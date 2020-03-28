@@ -7,11 +7,10 @@ from reconactions import *
 from reconconfig import *
 
 def main():
-    # Check stuff
+    run_checks(amass_config)
     print_bold_green("Bold Green")
     print_green("Green")
     print_grey("Grey")
-    print_yellow("Yellow")
     print_red("Red")
     # Run amass
     # Run assetfinder
