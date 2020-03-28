@@ -44,7 +44,7 @@ def run_checks(amass_config):
         print_yellow("Amass config not found. Results may not be as complete.")
 
     # Confirm packages are installed
-    packages_to_check = ['amass', 'gobuster']
+    packages_to_check = ['amass', 'gobuster', 'golang']
     apt_cache = apt.Cache()
     for package in packages_to_check:
         check_package(package, apt_cache)
@@ -55,14 +55,20 @@ def run_checks(amass_config):
 
 def run_amass(amass_config, target):
     ''' Runs amass with the specified config file '''
+    output_file = target + "/" + target + ".amass.txt"
+    if os.path.exists(output_file):
+        print_yellow("Moving previous amass results to " + output_file + ".bak")
+        cmdstring = "mv " + output_file + " " + output_file + ".bak"
+        os.system(cmdstring)
     if os.path.exists(amass_config):
         print_green("Using Amass config " + amass_config)
         cmdstring = "amass enum -config " + amass_config + " -brute -d " + target + " -o " + \
                     target + "/" + target + ".amass.txt"
     else:
         print_grey("Not using config.ini")
-        cmdstring = "amass enum -brute -d " + target + " -o " + target + "/" + target + ".amass.txt"
+        cmdstring = "amass enum -brute -d " + target + " -o " + output_file
 
     os.system(cmdstring)
 
     # need to define and add -min-for-recursive 3
+    # abort script if amass exits
