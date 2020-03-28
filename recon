@@ -10,10 +10,13 @@ def main():
     if len(sys.argv) == 1:
         print("\nUsage: recon example.com\n")
         sys.exit(1)
+    target = sys.argv[1]
 
     run_checks(amass_config)
+    create_directory(target)
 
-    print_bold_green("Running Amass to discover domains")
+    print_bold_green("Running Amass to find sub-domains")
+    run_amass(amass_config, target)
 
     print_green("Green")
     print_grey("Grey")
@@ -34,5 +37,5 @@ if __name__ == '__main__':
 
 '''
 TODO:
-Write the whole damn thing
+* Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$
 '''
