@@ -89,9 +89,18 @@ def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKE
     os.system(cmdstring)
     count_results('Assetfinder', output_file)
 
+def run_subfinder(target):
+    ''' Runs Subfinder to find subdomains '''
+    print_bold_green("Running Subfinder to find sub-domains")
+
+    output_file = target + "/" + target + ".subfinder.txt"
+    cmdstring = "subfinder -d " + target + " -o " + output_file
+    os.system(cmdstring)
+    count_results('Subfinder', output_file)
+
 def run_dnsbuffer(target):
     ''' Gets subdomains from Rapid7 '''
-    print_bold_green("Running Assetfinder to find sub-domains")
+    print_bold_green("Running DNS Buffer to find sub-domains")
 
     output_file = target + "/" + target + ".bufferover.txt"
     cmdstring = "curl -s https://dns.bufferover.run/dns?q=." + target + " | jq -r .FDNS_A[] | " \

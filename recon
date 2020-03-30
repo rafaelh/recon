@@ -17,11 +17,10 @@ def main():
 
     run_amass(target, amass_config)
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
+    run_subfinder(target)
     run_dnsbuffer(target)
 
     combine_subdomain_results(target)
-
-    # Run subfinder
 
     # Run livehosts
     # Run GIT-Endpoints
