@@ -43,6 +43,14 @@ def run_checks(amass_config):
             print_red(package + "is required for this script. Exiting.")
             sys.exit(1)
 
+def count_results(tool, output_file):
+    fname = output_file
+    count = 0
+    with open(fname, 'r') as f:
+        for line in f:
+            count += 1
+    print_green(tool + " total number of results: " + str(count))
+
 def run_amass(target, amass_config):
     ''' Runs amass with the specified config file '''
     output_file = target + "/" + target + ".amass.txt"
@@ -58,6 +66,7 @@ def run_amass(target, amass_config):
         print_grey("Not using config.ini")
         cmdstring = "amass enum -brute -d " + target + " -o " + output_file
     os.system(cmdstring)
+    count_results('Amass', output_file)
     # need to define and add -min-for-recursive 3
     # abort script if amass exits
 
@@ -66,4 +75,13 @@ def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKE
     if FB_APP_SECRET: os.system('export FB_APP_SECRET=' + FB_APP_SECRET)
     if VT_API_KEY: os.system('export VT_API_KEY=' + VT_API_KEY)
     if SPYSE_API_TOKEN: os.system('export SPYSE_API_TOKEN=' + SPYSE_API_TOKEN)
+
+    output_file = target + "/" + target + ".assetfinder.txt"
+    if os.path.exists(output_file):
+        print_yellow("Moving previous amass results to " + output_file + ".bak")
+        cmdstring = "mv " + output_file + " " + output_file + ".bak"
+        os.system(cmdstring)
+    cmdstring = "assetfinder -subs-only " + target + " > " + output_file
+    os.system(cmdstring)
+    count_results('Assetfinder', output_file)
 
