@@ -1,5 +1,6 @@
-import apt # Move with run_checks
+import apt
 import os
+import sys
 
 def print_bold_green(message):
     """ Prints a message to the console prefixed with a green '>>>' """
@@ -30,28 +31,17 @@ def create_directory(directory):
         cmdstring = "mkdir " + directory
         os.system(cmdstring)
 
-# ==== May end up in a different file =================================================
-
-def check_package(package, apt_cache):
-    if not apt_cache[package].is_installed:
-        print_red(package + " is required.")
-        cmdstring = "sudo apt install " + package
-        os.system(cmdstring)
-
 def run_checks(amass_config):
     ''' Confirm that all needed tools and config is available *before* wasting any time '''
     if not os.path.exists(amass_config):
         print_yellow("Amass config not found. Results may not be as complete.")
 
-    # Confirm packages are installed
     packages_to_check = ['amass', 'gobuster', 'golang']
     apt_cache = apt.Cache()
     for package in packages_to_check:
-        check_package(package, apt_cache)
-
-
-
-# =====================================================================================
+        if not apt_cache[package].is_installed:
+            print_red(package + "is required for this script. Exiting.")
+            sys.exit(1)
 
 def run_amass(amass_config, target):
     ''' Runs amass with the specified config file '''
