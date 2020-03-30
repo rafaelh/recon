@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
+# Written by Rafe Hart (@rafael_hart), based on a workflow recommended by nullenc0de.
+
 import sys
 import os
-#import subprocess <- things that can be done in parallel should be
 from reconactions import *
 from reconconfig import *
 
@@ -14,21 +15,14 @@ def main():
     run_checks(amass_config)
     create_directory(target)
 
-    print_bold_green("Running Amass to find sub-domains")
     run_amass(target, amass_config)
-
-    print_bold_green("Running Assetfinder to find sub-domains")
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
+    run_dnsbuffer(target)
 
-    print_green("Green")
-    print_grey("Grey")
-    print_red("Red")
-    # Run amass
-    # Run assetfinder
-    # Run findomain
-    # Run dnsbuffer
+    combine_subdomain_results(target)
+
     # Run subfinder
-    # remove duplicates
+
     # Run livehosts
     # Run GIT-Endpoints
     # Run Directory Bruteforce
@@ -41,5 +35,4 @@ if __name__ == '__main__':
 TODO:
 * Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$
 * Detect that assetfinder and other go modules have been installed
-* Create a summary function that lists how many subdomains each tool found
 '''

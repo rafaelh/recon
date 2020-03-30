@@ -36,7 +36,7 @@ def run_checks(amass_config):
     if not os.path.exists(amass_config):
         print_yellow("Amass config not found. Results may not be as complete.")
 
-    packages_to_check = ['amass', 'gobuster', 'golang']
+    packages_to_check = ['amass', 'gobuster', 'golang', 'jq']
     apt_cache = apt.Cache()
     for package in packages_to_check:
         if not apt_cache[package].is_installed:
@@ -44,15 +44,16 @@ def run_checks(amass_config):
             sys.exit(1)
 
 def count_results(tool, output_file):
-    fname = output_file
     count = 0
-    with open(fname, 'r') as f:
+    with open(output_file, 'r') as f:
         for line in f:
             count += 1
     print_green(tool + " total number of results: " + str(count))
 
 def run_amass(target, amass_config):
     ''' Runs amass with the specified config file '''
+    print_bold_green("Running Amass to find sub-domains")
+
     output_file = target + "/" + target + ".amass.txt"
     if os.path.exists(output_file):
         print_yellow("Moving previous amass results to " + output_file + ".bak")
@@ -71,6 +72,9 @@ def run_amass(target, amass_config):
     # abort script if amass exits
 
 def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN):
+    ''' Runs Assetfinder after exporting environment variables '''
+    print_bold_green("Running Assetfinder to find sub-domains")
+
     if FB_APP_ID: os.system('export FB_APP_ID=' + FB_APP_ID)
     if FB_APP_SECRET: os.system('export FB_APP_SECRET=' + FB_APP_SECRET)
     if VT_API_KEY: os.system('export VT_API_KEY=' + VT_API_KEY)
@@ -85,3 +89,21 @@ def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKE
     os.system(cmdstring)
     count_results('Assetfinder', output_file)
 
+def run_dnsbuffer(target):
+    ''' Gets subdomains from Rapid7 '''
+    print_bold_green("Running Assetfinder to find sub-domains")
+
+    output_file = target + "/" + target + ".bufferover.txt"
+    cmdstring = "curl -s https://dns.bufferover.run/dns?q=." + target + " | jq -r .FDNS_A[] | " \
+                "cut -d',' -f2 > " + output_file
+    os.system(cmdstring)
+    count_results('DNSBuffer', output_file)
+
+def combine_subdomain_results(target):
+    ''' Combine all subdomain tool results and remove duplicates '''
+    print_bold_green("Combining subdomain results")
+
+    output_file = target + "/" + target + ".combined.txt"
+    cmdstring = "sort " + target + "/*.txt | uniq > " + output_file
+    os.system(cmdstring)
+    count_results('Combined', output_file)
