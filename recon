@@ -16,7 +16,10 @@ def main():
     create_directory(target)
 
     print_bold_green("Running Amass to find sub-domains")
-    run_amass(amass_config, target)
+    run_amass(target, amass_config)
+
+    print_bold_green("Running Assetfinder to find sub-domains")
+    run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
 
     print_green("Green")
     print_grey("Grey")
@@ -38,4 +41,6 @@ if __name__ == '__main__':
 '''
 TODO:
 * Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$
+* Detect assetfinder variables and offer them as config.py options
+
 '''

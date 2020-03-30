@@ -43,7 +43,7 @@ def run_checks(amass_config):
             print_red(package + "is required for this script. Exiting.")
             sys.exit(1)
 
-def run_amass(amass_config, target):
+def run_amass(target, amass_config):
     ''' Runs amass with the specified config file '''
     output_file = target + "/" + target + ".amass.txt"
     if os.path.exists(output_file):
@@ -57,8 +57,13 @@ def run_amass(amass_config, target):
     else:
         print_grey("Not using config.ini")
         cmdstring = "amass enum -brute -d " + target + " -o " + output_file
-
     os.system(cmdstring)
-
     # need to define and add -min-for-recursive 3
     # abort script if amass exits
+
+def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN):
+    if FB_APP_ID: os.system('export FB_APP_ID=' + FB_APP_ID)
+    if FB_APP_SECRET: os.system('export FB_APP_SECRET=' + FB_APP_SECRET)
+    if VT_API_KEY: os.system('export VT_API_KEY=' + VT_API_KEY)
+    if SPYSE_API_TOKEN: os.system('export SPYSE_API_TOKEN=' + SPYSE_API_TOKEN)
+
