@@ -8,3 +8,6 @@ FB_APP_ID = '' # Facebook (https://developers.facebook.com)
 FB_APP_SECRET = ''
 VT_API_KEY = '' # VirusTotal (https://developers.virustotal.com/reference)
 SPYSE_API_TOKEN = '' # Spyse (https://spyse.com/apidocs)
+
+# Massdns resolver file, depending on where you've installed it
+massdns_resolvers = "/opt/massdns/lists/resolvers.txt"

@@ -75,10 +75,10 @@ def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKE
     ''' Runs Assetfinder after exporting environment variables '''
     print_bold_green("Running Assetfinder to find sub-domains")
 
-    if FB_APP_ID: os.system('export FB_APP_ID=' + FB_APP_ID)
-    if FB_APP_SECRET: os.system('export FB_APP_SECRET=' + FB_APP_SECRET)
-    if VT_API_KEY: os.system('export VT_API_KEY=' + VT_API_KEY)
-    if SPYSE_API_TOKEN: os.system('export SPYSE_API_TOKEN=' + SPYSE_API_TOKEN)
+    if FB_APP_ID: os.environ["FB_APP_ID"] = FB_APP_ID
+    if FB_APP_SECRET: os.environ["FB_APP_SECRET"] = FB_APP_SECRET
+    if VT_API_KEY: os.environ["VT_API_KEY"] = VT_API_KEY
+    if SPYSE_API_TOKEN: os.environ["SPYSE_API_TOKEN"] = SPYSE_API_TOKEN
 
     output_file = target + "/" + target + ".assetfinder.txt"
     if os.path.exists(output_file):
@@ -116,3 +116,21 @@ def combine_subdomain_results(target):
     cmdstring = "sort " + target + "/*.txt | uniq > " + output_file
     os.system(cmdstring)
     count_results('Combined', output_file)
+
+def run_dnsgen_and_massdns(target, massdns_resolvers):
+    ''' Guess additional subdomains with dnsgen | massdns '''
+    print_bold_green("Guess additional subdomains with dnsgen | massdns")
+
+    combined_domain_file = target + "/" + target + ".combined.txt"
+    output_file = target + "/" + target + ".massdns.txt"
+    cmdstring = "cat " + combined_domain_file + " | dnsgen - | massdns -r " + massdns_resolvers + " -t A -o S -w " + output_file
+    os.system(cmdstring)
+    count_results('dnsgen | massdns', output_file)
+
+def print_results_summary(target):
+    print_bold_green("Summary of results")
+    count_results('Amass', target + "/" + target + ".amass.txt")
+    count_results('Subfinder', target + "/" + target + ".subfinder.txt")
+    count_results('DNSBuffer', target + "/" + target + ".bufferover.txt")
+    count_results('Combined Amass, Subfinder & dnsbuffer', target + "/" + target + ".combined.txt")
+    count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
