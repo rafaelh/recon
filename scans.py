@@ -124,6 +124,7 @@ def run_dnsgen_and_massdns(target, massdns_resolvers):
     combined_domain_file = target + "/" + target + ".combined.txt"
     output_file = target + "/" + target + ".massdns.txt"
     cmdstring = "cat " + combined_domain_file + " | dnsgen - | massdns -r " + massdns_resolvers + " -t A -o S -w " + output_file
+    #print(cmdstring)
     os.system(cmdstring)
     count_results('dnsgen | massdns', output_file)
 

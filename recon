@@ -20,7 +20,7 @@ def main():
     run_dnsbuffer(target)
     run_dnsgen_and_massdns(target, massdns_resolvers)
     combine_subdomain_results(target)
-
+    print_results_summary(target)
     # Run livehosts
     # Run GIT-Endpoints
     # Run Directory Bruteforce
