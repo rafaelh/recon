@@ -14,7 +14,7 @@ def main():
 
     run_checks(amass_config)
     create_directory(target)
-    #run_amass(target, amass_config)
+    run_amass(target, amass_config)
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
     run_subfinder(target)
     run_dnsbuffer(target)
