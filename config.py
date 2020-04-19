@@ -1,7 +1,7 @@
 # Location of Amass config.ini
 # An example is available at https://github.com/OWASP/Amass/blob/master/examples/config.ini
 
-amass_config = ''
+amass_config = '/home/rafael/x/notes/amass_config.ini'
 
 # Assetfinder variables (these will be exported if set)
 FB_APP_ID = '' # Facebook (https://developers.facebook.com)

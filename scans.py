@@ -82,7 +82,7 @@ def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKE
 
     output_file = target + "/" + target + ".assetfinder.txt"
     if os.path.exists(output_file):
-        print_yellow("Moving previous amass results to " + output_file + ".bak")
+        print_yellow("Moving previous assetfinder results to " + output_file + ".bak")
         cmdstring = "mv " + output_file + " " + output_file + ".bak"
         os.system(cmdstring)
     cmdstring = "assetfinder -subs-only " + target + " > " + output_file
@@ -124,9 +124,17 @@ def run_dnsgen_and_massdns(target, massdns_resolvers):
     combined_domain_file = target + "/" + target + ".combined.txt"
     output_file = target + "/" + target + ".massdns.txt"
     cmdstring = "cat " + combined_domain_file + " | dnsgen - | massdns -r " + massdns_resolvers + " -t A -o S -w " + output_file
-    #print(cmdstring)
     os.system(cmdstring)
     count_results('dnsgen | massdns', output_file)
+
+def finalize_subdomain_results(target):
+    ''' Clean up the verified massdns results '''
+    print_bold_green("Cleaning up subdomain results")
+    output_file = target + "/" + target + ".final.txt"
+    cmdstring = "sort " + target + "/" + target +".massdns.txt | awk '{print $1}' | sed 's/\.$//' | uniq > " + output_file
+    os.system(cmdstring)
+    count_results('Final Subdomains', output_file)
+
 
 def print_results_summary(target):
     print_bold_green("Summary of results")
@@ -135,3 +143,4 @@ def print_results_summary(target):
     count_results('DNSBuffer', target + "/" + target + ".bufferover.txt")
     count_results('Combined Amass, Subfinder & dnsbuffer', target + "/" + target + ".combined.txt")
     count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
+    count_results('Final Subdomains', target + "/" + target + ".final.txt")

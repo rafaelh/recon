@@ -14,12 +14,13 @@ def main():
 
     run_checks(amass_config)
     create_directory(target)
-    run_amass(target, amass_config)
+    #run_amass(target, amass_config)
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
     run_subfinder(target)
     run_dnsbuffer(target)
-    run_dnsgen_and_massdns(target, massdns_resolvers)
     combine_subdomain_results(target)
+    run_dnsgen_and_massdns(target, massdns_resolvers)
+    finalize_subdomain_results(target)
     print_results_summary(target)
     # Run livehosts
     # Run GIT-Endpoints
