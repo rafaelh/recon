@@ -13,6 +13,8 @@ def main():
     target = sys.argv[1]
 
     run_checks(amass_config)
+
+    # Workflow
     create_directory(target)
     run_amass(target, amass_config)
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
@@ -21,6 +23,7 @@ def main():
     combine_subdomain_results(target)
     run_dnsgen_and_massdns(target, massdns_resolvers)
     resolve_subdomains(target)
+    remove_wildcard_domains(target)
     print_results_summary(target)
     # Run livehosts
     # Run GIT-Endpoints

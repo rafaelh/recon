@@ -142,6 +142,18 @@ def resolve_subdomains(target):
     os.system(cmdstring)
     count_results('Resolved Subdomains', output_file)
 
+def remove_wildcard_domains(target):
+    ''' Removed wildcard domains from the list '''
+    print_bold_green("Removing wildcard domains")
+    output_file = target + "/" + target + ".non-wildcard.txt"
+    if not os.path.exists(output_file):
+        cmdstring = "wildcheck -i " + target + "/" + target + ".resolved.txt -t 100 -p | grep non-wildcard | cut -d ' ' -f3 > " + output_file
+        os.system(cmdstring)
+    else:
+        print_yellow("Previous wildcheck results exist. Skipping")
+    count_results('Non-wildcard domains', output_file)
+
+
 def print_results_summary(target):
     print_bold_green("Summary of results")
     count_results('Amass', target + "/" + target + ".amass.txt")
@@ -150,4 +162,5 @@ def print_results_summary(target):
     count_results('Combined Amass, Subfinder & dnsbuffer', target + "/" + target + ".combined.txt")
     count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
     count_results('Resolved Subdomains', target + "/" + target + ".resolved.txt")
+    count_results('Non-wildcard domains', target + "/" + target + ".non-wildcard.txt")
 
