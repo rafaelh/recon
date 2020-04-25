@@ -24,8 +24,9 @@ def main():
     run_dnsgen_and_massdns(target, massdns_resolvers)
     resolve_subdomains(target)
     remove_wildcard_domains(target)
+    find_http_servers(target, infile=target + '.resolved.txt', outfile=target + '.httprobe.txt')
     print_results_summary(target)
-    # Run livehosts
+    
     # Run GIT-Endpoints
     # Run Directory Bruteforce
 
@@ -37,4 +38,5 @@ if __name__ == '__main__':
 TODO:
 * Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$
 * Detect that assetfinder and other go modules have been installed
+* Change all functions to follow a 'target, infile, outfile' pattern, so the workflow is easier to comprehend
 '''

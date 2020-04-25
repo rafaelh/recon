@@ -153,6 +153,15 @@ def remove_wildcard_domains(target):
         print_yellow("Previous wildcheck results exist. Skipping")
     count_results('Non-wildcard domains', output_file)
 
+def find_http_servers(target, infile, outfile):
+    ''' Probe domains for http/https servers'''
+    print_bold_green("Probing for HTTP/HTTPS servers")
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "cat " + target + "/" + infile + " | httprobe -c 100 > " + target + "/" + outfile
+        os.system(cmdstring)
+    else:
+        print_yellow("Previous httprobe results exist. Skipping")
+    count_results('HTTP/HTTPS servers found', target + "/" + outfile)
 
 def print_results_summary(target):
     print_bold_green("Summary of results")
@@ -163,4 +172,5 @@ def print_results_summary(target):
     count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
     count_results('Resolved Subdomains', target + "/" + target + ".resolved.txt")
     count_results('Non-wildcard domains', target + "/" + target + ".non-wildcard.txt")
+    count_results('HTTP/HTTPS servers found', target + "/" + target + ".httprobe.txt")
 
