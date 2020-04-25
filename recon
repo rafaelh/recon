@@ -14,7 +14,7 @@ def main():
 
     run_checks(amass_config)
 
-    # Workflow
+    # Discover subdomains with HTTP/HTTPS servers
     create_directory(target)
     run_amass(target, amass_config)
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
@@ -24,11 +24,15 @@ def main():
     run_dnsgen_and_massdns(target, massdns_resolvers)
     resolve_subdomains(target)
     remove_wildcard_domains(target)
-    find_http_servers(target, infile=target + '.resolved.txt', outfile=target + '.httprobe.txt')
+    find_http_servers(target, infile=target + '.resolved.txt', outfile='responding_http_servers.txt')
+
+    # Analyse the HTTP/HTTPS servers
+    run_hakcrawler(target, infile='responding_http_servers.txt', outfile="hakcrawler.urls.txt")
+
+
+    # Summary
     print_results_summary(target)
-    
-    # Run GIT-Endpoints
-    # Run Directory Bruteforce
+
 
 
 if __name__ == '__main__':

@@ -83,7 +83,7 @@ def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKE
         cmdstring = "assetfinder -subs-only " + target + " > " + output_file
         os.system(cmdstring)
     else:
-        print_yellow("Previous Assetfinder results exist. Skipping")
+        print_yellow("Previous Assetfinder results exist. Skipping.")
     count_results('Assetfinder', output_file)
 
 def run_subfinder(target):
@@ -95,7 +95,7 @@ def run_subfinder(target):
         cmdstring = "subfinder -d " + target + " -o " + output_file
         os.system(cmdstring)
     else:
-        print_yellow("Previous Subfinder results exist. Skipping")
+        print_yellow("Previous Subfinder results exist. Skipping.")
     count_results('Subfinder', output_file)
 
 def run_dnsbuffer(target):
@@ -108,7 +108,7 @@ def run_dnsbuffer(target):
                     "cut -d',' -f2 > " + output_file
         os.system(cmdstring)
     else:
-        print_yellow("Previous dnsbuffer results exist. Skipping")
+        print_yellow("Previous dnsbuffer results exist. Skipping.")
     count_results('DNSBuffer', output_file)
 
 def combine_subdomain_results(target):
@@ -131,7 +131,7 @@ def run_dnsgen_and_massdns(target, massdns_resolvers):
         cmdstring = "cat " + combined_domain_file + " | dnsgen - | massdns -r " + massdns_resolvers + " -t A -o S -w " + output_file
         os.system(cmdstring)
     else:
-        print_yellow("Previous dnsgen | massdns results exist. Skipping")
+        print_yellow("Previous dnsgen | massdns results exist. Skipping.")
     count_results('dnsgen | massdns', output_file)
 
 def resolve_subdomains(target):
@@ -150,18 +150,32 @@ def remove_wildcard_domains(target):
         cmdstring = "wildcheck -i " + target + "/" + target + ".resolved.txt -t 100 -p | grep non-wildcard | cut -d ' ' -f3 > " + output_file
         os.system(cmdstring)
     else:
-        print_yellow("Previous wildcheck results exist. Skipping")
+        print_yellow("Previous wildcheck results exist. Skipping.")
     count_results('Non-wildcard domains', output_file)
 
 def find_http_servers(target, infile, outfile):
     ''' Probe domains for http/https servers'''
     print_bold_green("Probing for HTTP/HTTPS servers")
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/" + infile + " | httprobe -c 100 > " + target + "/" + outfile
+        cmdstring = "cat " + target + "/" + infile + " | httprobe -c 100 | sed 's/https\?:\/\///' | sort | uniq > " + target + "/" + outfile
         os.system(cmdstring)
     else:
-        print_yellow("Previous httprobe results exist. Skipping")
+        print_yellow("Previous httprobe results exist. Skipping.")
     count_results('HTTP/HTTPS servers found', target + "/" + outfile)
+
+def run_hakcrawler(target, infile, outfile):
+    ''' Use hakcrawler to extract a list of endpoints from a file of domain names '''
+    print_bold_green("Crawling HTTP/HTTPS servers for urls")
+    if not os.path.exists(target + "/" + outfile):
+        with open(target + "/" + infile) as f:
+            http_servers = [line.rstrip() for line in f]
+        for server in http_servers:
+            print_grey(server)
+            cmdstring = "hakrawler -url " + server + " -linkfinder >> " + target + "/" + outfile
+            os.system(cmdstring)
+    else:
+        print_yellow("Previous hakcrawler results exist. Skipping.")
+    count_results('Links found', target + "/" + outfile)
 
 def print_results_summary(target):
     print_bold_green("Summary of results")
@@ -172,5 +186,6 @@ def print_results_summary(target):
     count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
     count_results('Resolved Subdomains', target + "/" + target + ".resolved.txt")
     count_results('Non-wildcard domains', target + "/" + target + ".non-wildcard.txt")
-    count_results('HTTP/HTTPS servers found', target + "/" + target + ".httprobe.txt")
+    count_results('HTTP/HTTPS servers found', target + "/" + "responding_http_servers.txt")
+    count_results('Links found', target + "/" + "hakcrawler.urls.txt")
 
