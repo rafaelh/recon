@@ -177,6 +177,9 @@ def run_hakcrawler(target, infile, outfile):
         print_yellow("Previous hakcrawler results exist. Skipping.")
     count_results('Links found', target + "/" + outfile)
 
+    # Add sort | uniq
+
+
 def print_results_summary(target):
     print_bold_green("Summary of results")
     count_results('Amass', target + "/" + target + ".amass.txt")
