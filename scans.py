@@ -171,7 +171,7 @@ def run_hakcrawler(target, infile, outfile):
             http_servers = [line.rstrip() for line in f]
         for server in http_servers:
             print_grey(server)
-            cmdstring = "hakrawler -url " + server + " -linkfinder >> " + target + "/" + outfile
+            cmdstring = "hakrawler -url " + server + " -linkfinder -plain >> " + target + "/" + outfile
             os.system(cmdstring)
     else:
         print_yellow("Previous hakcrawler results exist. Skipping.")
