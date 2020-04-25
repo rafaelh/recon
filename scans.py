@@ -134,13 +134,13 @@ def run_dnsgen_and_massdns(target, massdns_resolvers):
         print_yellow("Previous dnsgen | massdns results exist. Skipping")
     count_results('dnsgen | massdns', output_file)
 
-def finalize_subdomain_results(target):
+def resolve_subdomains(target):
     ''' Clean up the verified massdns results '''
-    print_bold_green("Cleaning up subdomain results")
-    output_file = target + "/" + target + ".final.txt"
+    print_bold_green("Resolving the subdomains")
+    output_file = target + "/" + target + ".resolved.txt"
     cmdstring = "sort " + target + "/" + target +".massdns.txt | awk '{print $1}' | sed 's/\.$//' | uniq > " + output_file
     os.system(cmdstring)
-    count_results('Final Subdomains', output_file)
+    count_results('Resolved Subdomains', output_file)
 
 def print_results_summary(target):
     print_bold_green("Summary of results")
@@ -149,4 +149,5 @@ def print_results_summary(target):
     count_results('DNSBuffer', target + "/" + target + ".bufferover.txt")
     count_results('Combined Amass, Subfinder & dnsbuffer', target + "/" + target + ".combined.txt")
     count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
-    count_results('Final Subdomains', target + "/" + target + ".final.txt")
+    count_results('Resolved Subdomains', target + "/" + target + ".resolved.txt")
+
