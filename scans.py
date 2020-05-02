@@ -140,20 +140,19 @@ def resolve_subdomains(target):
     ''' Clean up the verified massdns results '''
     print_bold_green("Resolving the subdomains")
     output_file = target + "/" + target + ".resolved.txt"
-    cmdstring = "sort " + target + "/" + target +".massdns.txt | awk '{print $1}' | sed 's/\.$//' | uniq > " + output_file
+    cmdstring = "sort " + target + "/" + target + ".massdns.txt | awk '{print $1}' | sed 's/\.$//' | uniq > " + output_file
     os.system(cmdstring)
     count_results('Resolved Subdomains', output_file)
 
-def remove_wildcard_domains(target):
+def remove_wildcard_domains(target, infile, outfile):
     ''' Removed wildcard domains from the list '''
     print_bold_green("Removing wildcard domains")
-    output_file = target + "/" + target + ".non-wildcard.txt"
-    if not os.path.exists(output_file):
-        cmdstring = "wildcheck -i " + target + "/" + target + ".resolved.txt -t 100 -p | grep non-wildcard | cut -d ' ' -f3 > " + output_file
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "wildcheck -i " + target + "/" + target + ".resolved.txt -t 100 -p | grep non-wildcard | cut -d ' ' -f3 > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous wildcheck results exist. Skipping.")
-    count_results('Non-wildcard domains', output_file)
+    count_results('Non-wildcard domains', target + "/" + outfile)
 
 def find_web_servers(target, infile, outfile):
     ''' Probe domains for http/https servers'''
@@ -213,7 +212,7 @@ def print_results_summary(target):
     count_results('Combined Amass, Subfinder & dnsbuffer', target + "/" + target + ".combined.txt")
     count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
     count_results('Resolved Subdomains', target + "/" + target + ".resolved.txt")
-    count_results('Non-wildcard domains', target + "/" + target + ".non-wildcard.txt")
+    count_results('Non-wildcard domains', target + "/" + "subdomains.non-wildcard.txt")
     count_results('HTTP/HTTPS servers found', target + "/" + "responding_http_servers.txt")
     count_results('Links found', target + "/" + "urls.txt")
     show_dalfox_results(target + "/xss.results.txt")
