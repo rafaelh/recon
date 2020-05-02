@@ -173,14 +173,12 @@ def run_hakcrawler(target, infile, outfile):
             http_servers = [line.rstrip() for line in f]
         for server in http_servers:
             print_grey(server)
-            cmdstring = "hakrawler -url " + server + " -linkfinder -plain >> " + target + "/" + outfile
+            cmdstring = "hakrawler -url " + server + " -linkfinder -plain >> " + target + "/urls.raw.txt"
             os.system(cmdstring)
+        cmdstring = "cat " + target + "/urls.raw.txt | sed 's/https\?:\/\///' | sort | uniq > " + outfile
     else:
         print_yellow("Previous hakcrawler results exist. Skipping.")
     count_results('Links found', target + "/" + outfile)
-
-    # Add sort | uniq
-
 
 def print_results_summary(target):
     print_bold_green("Summary of results")

@@ -27,7 +27,7 @@ def main():
     find_http_servers(target, infile=target + '.resolved.txt', outfile='responding_http_servers.txt')
 
     # Analyse the HTTP/HTTPS servers
-    run_hakcrawler(target, infile='responding_http_servers.txt', outfile="hakcrawler.urls.txt")
+    run_hakcrawler(target, infile='responding_http_servers.txt', outfile="urls.txt")
 
 
     # Summary
