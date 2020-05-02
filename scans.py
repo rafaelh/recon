@@ -155,7 +155,7 @@ def remove_wildcard_domains(target):
         print_yellow("Previous wildcheck results exist. Skipping.")
     count_results('Non-wildcard domains', output_file)
 
-def find_http_servers(target, infile, outfile):
+def find_web_servers(target, infile, outfile):
     ''' Probe domains for http/https servers'''
     print_bold_green("Probing for HTTP/HTTPS servers")
     if not os.path.exists(target + "/" + outfile):
@@ -173,12 +173,37 @@ def run_hakcrawler(target, infile, outfile):
             http_servers = [line.rstrip() for line in f]
         for server in http_servers:
             print_grey(server)
-            cmdstring = "hakrawler -url " + server + " -linkfinder -plain >> " + target + "/urls.raw.txt"
+            cmdstring = "hakrawler -url " + server + " -plain >> " + target + "/urls.raw.txt"
             os.system(cmdstring)
-        cmdstring = "cat " + target + "/urls.raw.txt | sed 's/https\?:\/\///' | sort | uniq > " + outfile
+        cmdstring = "cat " + target + "/urls.raw.txt | sort | uniq > " + target + "/" + outfile
+        os.system(cmdstring)
     else:
         print_yellow("Previous hakcrawler results exist. Skipping.")
     count_results('Links found', target + "/" + outfile)
+
+def show_dalfox_results(infile):
+    ''' Show the results of the dalfox scan '''
+    warning_count = 0
+    vulnerability_count = 0
+    with open(infile, 'r') as f:
+        for line in f:
+            if "[W]" in line: warning_count += 1
+            if "[V]" in line: vulnerability_count += 1
+    print_green("XSS Results: " + str(warning_count) + " warnings, " + 
+                str(vulnerability_count) + " vulnerabilities")
+
+def run_dalfox(target, infile, outfile):
+    ''' Look for XSS '''
+    print_bold_green("Looking for XSS") # should this be red?
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
+        os.system(cmdstring)
+    else:
+        print_yellow("Previous dalfox results exist. Skipping")
+    show_dalfox_results(target + "/" + outfile)
+
+
+
 
 def print_results_summary(target):
     print_bold_green("Summary of results")
@@ -190,5 +215,6 @@ def print_results_summary(target):
     count_results('Resolved Subdomains', target + "/" + target + ".resolved.txt")
     count_results('Non-wildcard domains', target + "/" + target + ".non-wildcard.txt")
     count_results('HTTP/HTTPS servers found', target + "/" + "responding_http_servers.txt")
-    count_results('Links found', target + "/" + "hakcrawler.urls.txt")
+    count_results('Links found', target + "/" + "urls.txt")
+    show_dalfox_results(target + "/xss.results.txt")
 
