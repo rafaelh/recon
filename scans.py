@@ -119,6 +119,8 @@ def combine_subdomain_results(target):
     cmdstring = "sort " + target + "/*.txt | uniq > " + output_file
     os.system(cmdstring)
     count_results('Combined', output_file)
+    # Need to add the target itself to the domain lists, before uniq is run
+    # Need to name the files to combine - *.txt will mess up on subsequent runs
 
 def run_dnsgen_and_massdns(target, massdns_resolvers):
     ''' Guess additional subdomains with dnsgen | massdns '''
