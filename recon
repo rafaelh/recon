@@ -22,7 +22,7 @@ def main():
     run_dnsbuffer(target)
     combine_subdomain_results(target)
     run_dnsgen_and_massdns(target, massdns_resolvers)
-    resolve_subdomains(target)
+    resolve_subdomains(target, infile=target +".massdns.txt", outfile="subdomains.resolved.txt")
     remove_wildcard_domains(target, infile="subdomains.resolved.txt", outfile="subdomains.non-wildcard.txt")
     find_web_servers(target, infile="subdomains.non-wildcard.txt", outfile="responding_web_servers.txt")
     run_hakcrawler(target, infile="responding_web_servers.txt", outfile="urls.txt")
