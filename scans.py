@@ -212,7 +212,7 @@ def print_results_summary(target):
     count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
     count_results('Resolved Subdomains', target + "/" + "subdomains.resolved.txt")
     count_results('Non-wildcard domains', target + "/" + "subdomains.non-wildcard.txt")
-    count_results('HTTP/HTTPS servers found', target + "/" + "responding_http_servers.txt")
+    count_results('HTTP/HTTPS servers found', target + "/" + "responding_web_servers.txt")
     count_results('Links found', target + "/" + "urls.txt")
     show_dalfox_results(target + "/xss.results.txt")
 
