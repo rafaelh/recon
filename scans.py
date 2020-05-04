@@ -147,7 +147,7 @@ def remove_wildcard_domains(target, infile, outfile):
     ''' Removed wildcard domains from the list '''
     print_bold_green("Removing wildcard domains")
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "wildcheck -i " + target + "/" + target + ".resolved.txt -t 100 -p | grep non-wildcard | cut -d ' ' -f3 > " + target + "/" + outfile
+        cmdstring = "wildcheck -i " + target + "/" + infile + " -t 100 -p | grep non-wildcard | cut -d ' ' -f3 > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous wildcheck results exist. Skipping.")
