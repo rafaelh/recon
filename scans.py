@@ -159,6 +159,8 @@ def find_web_servers(target, infile, outfile):
     if not os.path.exists(target + "/" + outfile):
         cmdstring = "cat " + target + "/" + infile + " | httprobe -c 100 | sed 's/https\?:\/\///' | sort | uniq > " + target + "/" + outfile
         os.system(cmdstring)
+        cmdstring = "echo " + target + " >> " + target + "/" + outfile
+        os.system(cmdstring)
     else:
         print_yellow("Previous httprobe results exist. Skipping.")
     count_results('HTTP/HTTPS servers found', target + "/" + outfile)
