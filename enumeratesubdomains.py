@@ -1,35 +1,7 @@
 import apt
 import os
 import sys
-
-def print_bold_green(message):
-    """ Prints a message to the console prefixed with a green '>>>' """
-    print("\n\033[1;32;40m>>> \033[1;37;40m" + message + "\033[0;37;0m")
-
-def print_green(message):
-    """ Prints a message to the console prefixed with a green '[*]' """
-    print("[\033[0;32;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
-
-def print_yellow(message):
-    """ Prints a message to the console prefixed with a yellow '[*]' """
-    print("[\033[1;33;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
-
-def print_grey(message):
-    """ Prints a message to the console prefixed with a grey '[*]' """
-    print("[\033[0;37;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
-
-def print_red(message):
-    """ Prints a message to the console prefixed with a red '[*]' """
-    print("[\033[0;31;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
-
-def create_directory(directory):
-    ''' Checks if the specified directory exists, and creates it if not '''
-    if os.path.exists(directory):
-        print_grey("Directory exists: " + directory)
-    else:
-        print_green("Creating directory: " + directory)
-        cmdstring = "mkdir " + directory
-        os.system(cmdstring)
+from common import *
 
 def run_checks(amass_config):
     ''' Confirm that all needed tools and config is available *before* wasting any time '''
@@ -167,65 +139,3 @@ def find_web_servers(target, infile, outfile):
     else:
         print_yellow("Previous httprobe results exist. Skipping.")
     count_results('HTTP/HTTPS servers found', target + "/" + outfile)
-
-def run_hakcrawler(target, infile, outfile):
-    ''' Use hakcrawler to extract a list of endpoints from a file of domain names '''
-    print_bold_green("Crawling HTTP/HTTPS servers for urls")
-    if not os.path.exists(target + "/" + outfile):
-        with open(target + "/" + infile) as f:
-            http_servers = [line.rstrip() for line in f]
-        for server in http_servers:
-            print_grey(server)
-            cmdstring = "hakrawler -url " + server + " -plain >> " + target + "/urls.raw.txt"
-            os.system(cmdstring)
-        cmdstring = "cat " + target + "/urls.raw.txt | sort | uniq > " + target + "/" + outfile
-        os.system(cmdstring)
-    else:
-        print_yellow("Previous hakcrawler results exist. Skipping.")
-    count_results('Links found', target + "/" + outfile)
-
-def show_dalfox_results(infile):
-    ''' Show the results of the dalfox scan '''
-    warning_count = 0
-    vulnerability_count = 0
-    with open(infile, 'r') as f:
-        for line in f:
-            if "[W]" in line: warning_count += 1
-            if "[V]" in line: vulnerability_count += 1
-    print_green("XSS Results: " + str(warning_count) + " warnings, " + 
-                str(vulnerability_count) + " vulnerabilities")
-
-def run_dalfox(target, infile, outfile):
-    ''' Look for XSS '''
-    print_bold_green("Looking for XSS") # should this be red?
-    if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
-        os.system(cmdstring)
-    else:
-        print_yellow("Previous dalfox results exist. Skipping.")
-    show_dalfox_results(target + "/" + outfile)
-
-def run_getallurls(target, outfile):
-    ''' Gather URLs from a variety of sources '''
-    print_bold_green("")
-    if not os.path.exists(target + "/" + outfile):
-        cmdstring = "echo https://" + target + " | gau -subs > " + target + "/" + outfile
-        os.system(cmdstring)
-    else:
-        print_yellow("Previous getallurls results exist. Skipping.")
-    count_results('Getallurls links found', target + "/" + outfile)
-
-def print_results_summary(target):
-    print_bold_green("Summary of results")
-    count_results('Amass', target + "/" + target + ".amass.txt")
-    count_results('Subfinder', target + "/" + target + ".subfinder.txt")
-    count_results('DNSBuffer', target + "/" + target + ".bufferover.txt")
-    count_results('Combined Amass, Subfinder & dnsbuffer', target + "/" + target + ".combined.txt")
-    count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
-    count_results('Resolved Subdomains', target + "/" + "subdomains.resolved.txt")
-    count_results('Non-wildcard domains', target + "/" + "subdomains.non-wildcard.txt")
-    count_results('HTTP/HTTPS servers found', target + "/" + "responding_web_servers.txt")
-    count_results('Hakrawler links found', target + "/" + "hakrawler.txt")
-    count_results('Getallurls links found', target + "/" + "getallurls.txt")
-    show_dalfox_results(target + "/xss.results.txt")
-
