@@ -6,7 +6,7 @@ import os
 from config import *
 from enumeratesubdomains import *
 from enumeratelinks import *
-from findingflaws import *
+from enumerateflaws import *
 
 def print_results_summary(target):
     print_bold_green("Summary of results")

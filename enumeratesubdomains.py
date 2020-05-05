@@ -3,6 +3,22 @@ import os
 import sys
 from common import *
 
+def count_results(tool, output_file):
+    count = 0
+    with open(output_file, 'r') as f:
+        for line in f:
+            count += 1
+    print_green(tool + " total number of results: " + str(count))
+
+def create_directory(directory):
+    ''' Checks if the specified directory exists, and creates it if not '''
+    if os.path.exists(directory):
+        print_grey("Directory exists: " + directory)
+    else:
+        print_green("Creating directory: " + directory)
+        cmdstring = "mkdir " + directory
+        os.system(cmdstring)
+
 def run_checks(amass_config):
     ''' Confirm that all needed tools and config is available *before* wasting any time '''
     if not os.path.exists(amass_config):
@@ -15,12 +31,7 @@ def run_checks(amass_config):
             print_red(package + "is required for this script. Exiting.")
             sys.exit(1)
 
-def count_results(tool, output_file):
-    count = 0
-    with open(output_file, 'r') as f:
-        for line in f:
-            count += 1
-    print_green(tool + " total number of results: " + str(count))
+# -------------------------------
 
 def run_amass(target, amass_config):
     ''' Runs amass with the specified config file '''
