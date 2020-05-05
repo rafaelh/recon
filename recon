@@ -52,5 +52,6 @@ TODO:
 * Change all functions to follow a 'target, infile, outfile' pattern, so the workflow is easier to comprehend
 * Confirm that the user has authorization to attack the target before running anything non-passive
 * Allow excluding a text file of subdomains
+* Need to test subdomain takeover: https://github.com/EdOverflow/can-i-take-over-xyz
 
 '''

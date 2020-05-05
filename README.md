@@ -17,6 +17,7 @@ Subdomain verification:
 
 Finding URLs:
 * [hakrawler](https://github.com/hakluke/hakrawler)
+* [getallurls](https://github.com/lc/gau)
 
 Checking for XSS
 * [dalfox](https://github.com/hahwul/dalfox)
