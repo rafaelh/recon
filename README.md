@@ -11,13 +11,13 @@ Subdomain enumeration:
 * [dnsgen](https://github.com/ProjectAnte/dnsgen)
 
 Subdomain verification:
-* [massdns](https://github.com/blechschmidt/massdns)
-* [wildcheck](https://github.com/theblackturtle/wildcheck)
-* [httprobe](https://github.com/tomnomnom/httprobe)
+* [massdns](https://github.com/blechschmidt/massdns) - confirm the subdomains resolve
+* [wildcheck](https://github.com/theblackturtle/wildcheck) - remove wildcard domains (eg *.example.com)
+* [httprobe](https://github.com/tomnomnom/httprobe) - see which domains have responding web servers
 
 Finding URLs:
-* [hakrawler](https://github.com/hakluke/hakrawler)
-* [getallurls](https://github.com/lc/gau)
+* [hakrawler](https://github.com/hakluke/hakrawler) - crawl the subdomains for links
+* [getallurls](https://github.com/lc/gau) - get all known links from alienvault, wayback & common crawl
 
 Checking for XSS
 * [dalfox](https://github.com/hahwul/dalfox)
