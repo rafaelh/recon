@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Written by Rafe Hart (@rafael_hart), based on a workflow by nullenc0de.
+# Written by Rafe Hart (@rafael_hart)
 
 import sys
 import os
