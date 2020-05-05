@@ -5,8 +5,8 @@ The tools used are:
 
 Subdomain enumeration:
 * [Amass](https://github.com/OWASP/Amass)
-* [Assetfinder](https://github.com/tomnomnom/assetfinder)
-* [Subfinder](https://github.com/projectdiscovery/subfinder)
+* [assetfinder](https://github.com/tomnomnom/assetfinder)
+* [subfinder](https://github.com/projectdiscovery/subfinder)
 * [DNSBuffer](https://tls.bufferover.run/dns?q=)
 * [dnsgen](https://github.com/ProjectAnte/dnsgen)
 
@@ -16,9 +16,9 @@ Subdomain verification:
 * [httprobe](https://github.com/tomnomnom/httprobe)
 
 Finding URLs:
-* [Hakrawler](https://github.com/hakluke/hakrawler)
+* [hakrawler](https://github.com/hakluke/hakrawler)
 
 Checking for XSS
-* [Dalfox](https://github.com/hahwul/dalfox)
+* [dalfox](https://github.com/hahwul/dalfox)
 
 Configuration settings can be put in `config.py`. The links above all have installation instructions, or you can take a look at my script [update-kali](https://github.com/rafaelh/update-kali) for a more automated approach.

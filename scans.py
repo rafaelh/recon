@@ -199,11 +199,18 @@ def run_dalfox(target, infile, outfile):
         cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
         os.system(cmdstring)
     else:
-        print_yellow("Previous dalfox results exist. Skipping")
+        print_yellow("Previous dalfox results exist. Skipping.")
     show_dalfox_results(target + "/" + outfile)
 
-
-
+def run_getallurls(target, outfile):
+    ''' Gather URLs from a variety of sources '''
+    print_bold_green("")
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "echo https://" + target + " | gau -subs > " + target + "/" + outfile
+        os.system(cmdstring)
+    else:
+        print_yellow("Previous getallurls results exist. Skipping.")
+    count_results('Getallurls links found', target + "/" + outfile)
 
 def print_results_summary(target):
     print_bold_green("Summary of results")
@@ -215,6 +222,7 @@ def print_results_summary(target):
     count_results('Resolved Subdomains', target + "/" + "subdomains.resolved.txt")
     count_results('Non-wildcard domains', target + "/" + "subdomains.non-wildcard.txt")
     count_results('HTTP/HTTPS servers found', target + "/" + "responding_web_servers.txt")
-    count_results('Links found', target + "/" + "urls.txt")
+    count_results('Hakrawler links found', target + "/" + "hakrawler.txt")
+    count_results('Getallurls links found', target + "/" + "getallurls.txt")
     show_dalfox_results(target + "/xss.results.txt")
 

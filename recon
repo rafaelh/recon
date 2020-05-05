@@ -25,13 +25,15 @@ def main():
     resolve_subdomains(target, infile=target +".massdns.txt", outfile="subdomains.resolved.txt")
     remove_wildcard_domains(target, infile="subdomains.resolved.txt", outfile="subdomains.non-wildcard.txt")
     find_web_servers(target, infile="subdomains.non-wildcard.txt", outfile="responding_web_servers.txt")
-    run_hakcrawler(target, infile="responding_web_servers.txt", outfile="urls.txt")
 
+    # Discover URLs
+    run_hakcrawler(target, infile="responding_web_servers.txt", outfile="hakrawler.txt")
+    run_getallurls(target, outfile="getallurls.txt")
     # ------------------------------------------
     # Past this point we should be requiring an additional directive to actively scan
     # We also need to exclude some subdomains
 
-    run_dalfox(target, infile="urls.txt", outfile="xss.results.txt")
+    run_dalfox(target, infile="hakrawler.txt", outfile="xss.results.txt")
 
 
 
