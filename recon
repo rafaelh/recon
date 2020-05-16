@@ -54,8 +54,6 @@ def main():
     # Find flaws
     run_dalfox(target, infile="urls.txt", outfile="xss.results.txt", xsshunter_domain, custom_xss_payloads)
 
-
-
     # Summary
     print_results_summary(target)
 
@@ -66,6 +64,7 @@ if __name__ == '__main__':
 
 '''
 TODO:
+* Create an xss target list from the urls file with | grep "=" | grep -v ".jpg\|.png\|.css\|.js"
 * Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$
 * Detect that assetfinder and other go modules have been installed
 * Change all functions to follow a 'target, infile, outfile' pattern, so the workflow is easier to comprehend
