@@ -13,15 +13,13 @@ def show_dalfox_results(infile):
     print_green("XSS Results: " + str(warning_count) + " warnings, " + 
                 str(vulnerability_count) + " vulnerabilities")
 
-def run_dalfox(target, infile, outfile):
+def run_dalfox(target, infile, outfile, xsshunter_domain, custom_xss_payloads):
     ''' Look for XSS '''
     print_bold_green("Looking for XSS") # should this be red?
     if not os.path.exists(target + "/" + outfile):
-        if xsshunter_domain:
-            cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile + \
-                        " -b " + xsshunter_domain
-        else:
-            cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
+        cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
+        if xsshunter_domain: cmdstring += " -b " + xsshunter_domain
+        if custom_xss_payloads: cmdstring += " --custom-payload " + custom_xss_payloads
         os.system(cmdstring)
     else:
         print_yellow("Previous dalfox results exist. Skipping.")

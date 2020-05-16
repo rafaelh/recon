@@ -52,7 +52,7 @@ def main():
     # Past this point we should be requiring an additional directive to actively scan
 
     # Find flaws
-    run_dalfox(target, infile="urls.txt", outfile="xss.results.txt")
+    run_dalfox(target, infile="urls.txt", outfile="xss.results.txt", xsshunter_domain, custom_xss_payloads)
 
 
 

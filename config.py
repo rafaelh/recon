@@ -1,7 +1,7 @@
 # Location of Amass config.ini
 # An example is available at https://github.com/OWASP/Amass/blob/master/examples/config.ini
 
-amass_config = '/home/rafael/x/notes/amass_config.ini'
+amass_config = '/home/rafael/x/notes/automation/amass_config.ini'
 
 # Assetfinder variables (these will be exported if set)
 FB_APP_ID = '' # Facebook (https://developers.facebook.com)
@@ -15,3 +15,4 @@ massdns_resolvers = "/opt/massdns/lists/resolvers.txt"
 # Domain for blind XSS checking with dalfox
 # Get your own at https://xsshunter.com
 xsshunter_domain = "https://rafaelh.xss.ht"
+custom_xss_payloads = "/home/rafael/x/notes/automation/xss_alert.txt"
