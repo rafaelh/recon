@@ -17,7 +17,11 @@ def run_dalfox(target, infile, outfile):
     ''' Look for XSS '''
     print_bold_green("Looking for XSS") # should this be red?
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
+        if xsshunter_domain:
+            cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile + \
+                        " -b " + xsshunter_domain
+        else:
+            cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous dalfox results exist. Skipping.")
