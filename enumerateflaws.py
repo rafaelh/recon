@@ -13,11 +13,11 @@ def show_dalfox_results(infile):
     print_green("XSS Results: " + str(warning_count) + " warnings, " + 
                 str(vulnerability_count) + " vulnerabilities")
 
-def run_dalfox(target, infile, outfile, xsshunter_domain, custom_xss_payloads):
+def run_dalfox(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
     ''' Look for XSS '''
-    print_bold_green("Looking for XSS") # should this be red?
+    print_bold_green("Looking for XSS")
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/urls.txt | dalfox pipe -o " + target + "/" + outfile
+        cmdstring = "cat " + target + "/" + infile + " | dalfox pipe -o " + target + "/" + outfile
         if xsshunter_domain: cmdstring += " -b " + xsshunter_domain
         if custom_xss_payloads: cmdstring += " --custom-payload " + custom_xss_payloads
         os.system(cmdstring)

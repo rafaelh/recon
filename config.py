@@ -15,4 +15,5 @@ massdns_resolvers = "/opt/massdns/lists/resolvers.txt"
 # Domain for blind XSS checking with dalfox
 # Get your own at https://xsshunter.com
 xsshunter_domain = "https://rafaelh.xss.ht"
-custom_xss_payloads = "/home/rafael/x/notes/automation/xss_alert.txt"
+#custom_xss_payloads = "/home/rafael/x/notes/automation/xss_alert.txt"
+custom_xss_payloads = ""
