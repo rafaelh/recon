@@ -1,5 +1,6 @@
 import os
 import sys
+import urllib.request
 from common import *
 
 def count_results(tool, output_file):
@@ -54,3 +55,17 @@ def find_xss_injection_points(target, infile, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous xss injection point results exist. Skipping.")
+
+def validate_links(target, responsecode, infile, outfile):
+    ''' Check the response code of links from a file '''
+    print_bold_green("Checking which links return a " + str(responsecode) + " response code")
+    if not os.path.exists(target + "/" + outfile):
+        with open(target + "/" + infile, 'r') as rawlinksfile:
+            for line in rawlinksfile:
+                if urllib.request.urlopen("http://www.stackoverflow.com").getcode() == responsecode:
+                    with open(target + "/" + outfile, 'a') as validatedlinksfile:
+                        validatedlinksfile.write(line)
+                    print_grey("Response " + str(responsecode) + ": " + line)
+    else:
+        print_yellow("Previous link checking results exist. Skipping.")
+    count_results("Combined links found", target + "/" + outfile)
