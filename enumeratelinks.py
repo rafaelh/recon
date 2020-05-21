@@ -65,7 +65,7 @@ def validate_links(target, responsecode, infile, outfile):
                 if urllib.request.urlopen("http://www.stackoverflow.com").getcode() == responsecode:
                     with open(target + "/" + outfile, 'a') as validatedlinksfile:
                         validatedlinksfile.write(line)
-                    print_grey("Response " + str(responsecode) + ": " + line)
+                    print_grey("Response " + str(responsecode) + ": " + line.rstrip("\n"))
     else:
         print_yellow("Previous link checking results exist. Skipping.")
     count_results("Combined links found", target + "/" + outfile)
