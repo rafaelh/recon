@@ -34,13 +34,13 @@ def main():
     # Discover subdomains with HTTP/HTTPS servers
     create_directory(target)
     run_amass(target, amass_config, outfile="subs.amass.txt")
-    run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
-    run_subfinder(target)
-    run_dnsbuffer(target)
+    run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN, outfile="subs.assetfinder.txt")
+    run_subfinder(target, outfile="subs.subfinder.txt")
+    run_dnsbuffer(target, outfile="subs.dnsbuffer.txt")
 
     # Add the target domain itself to the subdomain results
-    with open(target + "/" + somefile, 'a') as file:
-        file.write(target + '\n')
+    #with open(target + "/" + somefile, 'a') as file:
+    #    file.write(target + '\n')
     combine_subdomain_results(target)
 
     run_dnsgen_and_massdns(target, massdns_resolvers)

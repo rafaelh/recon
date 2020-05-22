@@ -51,34 +51,31 @@ def run_amass(target, amass_config, outfile):
     count_results('Amass', target + "/" + outfile)
     # need to define and add -min-for-recursive 3
 
-def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN):
+def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN, outfile):
     ''' Runs Assetfinder after exporting environment variables '''
     print_bold_green("Running Assetfinder to find sub-domains")
-    output_file = target + "/" + target + ".assetfinder.txt"
 
-    if not os.path.exists(output_file):
+    if not os.path.exists(target + "/" + outfile):
         if FB_APP_ID: os.environ["FB_APP_ID"] = FB_APP_ID
         if FB_APP_SECRET: os.environ["FB_APP_SECRET"] = FB_APP_SECRET
         if VT_API_KEY: os.environ["VT_API_KEY"] = VT_API_KEY
         if SPYSE_API_TOKEN: os.environ["SPYSE_API_TOKEN"] = SPYSE_API_TOKEN
-
-        cmdstring = "assetfinder -subs-only " + target + " > " + output_file
+        cmdstring = "assetfinder -subs-only " + target + " > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous Assetfinder results exist. Skipping.")
-    count_results('Assetfinder', output_file)
+    count_results('Assetfinder', target + "/" + outfile)
 
-def run_subfinder(target):
+def run_subfinder(target, outfile):
     ''' Runs Subfinder to find subdomains '''
     print_bold_green("Running Subfinder to find sub-domains")
-    output_file = target + "/" + target + ".subfinder.txt"
 
-    if not os.path.exists(output_file):
-        cmdstring = "subfinder -d " + target + " -o " + output_file
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "subfinder -d " + target + " -o " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous Subfinder results exist. Skipping.")
-    count_results('Subfinder', output_file)
+    count_results('Subfinder', target + "/" + outfile)
 
 def run_dnsbuffer(target):
     ''' Gets subdomains from Rapid7 '''
