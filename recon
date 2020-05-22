@@ -45,7 +45,6 @@ def main():
                     outfile="subs.combined.txt")
     with open(target + "/subs.combined.txt", 'a') as file:
         file.write(target + '\n')
-   
 
     run_dnsgen_and_massdns(target, massdns_resolvers)
     resolve_subdomains(target, infile=target +".massdns.txt", outfile="subdomains.resolved.txt")

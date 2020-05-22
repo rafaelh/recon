@@ -22,7 +22,7 @@ def print_red(message):
 
 def combine_results(target, infile1="", infile2="", infile3="", infile4="", outfile=""):
     ''' Combine, sort and remove duplicates from the url finding tasks '''
-    print_bold_green("Combining linkfinding results")
+    print_bold_green("Combining results")
     if not os.path.exists(target + "/" + outfile):
         cmdstring = "sort "
         if infile1: cmdstring += target + "/" + infile1 + " "
