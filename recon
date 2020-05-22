@@ -38,6 +38,13 @@ def main():
     run_subfinder(target, outfile="subs.subfinder.txt")
     run_dnsbuffer(target, outfile="subs.dnsbuffer.txt")
 
+    combine_results(target,
+                    infile1="subs.amass.txt",
+                    infile2="subs.assetfinder.txt",
+                    infile3="subs.subfinder.txt",
+                    infile4="subs.dnsbuffer.txt",
+                    outfile="subs.combined.txt")
+    
     # Add the target domain itself to the subdomain results
     #with open(target + "/" + somefile, 'a') as file:
     #    file.write(target + '\n')

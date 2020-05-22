@@ -107,7 +107,7 @@ def run_dnsgen_and_massdns(target, massdns_resolvers):
     ''' Guess additional subdomains with dnsgen | massdns '''
     print_bold_green("Guess additional subdomains with dnsgen | massdns")
 
-    combined_domain_file = target + "/" + target + ".combined.txt"
+    combined_domain_file = target + "/subs.combined.txt"
     output_file = target + "/" + target + ".massdns.txt"
 
     if not os.path.exists(output_file):
