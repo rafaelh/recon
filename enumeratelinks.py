@@ -45,7 +45,7 @@ def combine_url_results(target, infile1, infile2, outfile):
         print_yellow("Previous combined link results exist. Skipping.")
     count_results("Combined links found", target + "/" + outfile)
 
-def find_xss_injection_points(target, infile, outfile):
+def find_injection_points(target, infile, outfile):
     ''' Extract endpoints more likely to yield reflected XSS from a file '''
     print_bold_green("Extracting endpoints to test for XSS")
     if not os.path.exists(target + "/" + outfile):
