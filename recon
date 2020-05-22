@@ -33,11 +33,16 @@ def main():
 
     # Discover subdomains with HTTP/HTTPS servers
     create_directory(target)
-    run_amass(target, amass_config)
+    run_amass(target, amass_config, outfile="subs.amass.txt")
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN)
     run_subfinder(target)
     run_dnsbuffer(target)
+
+    # Add the target domain itself to the subdomain results
+    with open(target + "/" + somefile, 'a') as file:
+        file.write(target + '\n')
     combine_subdomain_results(target)
+
     run_dnsgen_and_massdns(target, massdns_resolvers)
     resolve_subdomains(target, infile=target +".massdns.txt", outfile="subdomains.resolved.txt")
     remove_wildcard_domains(target, infile="subdomains.resolved.txt", outfile="subdomains.non-wildcard.txt")
@@ -66,10 +71,11 @@ if __name__ == '__main__':
 
 '''
 TODO:
+status messages > timestamp, info/error/warn... maybe implement loguru
+* Combine results should be a single function for subdomains, links, and anything else
 
-import urllib.request
-print(urllib.request.urlopen("http://www.stackoverflow.com").getcode())
->>> 200
+    # Need to add the target itself to the domain lists, before uniq is run
+    # Need to name the files to combine - *.txt will mess up on subsequent runs
 
 * Create an xss target list from the urls file with | grep "=" | grep -v ".jpg\|.png\|.css\|.js"
 * Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$

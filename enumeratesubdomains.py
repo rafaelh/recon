@@ -33,23 +33,22 @@ def run_checks(amass_config):
 
 # -------------------------------
 
-def run_amass(target, amass_config):
+def run_amass(target, amass_config, outfile):
     ''' Runs amass with the specified config file '''
     print_bold_green("Running Amass to find sub-domains")
 
-    output_file = target + "/" + target + ".amass.txt"
-    if not os.path.exists(output_file):
+    if not os.path.exists(target + "/" + outfile):
         if os.path.exists(amass_config):
             print_green("Using Amass config " + amass_config)
             cmdstring = "amass enum -config " + amass_config + " -brute -d " + target + " -o " + \
-                        target + "/" + target + ".amass.txt"
+                        target + "/" + outfile
         else:
             print_grey("Not using config.ini")
-            cmdstring = "amass enum -brute -d " + target + " -o " + output_file
+            cmdstring = "amass enum -brute -d " + target + " -o " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous amass results exist. Skipping.")
-    count_results('Amass', output_file)
+    count_results('Amass', target + "/" + outfile)
     # need to define and add -min-for-recursive 3
 
 def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN):
@@ -97,6 +96,9 @@ def run_dnsbuffer(target):
 def combine_subdomain_results(target):
     ''' Combine all subdomain tool results and remove duplicates '''
     print_bold_green("Combining subdomain results")
+
+    # with open(target + "/" + outfile, 'a') as validatedlinksfile:
+        # validatedlinksfile.write(line)
 
     output_file = target + "/" + target + ".combined.txt"
     cmdstring = "sort " + target + "/*.txt | uniq > " + output_file
