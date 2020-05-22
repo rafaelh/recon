@@ -77,18 +77,17 @@ def run_subfinder(target, outfile):
         print_yellow("Previous Subfinder results exist. Skipping.")
     count_results('Subfinder', target + "/" + outfile)
 
-def run_dnsbuffer(target):
+def run_dnsbuffer(target, outfile):
     ''' Gets subdomains from Rapid7 '''
     print_bold_green("Running DNS Buffer to find sub-domains")
-    output_file = target + "/" + target + ".bufferover.txt"
 
-    if not os.path.exists(output_file):
+    if not os.path.exists(target + "/" + outfile):
         cmdstring = "curl -s https://dns.bufferover.run/dns?q=." + target + " | jq -r .FDNS_A[] | " \
-                    "cut -d',' -f2 > " + output_file
+                    "cut -d',' -f2 > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous dnsbuffer results exist. Skipping.")
-    count_results('DNSBuffer', output_file)
+    count_results('DNSBuffer', target + "/" + outfile)
 
 def combine_subdomain_results(target):
     ''' Combine all subdomain tool results and remove duplicates '''
