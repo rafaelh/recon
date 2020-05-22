@@ -37,18 +37,15 @@ def main():
     run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN, outfile="subs.assetfinder.txt")
     run_subfinder(target, outfile="subs.subfinder.txt")
     run_dnsbuffer(target, outfile="subs.dnsbuffer.txt")
-
     combine_results(target,
                     infile1="subs.amass.txt",
                     infile2="subs.assetfinder.txt",
                     infile3="subs.subfinder.txt",
                     infile4="subs.dnsbuffer.txt",
                     outfile="subs.combined.txt")
-    
-    # Add the target domain itself to the subdomain results
-    #with open(target + "/" + somefile, 'a') as file:
-    #    file.write(target + '\n')
-    combine_subdomain_results(target)
+    with open(target + "/subs.combined.txt", 'a') as file:
+        file.write(target + '\n')
+   
 
     run_dnsgen_and_massdns(target, massdns_resolvers)
     resolve_subdomains(target, infile=target +".massdns.txt", outfile="subdomains.resolved.txt")
