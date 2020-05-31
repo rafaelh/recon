@@ -40,7 +40,8 @@ def main():
     # Discover URLs
     run_hakcrawler(target, infile="responding_web_servers.txt", outfile="hakrawler.txt")
     run_getallurls(target, outfile="getallurls.txt")
-    combine_url_results(target, infile1="hakrawler.txt", infile2="getallurls.txt", outfile="urls.raw.txt")
+    combine_results(target, infile1="hakrawler.txt", infile2="getallurls.txt",
+                    outfile="urls.raw.txt")
     find_injection_points(target, infile="urls.raw.txt", outfile="urls.interesting.txt")
     validate_links(target, 200, infile="urls.interesting.txt", outfile="urls.totest.txt")
 

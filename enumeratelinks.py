@@ -34,17 +34,6 @@ def run_getallurls(target, outfile):
         print_yellow("Previous getallurls results exist. Skipping.")
     count_results('Getallurls links found', target + "/" + outfile)
 
-def combine_url_results(target, infile1, infile2, outfile):
-    ''' Combine, sort and remove duplicates from the url finding tasks '''
-    print_bold_green("Combining linkfinding results")
-    if not os.path.exists(target + "/" + outfile):
-        cmdstring = "sort " + target + "/" + infile1 + " " + target + "/" + infile2 + \
-                    " | uniq > " + target + "/" + outfile
-        os.system(cmdstring)
-    else:
-        print_yellow("Previous combined link results exist. Skipping.")
-    count_results("Combined links found", target + "/" + outfile)
-
 def find_injection_points(target, infile, outfile):
     ''' Extract endpoints more likely to yield reflected XSS from a file '''
     print_bold_green("Extracting endpoints to test for XSS")
