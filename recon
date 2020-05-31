@@ -33,8 +33,8 @@ def main():
         file.write(target + '\n')
 
     run_dnsgen_and_massdns(target, massdns_resolvers, infile="tool_output/subs.combined.txt",
-                           outfile="tool_output/subs.massdns.txt")
-    resolve_subdomains(target, infile="tool_output/subs.massdns.txt", outfile="subs.resolved.txt")
+                            massdns_output="tool_output/subs.massdns.txt",
+                           outfile="subs.resolved.txt")
     remove_wildcard_domains(target, infile="subs.resolved.txt", outfile="subs.non-wildcard.txt")
     find_web_servers(target, infile="subs.non-wildcard.txt", outfile="responding_web_servers.txt")
 
@@ -59,6 +59,7 @@ if __name__ == '__main__':
 
 '''
 TODO:
+* Implement https://github.com/tomnomnom/hacks/tree/master/anti-burl
 * Add aquatone
 * Combine results should be a single function for subdomains, links, and anything else
 * Add argparse

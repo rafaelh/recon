@@ -89,13 +89,16 @@ def run_dnsbuffer(target, outfile):
         print_yellow("Previous dnsbuffer results exist. Skipping.")
     count_results('DNSBuffer', target + "/" + outfile)
 
-def run_dnsgen_and_massdns(target, massdns_resolvers, infile, outfile):
+def run_dnsgen_and_massdns(target, massdns_resolvers, infile, massdns_output, outfile):
     ''' Guess additional subdomains with dnsgen | massdns '''
     print_bold_green("Guess additional subdomains with dnsgen | massdns")
 
     if not os.path.exists(target + "/" + outfile):
         cmdstring = "cat " + target + "/" + infile + " | dnsgen - | massdns -r " + \
-                    massdns_resolvers + " -t A -o S -w " + target + "/" + outfile
+                    massdns_resolvers + " -t A -o S -w " + target + "/" + massdns_output
+        os.system(cmdstring)
+        cmdstring = "cat " + target + "/" + massdns_output + \
+                    " | awk '{print $1}' | sed 's/\.$//' | uniq > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous dnsgen | massdns results exist. Skipping.")
