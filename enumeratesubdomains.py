@@ -13,7 +13,7 @@ def count_results(tool, output_file):
 def create_directory(directory):
     ''' Checks if the specified directory exists, and creates it if not '''
     if os.path.exists(directory):
-        print_grey("Directory exists: " + directory)
+        print_yellow("Directory exists: " + directory)
     else:
         print_green("Creating directory: " + directory)
         cmdstring = "mkdir " + directory
@@ -43,7 +43,7 @@ def run_amass(target, amass_config, outfile):
             cmdstring = "amass enum -config " + amass_config + " -brute -d " + target + " -o " + \
                         target + "/" + outfile
         else:
-            print_grey("Not using config.ini")
+            print_red("Not using config.ini")
             cmdstring = "amass enum -brute -d " + target + " -o " + target + "/" + outfile
         os.system(cmdstring)
     else:

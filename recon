@@ -63,7 +63,10 @@ def main():
     # Past this point we should be requiring an additional directive to actively scan
 
     # Find flaws
-    run_dalfox(xsshunter_domain, custom_xss_payloads, target, infile="urls.totest.txt", outfile="xss.results.txt", )
+    look_for_xss(xsshunter_domain, custom_xss_payloads, target,
+                 infile="urls.totest.txt", outfile="xss.results.txt")
+    look_for_sqli(target, infile="urls.totest.txt", outfile="sqli.results.txt")
+    
 
     # Summary
     #print_results_summary(target)
