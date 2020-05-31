@@ -12,10 +12,6 @@ def print_yellow(message):
     """ Prints a message to the console prefixed with a yellow '[*]' """
     print("[\033[1;33;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
 
-def print_grey(message):
-    """ Prints a message to the console prefixed with a grey '[*]' """
-    print("[\033[0;37;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
-
 def print_red(message):
     """ Prints a message to the console prefixed with a red '[*]' """
     print("[\033[0;31;40m*\033[0;37;40m] " + message + "\033[0;37;0m")

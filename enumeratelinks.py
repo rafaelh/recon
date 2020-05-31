@@ -17,7 +17,7 @@ def run_hakcrawler(target, infile, outfile):
         with open(target + "/" + infile) as f:
             http_servers = [line.rstrip() for line in f]
         for server in http_servers:
-            print_grey(server)
+            print_yellow(server)
             cmdstring = "hakrawler -url " + server + " -plain >> " + target + "/" + outfile
             os.system(cmdstring)
     else:
@@ -49,7 +49,7 @@ def find_injection_points(target, infile, outfile):
     ''' Extract endpoints more likely to yield reflected XSS from a file '''
     print_bold_green("Extracting endpoints to test for XSS")
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/" + infile + " | grep \"=\" | " +
+        cmdstring = "cat " + target + "/" + infile + " | grep \"=\" | " + \
                     "egrep -iv \".(jpg|jpeg|git|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|js)\" | " + \
                     "qsreplace -a > " + target + "/" + outfile
         os.system(cmdstring)
@@ -61,14 +61,19 @@ def validate_links(target, responsecode, infile, outfile):
     print_bold_green("Checking which links return a " + str(responsecode) + " response code")
     if not os.path.exists(target + "/" + outfile):
         with open(target + "/" + infile, 'r') as rawlinksfile:
+            lines = 0
+            count = 0
+            for line in rawlinksfile: lines += 1
+            print_green("Links to check: " + lines)
             for line in rawlinksfile:
+                count += 1
                 try:
                     if urllib.request.urlopen(line).getcode() == responsecode:
                         with open(target + "/" + outfile, 'a') as validatedlinksfile:
                             validatedlinksfile.write(line)
-                        print_grey("Response " + str(responsecode) + ": " + line.rstrip("\n"))
+                        print_green("Response " + str(responsecode) + ": " + line.rstrip("\n"))
                 except:
-                    print("error")
+                    print_red("Link " + count + "/" + lines + " doesn't respond as " + responsecode)
     else:
         print_yellow("Previous link checking results exist. Skipping.")
     count_results("Combined links found", target + "/" + outfile)

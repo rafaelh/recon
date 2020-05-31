@@ -24,3 +24,6 @@ def run_dalfox(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
     else:
         print_yellow("Previous dalfox results exist. Skipping.")
     show_dalfox_results(target + "/" + outfile)
+
+#def look_for_sqli(target, infile, outfile):
+    ''' Look for SQLi '''
