@@ -78,17 +78,12 @@ if __name__ == '__main__':
 
 '''
 TODO:
-status messages > timestamp, info/error/warn... maybe implement loguru
+* Add aquatone
 * Combine results should be a single function for subdomains, links, and anything else
-
-    # Need to add the target itself to the domain lists, before uniq is run
-    # Need to name the files to combine - *.txt will mess up on subsequent runs
-
-* Create an xss target list from the urls file with | grep "=" | grep -v ".jpg\|.png\|.css\|.js"
-* Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$
+* Add argparse
 * Detect that assetfinder and other go modules have been installed
 * Confirm that the user has authorization to attack the target before running anything non-passive
 * Allow excluding a text file of subdomains
 * Need to test subdomain takeover: https://github.com/EdOverflow/can-i-take-over-xyz
-
+* status messages > timestamp, info/error/warn... maybe implement loguru
 '''
