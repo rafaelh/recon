@@ -19,7 +19,8 @@ Finding URLs:
 * [hakrawler](https://github.com/hakluke/hakrawler) - crawl the subdomains for links
 * [getallurls](https://github.com/lc/gau) - get all known links from alienvault, wayback & common crawl
 
-Checking for XSS
-* [dalfox](https://github.com/hahwul/dalfox)
+Checking for ...
+* XSS - [dalfox](https://github.com/hahwul/dalfox)
+* SQLi - [dsss.py](https://github.com/stamparm/DSSS)
 
 Configuration settings can be put in `config.py`. The links above all have installation instructions, or you can take a look at my script [update-kali](https://github.com/rafaelh/update-kali) for a more automated approach.

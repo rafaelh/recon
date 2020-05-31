@@ -107,6 +107,10 @@ def resolve_subdomains(target, infile, outfile):
     cmdstring = "sort " + target + "/" + infile + " | awk '{print $1}' | sed 's/\.$//' | uniq > " + \
                 target + "/" + outfile
     os.system(cmdstring)
+
+    # https://github.com/tomnomnom/hacks/tree/master/filter-resolved
+    # filter-resolved -c 100
+
     count_results('Resolved Subdomains', target + "/" + outfile)
 
 def remove_wildcard_domains(target, infile, outfile):
