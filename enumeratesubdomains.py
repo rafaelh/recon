@@ -104,18 +104,6 @@ def run_dnsgen_and_massdns(target, massdns_resolvers, infile, massdns_output, ou
         print_yellow("Previous dnsgen | massdns results exist. Skipping.")
     count_results('dnsgen | massdns', target + "/" + outfile)
 
-def resolve_subdomains(target, infile, outfile):
-    ''' Check which massdns results actually resolve '''
-    print_bold_green("Checking which subdomains resolve")
-    cmdstring = "sort " + target + "/" + infile + " | awk '{print $1}' | sed 's/\.$//' | uniq > " + \
-                target + "/" + outfile
-    os.system(cmdstring)
-
-    # https://github.com/tomnomnom/hacks/tree/master/filter-resolved
-    # filter-resolved -c 100
-
-    count_results('Resolved Subdomains', target + "/" + outfile)
-
 def remove_wildcard_domains(target, infile, outfile):
     ''' Removed wildcard domains from the list '''
     print_bold_green("Removing wildcard domains")
