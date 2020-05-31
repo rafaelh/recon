@@ -99,7 +99,7 @@ def run_dnsgen_and_massdns(target, massdns_resolvers, infile, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous dnsgen | massdns results exist. Skipping.")
-    count_results('dnsgen | massdns', output_file)
+    count_results('dnsgen | massdns', target + "/" + outfile)
 
 def resolve_subdomains(target, infile, outfile):
     ''' Check which massdns results actually resolve '''
