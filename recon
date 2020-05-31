@@ -28,12 +28,13 @@ def main():
                     infile2="tool_output/subs.assetfinder.txt",
                     infile3="tool_output/subs.subfinder.txt",
                     infile4="tool_output/subs.dnsbuffer.txt",
-                    outfile="subs.combined.txt")
-    with open(target + "/subs.combined.txt", 'a') as file:
+                    outfile="tool_output/subs.combined.txt")
+    with open(target + "/tool_output/subs.combined.txt", 'a') as file:
         file.write(target + '\n')
 
-    run_dnsgen_and_massdns(target, massdns_resolvers)
-    resolve_subdomains(target, infile=target +".massdns.txt", outfile="subs.resolved.txt")
+    run_dnsgen_and_massdns(target, massdns_resolvers, infile="tool_output/subs.combined.txt",
+                           outfile="tool_output/subs.massdns.txt")
+    resolve_subdomains(target, infile="tool_output/subs.massdns.txt", outfile="subs.resolved.txt")
     remove_wildcard_domains(target, infile="subs.resolved.txt", outfile="subs.non-wildcard.txt")
     find_web_servers(target, infile="subs.non-wildcard.txt", outfile="responding_web_servers.txt")
 
