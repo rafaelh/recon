@@ -49,9 +49,9 @@ def find_injection_points(target, infile, outfile):
     ''' Extract endpoints more likely to yield reflected XSS from a file '''
     print_bold_green("Extracting endpoints to test for XSS")
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/" + infile + \
-                    " | grep \"=\" | grep -v \".jpg\\|.png\\|.css\\|.js\" > " + \
-                    target + "/" + outfile
+        cmdstring = "cat " + target + "/" + infile + " | grep \"=\" | " +
+                    "egrep -iv \".(jpg|jpeg|git|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|js)\" | " + \
+                    "qsreplace -a > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous xss injection point results exist. Skipping.")

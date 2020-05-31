@@ -10,7 +10,7 @@ def show_dalfox_results(infile):
         for line in f:
             if "[W]" in line: warning_count += 1
             if "[V]" in line: vulnerability_count += 1
-    print_green("XSS Results: " + str(warning_count) + " warnings, " + 
+    print_green("XSS Results: " + str(warning_count) + " warnings, " +
                 str(vulnerability_count) + " vulnerabilities")
 
 def run_dalfox(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
