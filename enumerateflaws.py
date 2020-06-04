@@ -10,10 +10,10 @@ def show_dalfox_results(infile):
         for line in f:
             if "[W]" in line: warning_count += 1
             if "[V]" in line: vulnerability_count += 1
-    print_green("XSS Results: " + str(warning_count) + " warnings, " + 
+    print_green("XSS Results: " + str(warning_count) + " warnings, " +
                 str(vulnerability_count) + " vulnerabilities")
 
-def run_dalfox(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
+def look_for_xss(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
     ''' Look for XSS '''
     print_bold_green("Looking for XSS")
     if not os.path.exists(target + "/" + outfile):
@@ -24,3 +24,18 @@ def run_dalfox(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
     else:
         print_yellow("Previous dalfox results exist. Skipping.")
     show_dalfox_results(target + "/" + outfile)
+
+def look_for_sqli(target, infile, outfile):
+    ''' Look for SQLi '''
+    print_bold_green("Looking for SQLi")
+    if not os.path.exists(target + "/" + outfile):
+        with open(target + "/" + infile, 'r') as rawlinksfile:
+            lines = 0
+            count = 0
+            for line in rawlinksfile: lines += 1
+            for line in rawlinksfile:
+                print_green("Testing " + count + "/" + lines + " for SQLi")
+                cmdstring = "dsss.py -u " + line + "/" + infile + " >> " + target + "/" + outfile
+                os.system(cmdstring)
+    else:
+        print_yellow("Previous SQLi results exist. Skipping.")

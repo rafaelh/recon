@@ -8,21 +8,6 @@ from enumeratesubdomains import *
 from enumeratelinks import *
 from enumerateflaws import *
 
-def print_results_summary(target):
-    print_bold_green("Summary of results")
-    count_results('Amass', target + "/" + target + ".amass.txt")
-    count_results('Subfinder', target + "/" + target + ".subfinder.txt")
-    count_results('DNSBuffer', target + "/" + target + ".bufferover.txt")
-    count_results('Combined Amass, Subfinder & dnsbuffer', target + "/" + target + ".combined.txt")
-    count_results('dnsgen | massdns', target + "/" + target + ".massdns.txt")
-    count_results('Resolved Subdomains', target + "/" + "subdomains.resolved.txt")
-    count_results('Non-wildcard domains', target + "/" + "subdomains.non-wildcard.txt")
-    count_results('HTTP/HTTPS servers found', target + "/" + "responding_web_servers.txt")
-    count_results('Hakrawler links found', target + "/" + "hakrawler.txt")
-    count_results('Getallurls links found', target + "/" + "getallurls.txt")
-    count_results("Combined links found", target + "/" + "urls.raw.txt")
-    show_dalfox_results(target + "/xss.results.txt")
-
 def main():
     if len(sys.argv) == 1:
         print("\nUsage: recon example.com\nNOTE: You must have permission to scan this domain\n")
@@ -43,19 +28,21 @@ def main():
                     infile2="tool_output/subs.assetfinder.txt",
                     infile3="tool_output/subs.subfinder.txt",
                     infile4="tool_output/subs.dnsbuffer.txt",
-                    outfile="subs.combined.txt")
-    with open(target + "/subs.combined.txt", 'a') as file:
+                    outfile="tool_output/subs.combined.txt")
+    with open(target + "/tool_output/subs.combined.txt", 'a') as file:
         file.write(target + '\n')
 
-    run_dnsgen_and_massdns(target, massdns_resolvers)
-    resolve_subdomains(target, infile=target +".massdns.txt", outfile="subs.resolved.txt")
+    run_dnsgen_and_massdns(target, massdns_resolvers, infile="tool_output/subs.combined.txt",
+                            massdns_output="tool_output/subs.massdns.txt",
+                           outfile="subs.resolved.txt")
     remove_wildcard_domains(target, infile="subs.resolved.txt", outfile="subs.non-wildcard.txt")
     find_web_servers(target, infile="subs.non-wildcard.txt", outfile="responding_web_servers.txt")
 
     # Discover URLs
     run_hakcrawler(target, infile="responding_web_servers.txt", outfile="hakrawler.txt")
     run_getallurls(target, outfile="getallurls.txt")
-    combine_url_results(target, infile1="hakrawler.txt", infile2="getallurls.txt", outfile="urls.raw.txt")
+    combine_results(target, infile1="hakrawler.txt", infile2="getallurls.txt",
+                    outfile="urls.raw.txt")
     find_injection_points(target, infile="urls.raw.txt", outfile="urls.interesting.txt")
     validate_links(target, 200, infile="urls.interesting.txt", outfile="urls.totest.txt")
 
@@ -63,31 +50,26 @@ def main():
     # Past this point we should be requiring an additional directive to actively scan
 
     # Find flaws
-    #run_dalfox(xsshunter_domain, custom_xss_payloads, target, infile="urls.totest.txt", outfile="xss.results.txt", )
-
-    # Summary
-    #print_results_summary(target)
-
-
+    look_for_xss(xsshunter_domain, custom_xss_payloads, target,
+                 infile="urls.totest.txt", outfile="xss.results.txt")
+    look_for_sqli(target, infile="urls.totest.txt", outfile="sqli.results.txt")
 
 if __name__ == '__main__':
     main()
 
 '''
 TODO:
-status messages > timestamp, info/error/warn... maybe implement loguru
+* Implement https://github.com/tomnomnom/hacks/tree/master/anti-burl
+* Add aquatone
 * Combine results should be a single function for subdomains, links, and anything else
-
-    # Need to add the target itself to the domain lists, before uniq is run
-    # Need to name the files to combine - *.txt will mess up on subsequent runs
 * Use gobuster to brute force out additional links
 * Use fuff to search for secrets
 * grep crawled results for .git directories and use https://github.com/arthaud/git-dumper
 * Add a domain regex check: ^(((?!-))(xn--|_{1,1})?[a-z0-9-]{0,61}[a-z0-9]{1,1}\.)*(xn--)?([a-z0-9][a-z0-9\-]{0,60}|[a-z0-9-]{1,30}\.[a-z]{2,})$
+* Add argparse
 * Detect that assetfinder and other go modules have been installed
-* Change all functions to follow a 'target, infile, outfile' pattern, so the workflow is easier to comprehend
 * Confirm that the user has authorization to attack the target before running anything non-passive
 * Allow excluding a text file of subdomains
 * Need to test subdomain takeover: https://github.com/EdOverflow/can-i-take-over-xyz
-
+* status messages > timestamp, info/error/warn... maybe implement loguru
 '''

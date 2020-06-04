@@ -13,7 +13,7 @@ def count_results(tool, output_file):
 def create_directory(directory):
     ''' Checks if the specified directory exists, and creates it if not '''
     if os.path.exists(directory):
-        print_grey("Directory exists: " + directory)
+        print_yellow("Directory exists: " + directory)
     else:
         print_green("Creating directory: " + directory)
         cmdstring = "mkdir " + directory
@@ -43,7 +43,7 @@ def run_amass(target, amass_config, outfile):
             cmdstring = "amass enum -config " + amass_config + " -brute -d " + target + " -o " + \
                         target + "/" + outfile
         else:
-            print_grey("Not using config.ini")
+            print_red("Not using config.ini")
             cmdstring = "amass enum -brute -d " + target + " -o " + target + "/" + outfile
         os.system(cmdstring)
     else:
@@ -89,28 +89,20 @@ def run_dnsbuffer(target, outfile):
         print_yellow("Previous dnsbuffer results exist. Skipping.")
     count_results('DNSBuffer', target + "/" + outfile)
 
-def run_dnsgen_and_massdns(target, massdns_resolvers):
+def run_dnsgen_and_massdns(target, massdns_resolvers, infile, massdns_output, outfile):
     ''' Guess additional subdomains with dnsgen | massdns '''
     print_bold_green("Guess additional subdomains with dnsgen | massdns")
 
-    combined_domain_file = target + "/subs.combined.txt"
-    output_file = target + "/" + target + ".massdns.txt"
-
-    if not os.path.exists(output_file):
-        cmdstring = "cat " + combined_domain_file + " | dnsgen - | massdns -r " + \
-                    massdns_resolvers + " -t A -o S -w " + output_file
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "cat " + target + "/" + infile + " | dnsgen - | massdns -r " + \
+                    massdns_resolvers + " -t A -o S -w " + target + "/" + massdns_output
+        os.system(cmdstring)
+        cmdstring = "cat " + target + "/" + massdns_output + \
+                    " | awk '{print $1}' | sed 's/\.$//' | uniq > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous dnsgen | massdns results exist. Skipping.")
-    count_results('dnsgen | massdns', output_file)
-
-def resolve_subdomains(target, infile, outfile):
-    ''' Check which massdns results actually resolve '''
-    print_bold_green("Checking which subdomains resolve")
-    cmdstring = "sort " + target + "/" + infile + " | awk '{print $1}' | sed 's/\.$//' | uniq > " + \
-                target + "/" + outfile
-    os.system(cmdstring)
-    count_results('Resolved Subdomains', target + "/" + outfile)
+    count_results('dnsgen | massdns', target + "/" + outfile)
 
 def remove_wildcard_domains(target, infile, outfile):
     ''' Removed wildcard domains from the list '''
