@@ -18,7 +18,7 @@ def main():
     create_directory(target + "/tool_output")
 
     if not os.path.exists(target + "/target.txt"):
-        f = open(target + "/target.txt", "a")
+        f = open(target + "/target.txt", "w")
         f.write(target)
         f.close()
 
@@ -29,8 +29,6 @@ def main():
                     outfile="urls.raw.txt")
     find_injection_points(target, infile="urls.raw.txt", outfile="urls.interesting.txt")
     validate_links(target, 200, infile="urls.interesting.txt", outfile="urls.totest.txt")
-
-
 
     # Find flaws
     look_for_xss(xsshunter_domain, custom_xss_payloads, target,
