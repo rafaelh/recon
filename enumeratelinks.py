@@ -41,20 +41,23 @@ def validate_links(target, responsecode, infile, outfile):
     ''' Check the response code of links from a file '''
     print_bold_green("Checking which links return a " + str(responsecode) + " response code")
     if not os.path.exists(target + "/" + outfile):
-        with open(target + "/" + infile, 'r') as rawlinksfile:
-            lines = 0
-            count = 0
-            for line in rawlinksfile: lines += 1
-            print_message("green", "Links to check: " + str(lines))
-            for line in rawlinksfile:
-                count += 1
-                try:
-                    if urllib.request.urlopen(line).getcode() == responsecode:
-                        with open(target + "/" + outfile, 'a') as validatedlinksfile:
-                            validatedlinksfile.write(line)
-                        print_message("green", "Response " + str(responsecode) + ": " + line.rstrip("\n"))
-                except:
-                    print_message("red", "Link " + count + "/" + lines + " doesn't respond as " + responsecode)
+        try:
+            with open(target + "/" + infile, 'r') as rawlinksfile:
+                lines = 0
+                count = 0
+                for line in rawlinksfile: lines += 1
+                print_message("green", "Links to check: " + str(lines))
+                for line in rawlinksfile:
+                    count += 1
+                    try:
+                        if urllib.request.urlopen(line).getcode() == responsecode:
+                            with open(target + "/" + outfile, 'a') as validatedlinksfile:
+                                validatedlinksfile.write(line)
+                            print_message("green", "Response " + str(responsecode) + ": " + line.rstrip("\n"))
+                    except:
+                        print_message("red", "Link " + count + "/" + lines + " doesn't respond as " + responsecode)
+        except IOError:
+            print_message("red", "Input file " + infile + " does not appear to exist.")
     else:
         print_yellow("Previous link checking results exist. Skipping.")
 

@@ -6,12 +6,15 @@ def show_dalfox_results(infile):
     ''' Show the results of the dalfox scan '''
     warning_count = 0
     vulnerability_count = 0
-    with open(infile, 'r') as f:
-        for line in f:
-            if "[W]" in line: warning_count += 1
-            if "[V]" in line: vulnerability_count += 1
-    print_green("XSS Results: " + str(warning_count) + " warnings, " +
-                str(vulnerability_count) + " vulnerabilities")
+    try:
+        with open(infile, 'r') as f:
+            for line in f:
+                if "[W]" in line: warning_count += 1
+                if "[V]" in line: vulnerability_count += 1
+        print_message("green", "XSS Results: " + str(warning_count) + " warnings, " +
+                    str(vulnerability_count) + " vulnerabilities")
+    except IOError:
+        print_message("red", "No Dalfox results exist")
 
 def look_for_xss(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
     ''' Look for XSS '''
@@ -29,13 +32,16 @@ def look_for_sqli(target, infile, outfile):
     ''' Look for SQLi '''
     print_message("green", "Looking for SQLi")
     if not os.path.exists(target + "/" + outfile):
-        with open(target + "/" + infile, 'r') as rawlinksfile:
-            lines = 0
-            count = 0
-            for line in rawlinksfile: lines += 1
-            for line in rawlinksfile:
-                print_message("green", "Testing " + count + "/" + lines + " for SQLi")
-                cmdstring = "dsss.py -u " + line + "/" + infile + " >> " + target + "/" + outfile
-                os.system(cmdstring)
+        try:
+            with open(target + "/" + infile, 'r') as rawlinksfile:
+                lines = 0
+                count = 0
+                for line in rawlinksfile: lines += 1
+                for line in rawlinksfile:
+                    print_message("green", "Testing " + count + "/" + lines + " for SQLi")
+                    cmdstring = "dsss.py -u " + line + "/" + infile + " >> " + target + "/" + outfile
+                    os.system(cmdstring)
+        except IOError:
+            print_message("red", "Input file " + infile + " does not appear to exist")
     else:
         print_message("yellow", "Previous SQLi results exist. Skipping.")
