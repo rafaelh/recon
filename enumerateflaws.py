@@ -15,15 +15,20 @@ def show_dalfox_results(infile):
                     str(vulnerability_count) + " vulnerabilities")
     except IOError:
         print_message("red", "No Dalfox results exist")
+        sys.exit(1)
 
 def look_for_xss(xsshunter_domain, custom_xss_payloads, target, infile, outfile):
     ''' Look for XSS '''
     print_message("green", "Looking for XSS")
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/" + infile + " | dalfox pipe -o " + target + "/" + outfile
-        if xsshunter_domain: cmdstring += " -b " + xsshunter_domain
-        if custom_xss_payloads: cmdstring += " --custom-payload " + custom_xss_payloads
-        os.system(cmdstring)
+        if os.path.exists(target + "/" + infile):
+            cmdstring = "cat " + target + "/" + infile + " | dalfox pipe -o " + target + "/" + outfile
+            if xsshunter_domain: cmdstring += " -b " + xsshunter_domain
+            if custom_xss_payloads: cmdstring += " --custom-payload " + custom_xss_payloads
+            os.system(cmdstring)
+        else:
+            print_message("red", "Input file " + infile + " does not appear to exist")
+            sys.exit(1)
     else:
         print_message("yellow", "Previous dalfox results exist. Skipping.")
     show_dalfox_results(target + "/" + outfile)
@@ -43,5 +48,6 @@ def look_for_sqli(target, infile, outfile):
                     os.system(cmdstring)
         except IOError:
             print_message("red", "Input file " + infile + " does not appear to exist")
+            sys.exit(1)
     else:
         print_message("yellow", "Previous SQLi results exist. Skipping.")

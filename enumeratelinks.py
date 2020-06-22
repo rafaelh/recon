@@ -37,16 +37,19 @@ def find_injection_points(target, infile, outfile):
     else:
         print_yellow("Previous xss injection point results exist. Skipping.")
 
+# This is where the error is (down)
+# checking in & outfiles should be extracted out into it's own function. DRY.
+
 def validate_links(target, responsecode, infile, outfile):
     ''' Check the response code of links from a file '''
-    print_bold_green("Checking which links return a " + str(responsecode) + " response code")
+    print_message("green", "Checking which links return a " + str(responsecode) + " response code")
     if not os.path.exists(target + "/" + outfile):
         try:
             with open(target + "/" + infile, 'r') as rawlinksfile:
                 lines = 0
                 count = 0
                 for line in rawlinksfile: lines += 1
-                print_message("green", "Links to check: " + str(lines))
+                print_message("grey", "Links to check: " + str(lines))
                 for line in rawlinksfile:
                     count += 1
                     try:
@@ -59,5 +62,5 @@ def validate_links(target, responsecode, infile, outfile):
         except IOError:
             print_message("red", "Input file " + infile + " does not appear to exist.")
     else:
-        print_yellow("Previous link checking results exist. Skipping.")
+        print_message("yellow", "Previous link checking results exist. Skipping.")
 
