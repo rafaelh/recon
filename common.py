@@ -16,6 +16,14 @@ def print_red(message):
     """ Prints a message to the console prefixed with a red '[*]' """
     print("[\033[0;31;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
 
+def print_message(color, message):
+    """ Prints a formatted message to the console """
+    if   color == "green":  print("\n\033[1;32m>>> \033[0;37m" + message + "\033[0;37m")
+    elif color == "yellow": print("[\033[1;33m*\033[0;37m] " + message + "\033[0;37m")
+    elif color == "red":    print("[\033[1;31m*\033[0;37m] " + message + "\033[0;37m")
+    elif color == "grey":   print("[*] " + message)
+    else:                   print("\033[0;31mInvalid Format \033[0;37m" + message + "\033[0;37m")
+
 def create_directory(directory):
     ''' Checks if the specified directory exists, and creates it if not '''
     if os.path.exists(directory):
