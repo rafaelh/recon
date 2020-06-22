@@ -53,7 +53,7 @@ def validate_links(target, responsecode, infile, outfile):
             lines = 0
             count = 0
             for line in rawlinksfile: lines += 1
-            print_green("Links to check: " + lines)
+            print_green("Links to check: " + str(lines))
             for line in rawlinksfile:
                 count += 1
                 try:
