@@ -3,13 +3,6 @@ import os
 import sys
 from common import *
 
-def count_results(tool, output_file):
-    count = 0
-    with open(output_file, 'r') as f:
-        for line in f:
-            count += 1
-    print_green(tool + " total number of results: " + str(count))
-
 def run_checks(amass_config):
     ''' Confirm that all needed tools and config is available *before* wasting any time '''
     if not os.path.exists(amass_config):
@@ -39,7 +32,6 @@ def run_amass(target, amass_config, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous amass results exist. Skipping.")
-    count_results('Amass', target + "/" + outfile)
     # need to define and add -min-for-recursive 3
 
 def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN, outfile):
@@ -55,7 +47,6 @@ def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKE
         os.system(cmdstring)
     else:
         print_yellow("Previous Assetfinder results exist. Skipping.")
-    count_results('Assetfinder', target + "/" + outfile)
 
 def run_subfinder(target, outfile):
     ''' Runs Subfinder to find subdomains '''
@@ -66,7 +57,6 @@ def run_subfinder(target, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous Subfinder results exist. Skipping.")
-    count_results('Subfinder', target + "/" + outfile)
 
 def run_dnsbuffer(target, outfile):
     ''' Gets subdomains from Rapid7 '''
@@ -78,7 +68,6 @@ def run_dnsbuffer(target, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous dnsbuffer results exist. Skipping.")
-    count_results('DNSBuffer', target + "/" + outfile)
 
 def run_dnsgen_and_massdns(target, massdns_resolvers, infile, massdns_output, outfile):
     ''' Guess additional subdomains with dnsgen | massdns '''
@@ -93,7 +82,6 @@ def run_dnsgen_and_massdns(target, massdns_resolvers, infile, massdns_output, ou
         os.system(cmdstring)
     else:
         print_yellow("Previous dnsgen | massdns results exist. Skipping.")
-    count_results('dnsgen | massdns', target + "/" + outfile)
 
 def remove_wildcard_domains(target, infile, outfile):
     ''' Removed wildcard domains from the list '''
@@ -104,7 +92,6 @@ def remove_wildcard_domains(target, infile, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous wildcheck results exist. Skipping.")
-    count_results('Non-wildcard domains', target + "/" + outfile)
 
 def find_web_servers(target, infile, outfile):
     ''' Probe domains for http/https servers'''
@@ -116,4 +103,3 @@ def find_web_servers(target, infile, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous httprobe results exist. Skipping.")
-    count_results('HTTP/HTTPS servers found', target + "/" + outfile)

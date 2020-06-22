@@ -9,7 +9,7 @@ from enumerateflaws import *
 
 def main():
     if len(sys.argv) == 1:
-        print("\nUsage: recon example.com\nNOTE: You must have permission to scan this domain\n")
+        print("\nUsage: reconsite www.example.com\nNOTE: You must have permission to scan this domain\n")
         sys.exit(1)
 
     target = sys.argv[1]

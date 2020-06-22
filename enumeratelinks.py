@@ -3,12 +3,6 @@ import sys
 import urllib.request
 from common import *
 
-def count_results(tool, output_file):
-    count = 0
-    with open(output_file, 'r') as f:
-        for line in f:
-            count += 1
-    print_green(tool + " total number of results: " + str(count))
 
 def run_hakcrawler(target, infile, outfile):
     ''' Use hakcrawler to extract a list of endpoints from a file of domain names '''
@@ -22,7 +16,6 @@ def run_hakcrawler(target, infile, outfile):
             os.system(cmdstring)
     else:
         print_yellow("Previous hakcrawler results exist. Skipping.")
-    count_results('Links found', target + "/" + outfile)
 
 def run_getallurls(target, outfile):
     ''' Gather URLs from a variety of sources '''
@@ -32,7 +25,6 @@ def run_getallurls(target, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous getallurls results exist. Skipping.")
-    count_results('Getallurls links found', target + "/" + outfile)
 
 def find_injection_points(target, infile, outfile):
     ''' Extract endpoints more likely to yield reflected XSS from a file '''
@@ -53,16 +45,16 @@ def validate_links(target, responsecode, infile, outfile):
             lines = 0
             count = 0
             for line in rawlinksfile: lines += 1
-            print_green("Links to check: " + str(lines))
+            print_message("green", "Links to check: " + str(lines))
             for line in rawlinksfile:
                 count += 1
                 try:
                     if urllib.request.urlopen(line).getcode() == responsecode:
                         with open(target + "/" + outfile, 'a') as validatedlinksfile:
                             validatedlinksfile.write(line)
-                        print_green("Response " + str(responsecode) + ": " + line.rstrip("\n"))
+                        print_message("green", "Response " + str(responsecode) + ": " + line.rstrip("\n"))
                 except:
-                    print_red("Link " + count + "/" + lines + " doesn't respond as " + responsecode)
+                    print_message("red", "Link " + count + "/" + lines + " doesn't respond as " + responsecode)
     else:
         print_yellow("Previous link checking results exist. Skipping.")
-    count_results("Combined links found", target + "/" + outfile)
+
