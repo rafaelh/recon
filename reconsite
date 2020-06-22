@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+# Written by Rafe Hart (@rafael_hart)
+
+import sys
+import os
+from config import *
+from enumeratelinks import *
+from enumerateflaws import *
+
+def main():
+    if len(sys.argv) == 1:
+        print("\nUsage: recon example.com\nNOTE: You must have permission to scan this domain\n")
+        sys.exit(1)
+
+    target = sys.argv[1]
+
+    create_directory(target)
+    create_directory(target + "/tool_output")
+
+    f = open(target + "/target.txt", "a")
+    f.write(target)
+    f.close()
+
+    # Discover URLs
+    run_hakcrawler(target, infile="target.txt", outfile="hakrawler.txt")
+    run_getallurls(target, outfile="getallurls.txt")
+    combine_results(target, infile1="hakrawler.txt", infile2="getallurls.txt",
+                    outfile="urls.raw.txt")
+    find_injection_points(target, infile="urls.raw.txt", outfile="urls.interesting.txt")
+    validate_links(target, 200, infile="urls.interesting.txt", outfile="urls.totest.txt")
+
+    # ------------------------------------------
+    # Past this point we should be requiring an additional directive to actively scan
+
+    # Find flaws
+    look_for_xss(xsshunter_domain, custom_xss_payloads, target,
+                 infile="urls.totest.txt", outfile="xss.results.txt")
+    look_for_sqli(target, infile="urls.totest.txt", outfile="sqli.results.txt")

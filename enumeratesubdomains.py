@@ -10,15 +10,6 @@ def count_results(tool, output_file):
             count += 1
     print_green(tool + " total number of results: " + str(count))
 
-def create_directory(directory):
-    ''' Checks if the specified directory exists, and creates it if not '''
-    if os.path.exists(directory):
-        print_yellow("Directory exists: " + directory)
-    else:
-        print_green("Creating directory: " + directory)
-        cmdstring = "mkdir " + directory
-        os.system(cmdstring)
-
 def run_checks(amass_config):
     ''' Confirm that all needed tools and config is available *before* wasting any time '''
     if not os.path.exists(amass_config):

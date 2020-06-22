@@ -16,6 +16,15 @@ def print_red(message):
     """ Prints a message to the console prefixed with a red '[*]' """
     print("[\033[0;31;40m*\033[0;37;40m] " + message + "\033[0;37;0m")
 
+def create_directory(directory):
+    ''' Checks if the specified directory exists, and creates it if not '''
+    if os.path.exists(directory):
+        print_yellow("Directory exists: " + directory)
+    else:
+        print_green("Creating directory: " + directory)
+        cmdstring = "mkdir " + directory
+        os.system(cmdstring)
+
 def combine_results(target, infile1="", infile2="", infile3="", infile4="", outfile=""):
     ''' Combine, sort and remove duplicates from the url finding tasks '''
     print_bold_green("Combining results")

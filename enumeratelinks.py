@@ -12,7 +12,7 @@ def count_results(tool, output_file):
 
 def run_hakcrawler(target, infile, outfile):
     ''' Use hakcrawler to extract a list of endpoints from a file of domain names '''
-    print_bold_green("Crawling HTTP/HTTPS servers for urls")
+    print_message("green", "Crawling HTTP/HTTPS servers for urls")
     if not os.path.exists(target + "/" + outfile):
         with open(target + "/" + infile) as f:
             http_servers = [line.rstrip() for line in f]
