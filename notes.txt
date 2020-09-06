@@ -1,0 +1,11 @@
+
+getlinks() {
+    gau $1 -subs | \
+    grep "=" | \
+    egrep -iv ".(jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|js)" | \
+    qsreplace -a
+}
+
+sqlicheck() {
+    getlinks $1 | python3 /opt/DSSS/dsss.py
+}
