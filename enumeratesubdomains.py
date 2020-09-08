@@ -60,7 +60,7 @@ def run_massdns(target, massdns_resolvers, infile, outfile):
     print_bold_green("Resolve the subdomains")
 
     if not os.path.exists(target + "/" + outfile):
-        cmdstring = "cat " + target + "/" + infile + "massdns -r " + massdns_resolvers + " -t A -o S | awk '{print $1}' | sed 's/\.$//' | uniq > " + target + "/" + outfile
+        cmdstring = "cat " + target + "/" + infile + " | massdns -r " + massdns_resolvers + " -t A -o S | awk '{print $1}' | sed 's/\.$//' | uniq > " + target + "/" + outfile
         os.system(cmdstring)
     else:
         print_yellow("Previous massdns results exist. Skipping.")
