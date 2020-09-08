@@ -3,6 +3,17 @@ import sys
 import urllib.request
 from common import *
 
+def find_web_servers(target, infile, outfile):
+    ''' Probe domains for http/https servers'''
+    print_bold_green("Probing for HTTP/HTTPS servers")
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "cat " + target + "/" + infile + " | httprobe -c 100 | sed 's/https\?:\/\///' | sort | uniq > " + target + "/" + outfile
+        os.system(cmdstring)
+        cmdstring = "echo " + target + " >> " + target + "/" + outfile
+        os.system(cmdstring)
+    else:
+        print_yellow("Previous httprobe results exist. Skipping.")
+
 
 def run_hakcrawler(target, infile, outfile):
     ''' Use hakcrawler to extract a list of endpoints from a file of domain names '''
