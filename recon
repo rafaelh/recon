@@ -14,45 +14,42 @@ def main():
         sys.exit(1)
     target = sys.argv[1]
 
-    run_checks(amass_config)
-
     # Discover subdomains with HTTP/HTTPS servers
     create_directory(target)
     create_directory(target + "/tool_output")
-    run_amass(target, amass_config, outfile="tool_output/subs.amass.txt")
-    run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN, outfile="tool_output/subs.assetfinder.txt")
-    run_subfinder(target, outfile="tool_output/subs.subfinder.txt")
-    run_dnsbuffer(target, outfile="tool_output/subs.dnsbuffer.txt")
-    combine_results(target,
-                    infile1="tool_output/subs.amass.txt",
-                    infile2="tool_output/subs.assetfinder.txt",
-                    infile3="tool_output/subs.subfinder.txt",
-                    infile4="tool_output/subs.dnsbuffer.txt",
-                    outfile="tool_output/subs.combined.txt")
-    with open(target + "/tool_output/subs.combined.txt", 'a') as file:
+    run_amass(target, amass_config, outfile="tool_output/subs.1.amass.txt")
+    #run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN, outfile="tool_output/subs.assetfinder.txt")
+    #run_subfinder(target, outfile="tool_output/subs.subfinder.txt")
+    #run_dnsbuffer(target, outfile="tool_output/subs.dnsbuffer.txt")
+    #combine_results(target,
+    #                infile1="tool_output/subs.amass.txt",
+    #                infile2="tool_output/subs.assetfinder.txt",
+    #                infile3="tool_output/subs.subfinder.txt",
+    #                infile4="tool_output/subs.dnsbuffer.txt",
+    #                outfile="tool_output/subs.combined.txt")
+    with open(target + "tool_output/subs.1.amass.txt", 'a') as file:
         file.write(target + '\n')
 
-    run_dnsgen_and_massdns(target, massdns_resolvers, infile="tool_output/subs.combined.txt",
-                            massdns_output="tool_output/subs.massdns.txt",
-                           outfile="subs.resolved.txt")
-    remove_wildcard_domains(target, infile="subs.resolved.txt", outfile="subs.non-wildcard.txt")
-    find_web_servers(target, infile="subs.non-wildcard.txt", outfile="responding_web_servers.txt")
+    run_massdns(target, massdns_resolvers, infile="tool_output/subs.1.amass.txt", outfile="tool_output/subs.massdnsresolved.txt")
+    remove_wildcard_domains(target, infile="tool_output/subs.massdnsresolved.txt", outfile="subdomains.resolved.txt")
+    find_web_servers(target, infile="subdomains.resolved.txt", outfile="responding_web_servers.txt")
 
     # Discover URLs
     run_hakcrawler(target, infile="responding_web_servers.txt", outfile="hakrawler.txt")
-    run_getallurls(target, outfile="getallurls.txt")
-    combine_results(target, infile1="hakrawler.txt", infile2="getallurls.txt",
-                    outfile="urls.raw.txt")
-    find_injection_points(target, infile="urls.raw.txt", outfile="urls.interesting.txt")
-    validate_links(target, 200, infile="urls.interesting.txt", outfile="urls.totest.txt")
+    #run_getallurls(target, outfile="getallurls.txt")
+    #combine_results(target, infile1="hakrawler.txt", infile2="getallurls.txt",
+    #                outfile="urls.raw.txt")
+    #find_injection_points(target, infile="urls.raw.txt", outfile="urls.interesting.txt")
+    #validate_links(target, 200, infile="urls.interesting.txt", outfile="urls.totest.txt")
 
     # ------------------------------------------
     # Past this point we should be requiring an additional directive to actively scan
 
     # Find flaws
-    look_for_xss(xsshunter_domain, custom_xss_payloads, target,
-                 infile="urls.totest.txt", outfile="xss.results.txt")
-    look_for_sqli(target, infile="urls.totest.txt", outfile="sqli.results.txt")
+    # finding flaws should be a separate scripts that can be invoked separately 
+    #look_for_xss(xsshunter_domain, custom_xss_payloads, target,
+    #             infile="urls.totest.txt", outfile="xss.results.txt")
+    #look_for_sqli(target, infile="urls.totest.txt", outfile="sqli.results.txt")
 
 if __name__ == '__main__':
     main()
@@ -61,7 +58,6 @@ if __name__ == '__main__':
 TODO:
 * Implement https://github.com/tomnomnom/hacks/tree/master/anti-burl
 * Add aquatone
-* Combine results should be a single function for subdomains, links, and anything else
 * Use gobuster to brute force out additional links
 * Use fuff to search for secrets
 * grep crawled results for .git directories and use https://github.com/arthaud/git-dumper

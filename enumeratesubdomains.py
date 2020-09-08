@@ -3,19 +3,6 @@ import os
 import sys
 from common import *
 
-def run_checks(amass_config):
-    ''' Confirm that all needed tools and config is available *before* wasting any time '''
-    if not os.path.exists(amass_config):
-        print_yellow("Amass config not found. Results may not be as complete.")
-
-    packages_to_check = ['amass', 'gobuster', 'golang', 'jq']
-    apt_cache = apt.Cache()
-    for package in packages_to_check:
-        if not apt_cache[package].is_installed:
-            print_red(package + "is required for this script. Exiting.")
-            sys.exit(1)
-
-# -------------------------------
 
 def run_amass(target, amass_config, outfile):
     ''' Runs amass with the specified config file '''
@@ -32,7 +19,6 @@ def run_amass(target, amass_config, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous amass results exist. Skipping.")
-    # need to define and add -min-for-recursive 3
 
 def run_assetfinder(target, FB_APP_ID, FB_APP_SECRET, VT_API_KEY, SPYSE_API_TOKEN, outfile):
     ''' Runs Assetfinder after exporting environment variables '''
@@ -68,6 +54,16 @@ def run_dnsbuffer(target, outfile):
         os.system(cmdstring)
     else:
         print_yellow("Previous dnsbuffer results exist. Skipping.")
+
+def run_massdns(target, massdns_resolvers, infile, outfile):
+    ''' Attempt resolution of the subdomains '''
+    print_bold_green("Resolve the subdomains")
+
+    if not os.path.exists(target + "/" + outfile):
+        cmdstring = "cat " + target + "/" + infile + "massdns -r " + massdns_resolvers + " -t A -o S | awk '{print $1}' | sed 's/\.$//' | uniq > " + target + "/" + outfile
+        os.system(cmdstring)
+    else:
+        print_yellow("Previous massdns results exist. Skipping.")
 
 def run_dnsgen_and_massdns(target, massdns_resolvers, infile, massdns_output, outfile):
     ''' Guess additional subdomains with dnsgen | massdns '''
