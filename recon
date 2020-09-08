@@ -27,11 +27,11 @@ def main():
     #                infile3="tool_output/subs.subfinder.txt",
     #                infile4="tool_output/subs.dnsbuffer.txt",
     #                outfile="tool_output/subs.combined.txt")
-    with open(target + "tool_output/subs.1.amass.txt", 'a') as file:
+    with open(target + "/tool_output/subs.1.amass.txt", 'a') as file:
         file.write(target + '\n')
 
-    run_massdns(target, massdns_resolvers, infile="tool_output/subs.1.amass.txt", outfile="tool_output/subs.massdnsresolved.txt")
-    remove_wildcard_domains(target, infile="tool_output/subs.massdnsresolved.txt", outfile="subdomains.resolved.txt")
+    run_massdns(target, massdns_resolvers, infile="/tool_output/subs.1.amass.txt", outfile="/tool_output/subs.massdnsresolved.txt")
+    remove_wildcard_domains(target, infile="/tool_output/subs.massdnsresolved.txt", outfile="subdomains.resolved.txt")
     find_web_servers(target, infile="subdomains.resolved.txt", outfile="responding_web_servers.txt")
 
     # Discover URLs
