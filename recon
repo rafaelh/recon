@@ -56,6 +56,7 @@ if __name__ == '__main__':
 
 '''
 TODO:
+* Run cloud_enum
 * Implement https://github.com/tomnomnom/hacks/tree/master/anti-burl
 * Add aquatone
 * Use gobuster to brute force out additional links
