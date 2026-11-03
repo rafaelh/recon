@@ -47,9 +47,9 @@ class, event, file and field names to `/spec-design`, including when they come f
    than two passes unless requested by the user. After the last pass, apply the improvements and
    accepted decisions and move on to step 4.
 
-4. Write the goal and the agreed behaviours to `output/YYYY-MM-spec-<goal>.md` (where <goal> is related to
+4. Write the goal and the agreed behaviours to `docs/specs/YYYY-MM-spec-<goal>.md` (where <goal> is related to
    the user's goal; for example, if the goal is "allow users to reset their password", the file
-   might be named `output/2026-10-spec-user-password-reset.md`). If it is a large set of behaviours, propose
+   might be named `docs/specs/2026-10-spec-user-password-reset.md`). If it is a large set of behaviours, propose
    breaking them into a series of smaller spec documents, and follow the user's instructions. If
    multiple specs should run in a sequence, include a `-#` in the filename, with `#` being the
    number of the spec. After that, tell the user that the next step is to run `/spec-design` and
