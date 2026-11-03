@@ -23,11 +23,20 @@ Checking for ...
 * XSS - [dalfox](https://github.com/hahwul/dalfox)
 * SQLi - [dsss.py](https://github.com/stamparm/DSSS)
 
-Configuration settings can be put in `config.py`. The links above all have installation instructions, or you can take a look at my script [update-kali](https://github.com/rafaelh/update-kali) for a more automated approach.
+Configuration settings can be put in `pkg/recon/config.py`. The links above all have installation instructions, or you can take a look at my script [update-kali](https://github.com/rafaelh/update-kali) for a more automated approach.
 
 ## Installing
 Run `./install.py` on macOS (Homebrew), Kali (apt) or Arch (yay). Prerequisites come from the system package manager; the tools themselves are installed to `~/.recon-tools`, so add this to your shell profile:
 
 ```sh
 export PATH="$HOME/.recon-tools/bin:$PATH"
+```
+
+## Running
+This is a [uv](https://docs.astral.sh/uv/) project, with the Python code in `pkg/recon`:
+
+```sh
+uv sync
+uv run recon example.com         # subdomains, web servers and URLs for a domain
+uv run reconsite www.example.com # URLs and flaws for a single site
 ```

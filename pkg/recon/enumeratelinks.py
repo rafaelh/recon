@@ -1,7 +1,7 @@
 import os
 import sys
 import urllib.request
-from common import *
+from .common import *
 
 def find_web_servers(target, infile, outfile):
     ''' Probe domains for http/https servers'''

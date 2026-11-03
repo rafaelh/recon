@@ -1,7 +1,6 @@
-import apt
 import os
 import sys
-from common import *
+from .common import *
 
 
 def run_amass(target, amass_config, outfile):

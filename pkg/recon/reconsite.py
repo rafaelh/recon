@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
 # Written by Rafe Hart (@rafael_hart)
 
 import sys
 import os
-from config import *
-from enumeratelinks import *
-from enumerateflaws import *
+from .config import *
+from .enumeratelinks import *
+from .enumerateflaws import *
 
 def main():
     if len(sys.argv) == 1:

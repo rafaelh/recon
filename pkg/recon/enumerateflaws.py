@@ -1,6 +1,6 @@
 import os
 import sys
-from common import *
+from .common import *
 
 def show_dalfox_results(infile):
     ''' Show the results of the dalfox scan '''
