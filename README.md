@@ -24,3 +24,10 @@ Checking for ...
 * SQLi - [dsss.py](https://github.com/stamparm/DSSS)
 
 Configuration settings can be put in `config.py`. The links above all have installation instructions, or you can take a look at my script [update-kali](https://github.com/rafaelh/update-kali) for a more automated approach.
+
+## Installing
+Run `./install.py` on macOS (Homebrew), Kali (apt) or Arch (yay). Prerequisites come from the system package manager; the tools themselves are installed to `~/.recon-tools`, so add this to your shell profile:
+
+```sh
+export PATH="$HOME/.recon-tools/bin:$PATH"
+```

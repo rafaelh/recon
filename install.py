@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
 import os
-import apt
+import shutil
 import subprocess
 import sys
 from datetime import datetime
+
+RECON_TOOLS_DIR = os.path.expanduser(os.getenv("RECON_TOOLS_DIR", "~/.recon-tools"))
+RECON_BIN_DIR = RECON_TOOLS_DIR + "/bin"
 
 def print_message(color, message):
     """ Prints a formatted message to the console """
@@ -20,60 +23,93 @@ def elevate_privileges():
     status = os.system("sudo date; echo")
     return status
 
-def take_ownership(directory):
-    username = os.path.expanduser("~").split('/')[2]
-    cmdstring = "sudo chown " + username + ":" + username + " " + directory
-    os.system(cmdstring)
+def detect_package_manager():
+    """ Returns 'brew' (macOS), 'apt' (Kali/Debian) or 'yay' (Arch) """
+    if sys.platform == "darwin":
+        return "brew"
+    os_ids = []
+    if os.path.exists("/etc/os-release"):
+        with open("/etc/os-release") as os_release:
+            for line in os_release:
+                key, _, value = line.strip().partition("=")
+                if key in ("ID", "ID_LIKE"):
+                    os_ids += value.strip('"').split()
+    if "arch" in os_ids:
+        return "yay"
+    if "debian" in os_ids or "kali" in os_ids:
+        return "apt"
+    return None
 
-def update_packages():
+def update_packages(package_manager):
     """ Do a general update of the system packages """
-    cmdseries = ['sudo apt update',
-                 'sudo apt full-upgrade -y',
-                 'sudo apt autoremove -y']
-    for cmdstring in cmdseries:
+    cmdseries = {'apt':  ['sudo apt update',
+                          'sudo apt full-upgrade -y',
+                          'sudo apt autoremove -y'],
+                 'yay':  ['yay -Syu --noconfirm'],
+                 'brew': ['brew update',
+                          'brew upgrade']}
+    for cmdstring in cmdseries[package_manager]:
         os.system(cmdstring)
 
-def install_package(package, apt_cache):
-    """ Installs a package from apt or lets you know if its present """
-    if not apt_cache[package].is_installed:
-        print_message("green", "Installing " + package)
-        cmdstring = "sudo apt install -y " + package
+def is_package_installed(package, package_manager):
+    """ Checks whether a system package is installed """
+    if package_manager == "apt":
+        cmd = ["dpkg-query", "-W", "-f=${Status}", package]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return "ok installed" in result.stdout
+    if package_manager == "yay":
+        cmd = ["pacman", "-Q", package]
+    elif package.startswith("--cask "):
+        cmd = ["brew", "list", "--cask", package.split()[-1]]
+    else:
+        cmd = ["brew", "list", "--formula", package]
+    return subprocess.run(cmd, capture_output=True).returncode == 0
+
+def install_package(package, package_manager):
+    """ Installs a system package or lets you know if its present """
+    if not is_package_installed(package, package_manager):
+        print_message("green", "Installing " + package.split()[-1])
+        cmdstring = {'apt':  "sudo apt install -y " + package,
+                     'yay':  "yay -S --needed --noconfirm " + package,
+                     'brew': "brew install " + package}[package_manager]
         os.system(cmdstring)
 
-def pip_package_install(pip_packages, installed_pip_packages):
-    """ Install python pip package """
-    for package in pip_packages:
-        if not package in installed_pip_packages:
-            print_message("green", "Installing pip package " + package)
-            cmdstring = "sudo pip3 install --upgrade " + package
-            os.system(cmdstring)
+def uv_tool_install(uv_tools):
+    """ Install python tools into their own virtualenvs, with the binaries in RECON_BIN_DIR """
+    env = dict(os.environ, UV_TOOL_DIR=RECON_TOOLS_DIR + "/uv-tools", UV_TOOL_BIN_DIR=RECON_BIN_DIR)
+    tool_list = subprocess.run(["uv", "tool", "list"], capture_output=True, text=True, env=env)
+    installed_tools = [line.split()[0] for line in tool_list.stdout.splitlines()
+                       if line and not line.startswith("-")]
+    for package in uv_tools:
+        name = package.split("/")[-1].removesuffix(".git").lower()
+        if name not in installed_tools:
+            print_message("green", "Installing python tool " + name)
+            subprocess.run(["uv", "tool", "install", package], env=env)
 
 def gem_package_install(gem_packages, installed_gem_packages):
     """ Install Ruby gem package """
     for package in gem_packages:
         if not package in installed_gem_packages:
             print_message("green", "Installing gem package " + package)
-            cmdstring = "sudo gem install " + package
+            cmdstring = "gem install --user-install " + package
             os.system(cmdstring)
 
 def install_golang_module(module):
-    """ Install the specified Golang module """
-    modulename = module.split("/")[-1].lower()
-    if not os.path.exists("/opt/" + modulename):
+    """ Install the specified Golang module into RECON_BIN_DIR """
+    # The binary is named after the last path element, skipping a /vN major version suffix
+    parts = module.split("/")
+    modulename = parts[-2] if parts[-1][1:].isdigit() and parts[-1][0] == "v" else parts[-1]
+    if not os.path.exists(RECON_BIN_DIR + "/" + modulename):
         print_message("green", "Installing go module " + modulename)
-        cmdseries = ["sudo -E go get -u " + module,
-                     "sudo ln -s /opt/" + modulename + "/bin/" + modulename + " /usr/local/bin/" \
-                     + modulename]
-        os.environ["GOPATH"] = "/opt/" + modulename
-        for cmdstring in cmdseries:
-            os.system(cmdstring)
+        env = dict(os.environ, GOBIN=RECON_BIN_DIR)
+        subprocess.run(["go", "install", module + "@latest"], env=env)
 
 def create_directory(directory):
     """ Checks if the specified directory exists, and creates it if not """
+    directory = os.path.expanduser(directory)
     if not os.path.exists(directory):
         print_message("green", "Creating directory: " + directory)
-        cmdstring = "mkdir " + directory
-        os.system(cmdstring)
+        os.makedirs(directory)
 
 def remove_directory(directory):
     """ Checks if the specified directory exists, and deletes it if it does """
@@ -102,10 +138,10 @@ def run_scripts():
 
     if os.path.exists(script_directory):
         scripts = sorted(os.listdir(script_directory))
+        env = dict(os.environ, RECON_TOOLS_DIR=RECON_TOOLS_DIR)
         for script in scripts:
-            if '.sh' or '.py' in script:
-                cmdstring = script_directory + '/' + script
-                os.system(cmdstring)
+            if script.startswith('install-') and script.endswith(('.sh', '.py')):
+                subprocess.run([script_directory + '/' + script], env=env)
     else:
         print_message("error", "'scripts' directory is missing")
 
@@ -114,42 +150,52 @@ def run_scripts():
 def main():
     ''' This script installs the requisite tools for recon. '''
 
-    # Get sudo privileges
-    if elevate_privileges(): sys.exit(1)
+    package_manager = detect_package_manager()
+    if package_manager is None:
+        print_message("error", "Unsupported OS. Use macOS (brew), Kali (apt) or Arch (yay).")
+        sys.exit(1)
+    if not shutil.which(package_manager):
+        print_message("error", package_manager + " is not installed.")
+        sys.exit(1)
 
-    # These kali packages will be installed
-    packages_to_install = ['amass', 'golang', 'jq', 'python3-pip', 'chromium']
+    # Get sudo privileges (Homebrew must not be run with sudo)
+    if package_manager != "brew" and elevate_privileges(): sys.exit(1)
 
-    # These python packages will be installed globally
-    pip_packages = ['pipenv', 'pylint', 'dnsgen', 'stegcracker']
+    # These system packages will be installed. Everything else goes in RECON_TOOLS_DIR.
+    # amass is in the AUR on Arch, which yay handles. Homebrew's chromium cask is disabled,
+    # so Chrome is used on macOS instead (needed by gowitness).
+    packages_to_install = {
+        'apt':  ['amass', 'golang-go', 'jq', 'uv', 'git', 'build-essential', 'curl', 'chromium'],
+        'yay':  ['amass', 'go', 'jq', 'uv', 'git', 'base-devel', 'curl', 'chromium'],
+        'brew': ['amass', 'go', 'jq', 'uv', 'git'],
+    }[package_manager]
+    if package_manager == "brew" and not os.path.exists("/Applications/Google Chrome.app"):
+        packages_to_install.append('--cask google-chrome')
 
-    # These gem packages will be installed globally
+    # These python tools will be installed with `uv tool`, each in its own virtualenv
+    uv_tools = ['pipenv', 'pylint', 'dnsgen', 'stegcracker',
+                'git+https://github.com/maurosoria/dirsearch.git']
+
+    # These gem packages will be installed for the current user
     gem_packages = []
 
-    # These go tools will be installed globally. You will need to have the following settings in your
-    # .bashrc already:
-    #
-    # export GOROOT=/usr/lib/go
-    # export GOPATH=$HOME/go
-    # export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+    # These go tools will be installed with `go install`
     golang_modules_to_install = [
                                 'github.com/tomnomnom/assetfinder',
-                                'github.com/projectdiscovery/subfinder/cmd/subfinder',
-                                'github.com/lc/gau',
+                                'github.com/projectdiscovery/subfinder/v2/cmd/subfinder',
+                                'github.com/lc/gau/v2/cmd/gau',
                                 'github.com/theblackturtle/wildcheck',
                                 'github.com/tomnomnom/httprobe',
                                 'github.com/hakluke/hakrawler',
                                 'github.com/tomnomnom/qsreplace',
-                                'github.com/hahwul/dalfox',
-                                'github.com/ffuf/ffuf',
-                                'github.com/dwisiswant0/hinject'
+                                'github.com/ffuf/ffuf/v2',
+                                'github.com/dwisiswant0/hinject',
+                                'github.com/sensepost/gowitness'
                                 ]
 
-    # These git repositories will be synced to the 'external repo' directory
-    external_tools_directory = '/opt'
+    # These git repositories will be synced to RECON_TOOLS_DIR
     ext_repositories_to_sync = [
-                                'https://github.com/Cillian-Collins/dirscraper',
-                                'https://github.com/maurosoria/dirsearch'
+                                'https://github.com/Cillian-Collins/dirscraper'
                                 ]
 
     # Sync the script with Github version
@@ -161,49 +207,48 @@ def main():
         print_message("error", "Files updated. Please run the new version.\n")
         sys.exit(1)
 
-    # Update and upgrade apt packages
+    # Update and upgrade system packages
     print_message("blue", "General Update")
-    update_packages()
+    update_packages(package_manager)
 
-    # Install or remove specified apt packages
+    # Install specified system packages
     print_message("blue", "Checking installed packages")
-    apt_cache = apt.Cache()
     for package in packages_to_install:
-        install_package(package, apt_cache)
+        install_package(package, package_manager)
 
-    # Install python modules
-    print_message("blue", "Checking python modules")
-    installed_pip_packages = [r.decode().split('==')[0] for r in \
-        subprocess.check_output([sys.executable, '-m', 'pip', 'freeze']).split()]
-    pip_package_install(pip_packages, installed_pip_packages)
+    # Create specified directories
+    print_message("blue", "Checking directory structure")
+    create_directory(RECON_BIN_DIR)
+    create_directory("~/r")
+
+    # Install python tools
+    print_message("blue", "Checking python tools")
+    uv_tool_install(uv_tools)
 
     # Install gem packages
-    print_message("blue", "Checking ruby gems")
-    gemlist = subprocess.Popen(["gem list | awk '{ print $1 }'"], shell=True, stdout=subprocess.PIPE).stdout
-    installed_gem_packages = gemlist.read().decode("utf-8").split("\n")
-    gem_package_install(gem_packages, installed_gem_packages)
-
-    # Take ownership of the external tools directory
-    take_ownership(external_tools_directory)
+    if gem_packages and shutil.which("gem"):
+        print_message("blue", "Checking ruby gems")
+        gemlist = subprocess.Popen(["gem list | awk '{ print $1 }'"], shell=True, stdout=subprocess.PIPE).stdout
+        installed_gem_packages = gemlist.read().decode("utf-8").split("\n")
+        gem_package_install(gem_packages, installed_gem_packages)
 
     # Install golang tools
     print_message("blue", "Checking golang modules")
     for module in golang_modules_to_install:
         install_golang_module(module)
 
-    # Create specified directories
-    print_message("blue", "Checking directory structure")
-    create_directory(external_tools_directory)
-    create_directory("~/r")
-
     # Sync git repositories
     print_message("blue", "Syncing git repositories")
     for repo in ext_repositories_to_sync:
-        sync_git_repo(repo, external_tools_directory)
+        sync_git_repo(repo, RECON_TOOLS_DIR)
 
-    # Run *.sh and *.py files in the /scripts directory
+    # Run install-* scripts in the install_scripts directory
     print_message("blue", "Running scripts")
     run_scripts()
+
+    if RECON_BIN_DIR not in os.environ.get("PATH", "").split(os.pathsep):
+        print_message("blue", "Add the tools to your PATH in ~/.zshrc or ~/.bashrc:")
+        print('    export PATH="$HOME/.recon-tools/bin:$PATH"')
 
     print("\nAll done. Ready to run.\n")
 

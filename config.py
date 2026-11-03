@@ -1,3 +1,5 @@
+import os
+
 # Location of Amass config.ini
 # An example is available at https://github.com/OWASP/Amass/blob/master/examples/config.ini
 
@@ -10,7 +12,7 @@ VT_API_KEY = '' # VirusTotal (https://developers.virustotal.com/reference)
 SPYSE_API_TOKEN = '' # Spyse (https://spyse.com/apidocs)
 
 # Massdns resolver file, depending on where you've installed it
-massdns_resolvers = "/opt/massdns/lists/resolvers.txt"
+massdns_resolvers = os.path.expanduser("~/.recon-tools/massdns/lists/resolvers.txt")
 
 # Domain for blind XSS checking with dalfox
 # Get your own at https://xsshunter.com
