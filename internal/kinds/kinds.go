@@ -17,6 +17,10 @@ type Kind struct {
 	Printed bool
 	// Counted kinds are only counted, never printed (URLs).
 	Counted bool
+	// HostAttr names the attribute holding the host of a web record. Such a
+	// record is shown (counted, printed, written to a CSV) only while that host
+	// is in scope, which is decided when it is read.
+	HostAttr string
 }
 
 // Registry maps kind names to Kinds.
@@ -46,7 +50,7 @@ const (
 	Excluded   = "excluded"
 )
 
-// Default returns the registry of the Spec 1 and Spec 2 kinds.
+// Default returns the registry of the kinds registered so far.
 func Default() *Registry {
 	r := &Registry{m: map[string]Kind{}}
 	for _, k := range []Kind{
@@ -61,10 +65,11 @@ func Default() *Registry {
 		{Name: "ip_owner"},
 		{Name: "ip_hostname"},
 		{Name: "provider_range"},
-		{Name: "web_service", Singular: "web service", Category: "web services", Printed: true},
+		{Name: "web_service", Singular: "web service", Category: "web services", Printed: true, HostAttr: "host"},
+		{Name: "http_port"},
 		{Name: "open_port", Singular: "open port", Category: "open ports", Printed: true},
 		{Name: "finding", Singular: "finding", Category: "findings", Printed: true},
-		{Name: "url", Singular: "url", Category: "urls", Counted: true},
+		{Name: "url", Singular: "url", Category: "urls", Counted: true, HostAttr: "host"},
 	} {
 		r.Register(k)
 	}

@@ -36,6 +36,9 @@ type Rate struct {
 // Crawl holds the crawl limits.
 type Crawl struct{ MaxDepth, MaxPages int }
 
+// Archive holds the limits on URLs taken from public archives.
+type Archive struct{ MaxURLs int }
+
 // Permutations holds the subdomain-permutation settings.
 type Permutations struct {
 	Enabled    bool
@@ -59,6 +62,7 @@ type Settings struct {
 	Concurrency   int
 	Rate          Rate
 	Crawl         Crawl
+	Archive       Archive
 	OutputDir     string
 	NetblockLimit int // IPv4 addresses
 }
@@ -72,6 +76,7 @@ func Defaults() Settings {
 		Concurrency:   10,
 		Rate:          Rate{PerHost: 5, PerSource: 1, DNS: 50},
 		Crawl:         Crawl{MaxDepth: 2, MaxPages: 100},
+		Archive:       Archive{MaxURLs: 20000},
 		OutputDir:     ".",
 		NetblockLimit: 4096,
 		Permutations:  Permutations{Enabled: true, MaxPerSeed: 200},
@@ -155,7 +160,7 @@ var settingTable = []setting{
 	{"wordlist", "wordlist"}, {"concurrency", "concurrency"}, {"rate-per-host", "rate.per_host"},
 	{"rate-per-source", "rate.per_source"}, {"rate-dns", "rate.dns"}, {"crawl-depth", "crawl.max_depth"},
 	{"crawl-pages", "crawl.max_pages"}, {"output-dir", "output_dir"}, {"netblock-limit", "netblock_limit"},
-	{"permutations-max", "permutations.max_per_seed"},
+	{"permutations-max", "permutations.max_per_seed"}, {"archive-max-urls", "archive.max_urls"},
 }
 
 // RegisterFlags adds one flag per setting to fs. There is deliberately no flag for API keys.
@@ -172,7 +177,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.Float64("rate-per-source", d.Rate.PerSource, "requests per second per third-party source")
 	fs.Float64("rate-dns", d.Rate.DNS, "DNS queries per second in total across public resolvers")
 	fs.Int("crawl-depth", d.Crawl.MaxDepth, "maximum crawl depth")
-	fs.Int("crawl-pages", d.Crawl.MaxPages, "maximum pages crawled per web service")
+	fs.Int("crawl-pages", d.Crawl.MaxPages, "maximum pages crawled per web service (0 disables the crawl)")
+	fs.Int("archive-max-urls", d.Archive.MaxURLs, "maximum archived URLs recorded per root from Wayback and Common Crawl")
 	fs.String("output-dir", d.OutputDir, "directory in which engagement directories are created")
 	fs.Bool("no-permutations", false, "do not resolve permutations of discovered subdomain labels (default: on, including with --passive)")
 	fs.Int("permutations-max", d.Permutations.MaxPerSeed, "maximum permutations generated per discovered subdomain label")
@@ -195,6 +201,9 @@ type rawSettings struct {
 		MaxDepth string `mapstructure:"max_depth"`
 		MaxPages string `mapstructure:"max_pages"`
 	} `mapstructure:"crawl"`
+	Archive struct {
+		MaxURLs string `mapstructure:"max_urls"`
+	} `mapstructure:"archive"`
 	OutputDir     string `mapstructure:"output_dir"`
 	NetblockLimit string `mapstructure:"netblock_limit"`
 	Permutations  struct {
@@ -216,7 +225,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		"ports": FormatPorts(d.Ports), "risky_ports": FormatPorts(d.RiskyPorts),
 		"sensitive_paths": "", "wordlist": "", "concurrency": d.Concurrency,
 		"rate.per_host": d.Rate.PerHost, "rate.per_source": d.Rate.PerSource, "rate.dns": d.Rate.DNS,
-		"crawl.max_depth": d.Crawl.MaxDepth, "crawl.max_pages": d.Crawl.MaxPages,
+		"crawl.max_depth": d.Crawl.MaxDepth, "crawl.max_pages": d.Crawl.MaxPages, "archive.max_urls": d.Archive.MaxURLs,
 		"output_dir": d.OutputDir, "netblock_limit": d.NetblockLimit,
 		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed,
 	}
@@ -302,6 +311,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	posFloat("rate.dns", raw.Rate.DNS, &s.Rate.DNS)
 	posInt("crawl.max_depth", raw.Crawl.MaxDepth, 0, &s.Crawl.MaxDepth)
 	posInt("crawl.max_pages", raw.Crawl.MaxPages, 0, &s.Crawl.MaxPages)
+	posInt("archive.max_urls", raw.Archive.MaxURLs, 1, &s.Archive.MaxURLs)
 	posInt("netblock_limit", raw.NetblockLimit, 1, &s.NetblockLimit)
 	posInt("permutations.max_per_seed", raw.Permutations.MaxPerSeed, 1, &s.Permutations.MaxPerSeed)
 	if enabled, err := strconv.ParseBool(strings.TrimSpace(raw.Permutations.Enabled)); err != nil {

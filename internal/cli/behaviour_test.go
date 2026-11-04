@@ -374,16 +374,16 @@ func redoStages(behaviour *int) (*testkit.Stage, *testkit.Stage) {
 		RunFn: func(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
 			switch {
 			case c.Key == "k000" && *behaviour == 0:
-				return []run.Observation{obs("web_service", "u0")}, nil
+				return []run.Observation{obs("web_service", "u0", "host", "a.com")}, nil
 			case c.Key == "k001":
-				return []run.Observation{obs("web_service", "u1")}, nil
+				return []run.Observation{obs("web_service", "u1", "host", "a.com")}, nil
 			}
 			return nil, nil
 		}}
 	o := &testkit.Stage{StageName: "other", Kind: run.ThirdParty,
 		ChecksFn: func(v run.View) []run.Check { return testkit.Keys("t", 1) },
 		RunFn: func(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
-			return []run.Observation{obs("web_service", "u1")}, nil
+			return []run.Observation{obs("web_service", "u1", "host", "a.com")}, nil
 		}}
 	return s, o
 }

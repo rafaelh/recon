@@ -8,9 +8,11 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -44,6 +46,9 @@ type Snapshot struct {
 	Inv     *inventory.Inventory
 	// ASNNetblocks maps an in-scope netblock to the "AS<n>" input it came from.
 	ASNNetblocks map[string]string
+	// Web decides WebVisible for Scope; Render makes one if it is nil. A caller
+	// that counts the same records passes its own, so each host is decided once.
+	Web *WebVisibility
 }
 
 // File is a registry entry. CSV files get the columns Columns followed by
@@ -57,6 +62,9 @@ type File struct {
 
 // Render writes every file via .recon/tmp and renames it into dir.
 func Render(dir string, files []File, snap Snapshot) error {
+	if snap.Web == nil {
+		snap.Web = NewWebVisibility(snap.Scope)
+	}
 	tmp := filepath.Join(dir, ".recon", "tmp")
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		return err
@@ -159,7 +167,7 @@ func csvSafe(s string) string {
 }
 
 // Default returns the registered files: Spec 1's scope, candidates and excluded,
-// then Spec 2's DNS files (D27).
+// then Spec 2's DNS files (D27) and Spec 3's web files.
 func Default() []File {
 	return []File{
 		{Name: "scope.csv", Format: CSV, Columns: []string{"type", "value", "source"}, Rows: scopeRows},
@@ -171,7 +179,99 @@ func Default() []File {
 		{Name: "wildcard-excluded.txt", Format: TXT, Rows: inScopeHostRows(true)},
 		{Name: "ips.csv", Format: CSV, Columns: []string{"ip", "asn", "owner", "provider", "service", "in_scope", "port_eligible", "hostnames"}, Rows: ipRows},
 		{Name: "provider-hosts.csv", Format: CSV, Columns: []string{"hostname", "provider", "service", "evidence", "cname", "resolves"}, Rows: providerHostRows},
+		{Name: "web-services.csv", Format: CSV, Columns: webServiceColumns, Rows: webServiceRows},
+		{Name: "urls.csv", Format: CSV, Columns: []string{"url", "host", "status", "found_by"}, Rows: urlRows},
 	}
+}
+
+var webServiceColumns = []string{"url", "host", "port", "scheme", "status", "title", "server", "technologies", "redirect",
+	"final_url", "tls_subject", "tls_sans", "tls_issuer", "tls_expiry", "tls_error", "tls_self_signed"}
+
+// WebVisible reports whether a web record (a kind with a host attribute) is
+// shown. The summary counts and the web CSVs both call it, so their totals
+// agree, and it is evaluated on read: an exclusion added later hides records
+// found earlier. A record without the attribute takes its host from its key.
+func WebVisible(sc *scope.Scope, hostAttr string, r store.Record) bool {
+	return sc.WebHostInScope(webHost(hostAttr, r))
+}
+
+func webHost(hostAttr string, r store.Record) string {
+	host := r.Str(hostAttr)
+	if host == "" {
+		if u, err := url.Parse(r.Key); err == nil {
+			host = u.Hostname()
+		}
+	}
+	return host
+}
+
+// WebVisibility is WebVisible for one scope, deciding each host once. Web
+// records share few hosts, so a render need not classify every record. It is
+// not safe for concurrent use.
+type WebVisibility struct {
+	sc    *scope.Scope
+	hosts map[string]bool
+}
+
+func NewWebVisibility(sc *scope.Scope) *WebVisibility {
+	return &WebVisibility{sc: sc, hosts: map[string]bool{}}
+}
+
+// Visible is WebVisible(sc, hostAttr, r) for the scope w was made with.
+func (w *WebVisibility) Visible(hostAttr string, r store.Record) bool {
+	host := webHost(hostAttr, r)
+	v, ok := w.hosts[host]
+	if !ok {
+		v = w.sc.WebHostInScope(host)
+		w.hosts[host] = v
+	}
+	return v
+}
+
+func (s Snapshot) webVisible(r store.Record) bool {
+	if s.Web == nil {
+		return WebVisible(s.Scope, "host", r)
+	}
+	return s.Web.Visible("host", r)
+}
+
+// attrCell renders an attribute for a CSV cell. Numbers come back from the
+// store as float64.
+func attrCell(r store.Record, k string) string {
+	switch v := r.Attrs[k].(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(v)
+	}
+	return ""
+}
+
+func webServiceRows(s Snapshot) []Row {
+	var rows []Row
+	for _, r := range s.Records["web_service"] {
+		if !s.webVisible(r) {
+			continue
+		}
+		cells := []string{r.Key}
+		for _, col := range webServiceColumns[1:] {
+			cells = append(cells, attrCell(r, col))
+		}
+		rows = append(rows, recordRow(r, cells...))
+	}
+	return rows
+}
+
+func urlRows(s Snapshot) []Row {
+	var rows []Row
+	for _, r := range s.Records["url"] {
+		if s.webVisible(r) {
+			rows = append(rows, recordRow(r, r.Key, attrCell(r, "host"), attrCell(r, "status"), strings.Join(r.Stages, ",")))
+		}
+	}
+	return rows
 }
 
 func scopeRows(s Snapshot) []Row {

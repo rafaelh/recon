@@ -11,6 +11,7 @@ import (
 	"iter"
 	"maps"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,24 +20,35 @@ import (
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
+	"github.com/rafaelh/recon/internal/stages/web"
 )
 
 // maxPages caps archive and API paging inside one check (D24).
 const maxPages = 30
 
 // result is what a fetcher found. Attrs are attached to every hostname.
+// urls are the archive URLs of a source that has them (Spec 3 D16).
 type result struct {
 	names []string
 	attrs map[string]any
+	urls  []string
 }
 
 type fetcher func(ctx context.Context, root string, c egress.Clients) (result, error)
+
+// rootInput is the Check.Input of every subdomain source. The root travels in
+// it, not in the key, because an archive stage's key also carries the URL cap.
+type rootInput struct {
+	root    string
+	maxURLs int
+}
 
 // Stage is one subdomain source.
 type Stage struct {
 	name    string
 	sources []string
 	keyed   bool
+	archive bool // also records URLs; its check key carries archive.max_urls
 	fetch   fetcher
 }
 
@@ -44,8 +56,8 @@ type Stage struct {
 func New() []run.Stage {
 	return []run.Stage{
 		&Stage{name: "crtsh", sources: []string{"crt.sh"}, fetch: crtsh},
-		&Stage{name: "wayback", sources: []string{"web.archive.org"}, fetch: wayback},
-		&Stage{name: "commoncrawl", sources: []string{"index.commoncrawl.org"}, fetch: commoncrawl},
+		&Stage{name: "wayback", sources: []string{"web.archive.org"}, archive: true, fetch: wayback},
+		&Stage{name: "commoncrawl", sources: []string{"index.commoncrawl.org"}, archive: true, fetch: commoncrawl},
 		&Stage{name: "virustotal", sources: []string{"www.virustotal.com"}, keyed: true, fetch: virustotal},
 		&Stage{name: "securitytrails", sources: []string{"api.securitytrails.com"}, keyed: true, fetch: securitytrails},
 	}
@@ -58,11 +70,17 @@ func (s *Stage) Sources() []string    { return s.sources }
 // Configured: keyed sources need keys.<source>.
 func (s *Stage) Configured(e run.Env) (bool, string) { return httpsrc.Configured(e, s.name, s.keyed) }
 
-// Checks yields one check per in-scope root.
-func (*Stage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
+// Checks yields one check per in-scope root. An archive stage's key is
+// "<root>|urls=N", so changing archive.max_urls re-runs it and nothing else.
+func (s *Stage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
+		max := v.Settings().Archive.MaxURLs
 		for _, r := range v.Inputs().Roots {
-			if !yield(run.Check{Key: r, Input: r}, nil) {
+			key := r
+			if s.archive {
+				key = fmt.Sprintf("%s|urls=%d", r, max)
+			}
+			if !yield(run.Check{Key: key, Input: rootInput{root: r, maxURLs: max}}, nil) {
 				return
 			}
 		}
@@ -71,7 +89,8 @@ func (*Stage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 
 // Run fetches the root's subdomains and records those under it.
 func (s *Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
-	root := c.Key
+	in := c.Input.(rootInput)
+	root := in.root
 	res, err := s.fetch(ctx, root, e)
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: %w", s.name, root, err)
@@ -80,14 +99,59 @@ func (s *Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.O
 	var obs []run.Observation
 	for _, n := range res.names {
 		n = cleanName(n)
-		if n == "" || seen[n] || !(n == root || strings.HasSuffix(n, "."+root)) {
+		if n == "" || seen[n] || !under(n, root) {
 			continue
 		}
 		seen[n] = true
 		obs = append(obs, run.Observation{Kind: "hostname", Key: n, Attrs: res.attrs})
 	}
 	sort.Slice(obs, func(i, j int) bool { return obs[i].Key < obs[j].Key })
+	for _, u := range pickURLs(res.urls, root, in.maxURLs) {
+		obs = append(obs, run.Observation{Kind: "url", Key: u.url, Attrs: map[string]any{"url": u.url, "host": u.host}})
+	}
 	return obs, nil
+}
+
+type archivedURL struct{ url, host string }
+
+// pickURLs normalises archive URLs and keeps those under root that are not
+// static assets, then takes at most max of them round-robin across hosts in
+// sorted order, so early-sorting hosts cannot use the whole cap. Within a host
+// the URLs are taken in sorted order, so the selection is deterministic.
+func pickURLs(raw []string, root string, max int) []archivedURL {
+	byHost := map[string][]string{}
+	for _, r := range raw {
+		u, ok := web.NormaliseURL(r)
+		if !ok {
+			continue
+		}
+		pu, err := url.Parse(u)
+		if err != nil || !under(pu.Hostname(), root) || web.IsStaticAsset(pu.Path) {
+			continue
+		}
+		byHost[pu.Hostname()] = append(byHost[pu.Hostname()], u)
+	}
+	hosts := make([]string, 0, len(byHost))
+	for h, l := range byHost {
+		sort.Strings(l)
+		byHost[h] = slices.Compact(l)
+		hosts = append(hosts, h)
+	}
+	sort.Strings(hosts)
+	var out []archivedURL
+	for i := 0; len(out) < max; i++ {
+		took := false
+		for _, h := range hosts {
+			if i < len(byHost[h]) && len(out) < max {
+				out = append(out, archivedURL{byHost[h][i], h})
+				took = true
+			}
+		}
+		if !took {
+			break
+		}
+	}
+	return out
 }
 
 // cleanName normalises a name from a source; wildcards and non-hostnames are dropped.
@@ -129,17 +193,18 @@ func crtsh(ctx context.Context, root string, c egress.Clients) (result, error) {
 	return result{names: names}, err
 }
 
+// under reports whether name is root or a subdomain of it.
+func under(name, root string) bool { return name == root || strings.HasSuffix(name, "."+root) }
+
 // --- Wayback Machine (CDX) ---
 
-func hostOfURL(raw string) string {
+// withScheme gives an archived URL without a scheme ("www.example.com/login")
+// the http scheme, so its host and the URL itself are both kept.
+func withScheme(raw string) string {
 	if !strings.Contains(raw, "://") {
-		raw = "http://" + raw
+		return "http://" + raw
 	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return ""
-	}
-	return u.Hostname()
+	return raw
 }
 
 func wayback(ctx context.Context, root string, c egress.Clients) (result, error) {
@@ -154,7 +219,7 @@ func wayback(ctx context.Context, root string, c egress.Clients) (result, error)
 		return result{}, fmt.Errorf("unreadable CDX page count: %v", err)
 	}
 	pages = min(pages, maxPages)
-	var names []string
+	var names, urls []string
 	for p := 0; p < pages; p++ {
 		q := maps.Clone(base) // shallow is enough: only Set follows
 		q.Set("page", strconv.Itoa(p))
@@ -170,10 +235,12 @@ func wayback(ctx context.Context, root string, c egress.Clients) (result, error)
 			if i == 0 && len(r) > 0 && r[0] == "original" || len(r) == 0 {
 				continue
 			}
-			names = append(names, hostOfURL(r[0]))
+			u := withScheme(r[0])
+			names = append(names, web.HostOfURL(u))
+			urls = append(urls, u)
 		}
 	}
-	return result{names: names}, nil
+	return result{names: names, urls: urls}, nil
 }
 
 // --- Common Crawl ---
@@ -202,7 +269,7 @@ func commoncrawl(ctx context.Context, root string, c egress.Clients) (result, er
 	if err := json.Unmarshal(body, &np); err != nil {
 		return result{}, fmt.Errorf("unreadable Common Crawl page count: %v", err)
 	}
-	var names []string
+	var names, urls []string
 	for p := 0; p < min(np.Pages, maxPages); p++ {
 		q := url.Values{"url": {"*." + root}, "output": {"json"}, "fl": {"url"}, "page": {strconv.Itoa(p)}}
 		body, err := httpsrc.Get(ctx, c, egress.ThirdPartyRequest{Method: "GET", URL: endpoint + q.Encode()})
@@ -219,11 +286,13 @@ func commoncrawl(ctx context.Context, root string, c egress.Clients) (result, er
 				URL string `json:"url"`
 			}
 			if line = strings.TrimSpace(line); line != "" && json.Unmarshal([]byte(line), &row) == nil {
-				names = append(names, hostOfURL(row.URL))
+				u := withScheme(row.URL)
+				names = append(names, web.HostOfURL(u))
+				urls = append(urls, u)
 			}
 		}
 	}
-	return result{names: names, attrs: map[string]any{"index": id}}, nil
+	return result{names: names, urls: urls, attrs: map[string]any{"index": id}}, nil
 }
 
 // --- VirusTotal ---

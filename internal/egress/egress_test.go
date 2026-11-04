@@ -327,6 +327,24 @@ func TestHTTPRootAndHeaders(t *testing.T) {
 	}
 }
 
+// RootAt dials only the given address, and only if the name may be reached there.
+func TestHTTPRootAtPinsTheAddress(t *testing.T) {
+	f := newHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
+	if res, err := f.client().Get(context.Background(), egress.RootAt("www.example.com", "http", f.port, addr("127.0.0.1"))); err != nil {
+		t.Fatal(err)
+	} else if r, ok := res.(egress.Response); !ok || r.Status != 200 {
+		t.Fatalf("pinned to a permitted address: %#v", res)
+	}
+	before := f.hits.Load()
+	res, err := f.client().Get(context.Background(), egress.RootAt("www.example.com", "http", f.port, addr("127.0.0.2")))
+	if err != nil || !isRefused(res) {
+		t.Errorf("pinned to an address the name does not resolve to: %#v %v, want Refused", res, err)
+	}
+	if f.hits.Load() != before {
+		t.Error("a refused pinned request reached the server")
+	}
+}
+
 func TestHTTPSensitivePathAndLink(t *testing.T) {
 	var paths []string
 	f := newHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) {

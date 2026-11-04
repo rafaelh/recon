@@ -34,6 +34,7 @@ import (
 	"github.com/rafaelh/recon/internal/stages/providerranges"
 	"github.com/rafaelh/recon/internal/stages/shodan"
 	"github.com/rafaelh/recon/internal/stages/subdomains"
+	"github.com/rafaelh/recon/internal/stages/web"
 )
 
 // Deps are the collaborators of Execute, replaceable in tests.
@@ -71,7 +72,8 @@ func defaultStages() []run.Stage {
 	stages = append(stages, sub...)
 	return append(stages,
 		shodan.New(), providerranges.New(),
-		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner())
+		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner(),
+		web.NewProbe(), web.NewCrawl())
 }
 
 type options struct {

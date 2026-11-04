@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,13 +60,68 @@ func (Response) httpResult()  {}
 func (NoService) httpResult() {}
 func (Refused) httpResult()   {}
 
+// origin is where a Response came from. uri is the request URI, so a relative
+// reference in the body or in Location resolves against the page's real URL.
 type origin struct {
 	scheme, host string
 	port         int
+	uri          string
 }
 
 func (o *origin) base() *url.URL {
-	return &url.URL{Scheme: o.scheme, Host: net.JoinHostPort(o.host, strconv.Itoa(o.port)), Path: "/"}
+	u := &url.URL{Scheme: o.scheme, Host: HostPort(o.scheme, o.host, strconv.Itoa(o.port)), Path: "/"}
+	if ru, err := url.ParseRequestURI(o.uri); err == nil {
+		u.Path, u.RawPath, u.RawQuery = ru.Path, ru.RawPath, ru.RawQuery
+	}
+	return u
+}
+
+// HostPort is the authority of a URL: host[:port], with an IPv6 literal
+// bracketed and an empty or default port for the scheme dropped.
+func HostPort(scheme, host, port string) string {
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port == "" || (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		return host
+	}
+	return host + ":" + port
+}
+
+// URL is the absolute URL of the request that produced the response: the
+// default port is omitted and an IPv6 literal is bracketed.
+func (r Response) URL() string {
+	if r.origin == nil {
+		return ""
+	}
+	return r.origin.base().String()
+}
+
+// HeaderValue is the first value of the named header, matched case-insensitively,
+// or "" if there is none.
+func (r Response) HeaderValue(name string) string { return http.Header(r.Header).Get(name) }
+
+// ContentType is the media type of the response, lower case and without
+// parameters ("text/html"), or "" if there is none.
+func (r Response) ContentType() string {
+	v := r.HeaderValue("Content-Type")
+	if v == "" {
+		return ""
+	}
+	if mt, _, err := mime.ParseMediaType(v); err == nil {
+		return mt
+	}
+	return strings.ToLower(strings.TrimSpace(strings.SplitN(v, ";", 2)[0]))
+}
+
+// ipLiteral parses host as an IP address. A zoned address is not a literal
+// egress will dial, and a bracketed form is a URL authority, not a host.
+func ipLiteral(host string) (netip.Addr, bool) {
+	a, err := netip.ParseAddr(host)
+	if err != nil || a.Zone() != "" {
+		return netip.Addr{}, false
+	}
+	return a.Unmap(), true
 }
 
 // Service identifies a web service for SensitivePath requests.
@@ -73,7 +130,7 @@ type Service struct {
 	Port         int
 }
 
-// Request is a typed target request. It can only be built with Root,
+// Request is a typed target request. It can only be built with Root, RootAt,
 // SensitivePath, Link or Redirect; there is no way to name an arbitrary URL.
 type Request interface{ target() target }
 
@@ -82,6 +139,7 @@ type target struct {
 	port         int
 	sensitiveIdx int // >=0: index into the sensitive-path list
 	requestURI   string
+	pin          netip.Addr // if valid, the only address dialled
 }
 
 type req struct{ t target }
@@ -91,6 +149,13 @@ func (r req) target() target { return r.t }
 // Root requests "/" of a service.
 func Root(host, scheme string, port int) Request {
 	return req{target{scheme: scheme, host: host, port: port, sensitiveIdx: -1, requestURI: "/"}}
+}
+
+// RootAt requests "/" of a service by name, dialling only addr, so the answer
+// is known to come from that address. addr must be one of the name's permitted
+// addresses. Redirects and links from the response are not pinned.
+func RootAt(host, scheme string, port int, addr netip.Addr) Request {
+	return req{target{scheme: scheme, host: host, port: port, sensitiveIdx: -1, requestURI: "/", pin: addr.Unmap()}}
 }
 
 // SensitivePath requests entry index of the configured sensitive-path list.
@@ -169,18 +234,32 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 	if r, ok := p.targetRefusal(); ok {
 		return r, nil
 	}
+	host := input.NormaliseHost(tg.host)
+	lit, isIP := ipLiteral(host)
 	switch {
 	case tg.scheme != "http" && tg.scheme != "https":
 		return Refused{"scheme " + strconv.Quote(tg.scheme) + " is not http or https"}, nil
-	case tg.host == "" || strings.ContainsAny(tg.host, "@/?#: \\[]%") || tg.port < 1 || tg.port > 65535:
+	case tg.host == "" || tg.port < 1 || tg.port > 65535 || (!isIP && strings.ContainsAny(tg.host, "@/?#: \\[]%")):
 		return Refused{"malformed host or port"}, nil
 	}
-	host := input.NormaliseHost(tg.host)
-	switch c := p.Scope.ClassifyHost(host); c.Class {
-	case scope.Excluded:
-		return Refused{"host is excluded: " + c.Reason}, nil
-	case scope.Candidate:
-		return Refused{"host is not in scope"}, nil
+	if isIP {
+		host = lit.String()
+		// An address is a web target iff it is in an in-scope netblock and not
+		// excluded; a hostname that resolves there is probed by name instead.
+		if !p.Scope.InScopeIP(lit) {
+			return Refused{"address is not in scope"}, nil
+		}
+		if ex, why := p.Scope.ExcludedFor(lit, p.isShared(lit)); ex {
+			p.reportExcluded(lit.String(), why)
+			return Refused{"address is excluded: " + why}, nil
+		}
+	} else {
+		switch c := p.Scope.ClassifyHost(host); c.Class {
+		case scope.Excluded:
+			return Refused{"host is excluded: " + c.Reason}, nil
+		case scope.Candidate:
+			return Refused{"host is not in scope"}, nil
+		}
 	}
 	if !p.portAllowed(tg.port, true) {
 		return Refused{"port " + strconv.Itoa(tg.port) + " not allowed"}, nil
@@ -195,9 +274,18 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 	if !strings.HasPrefix(uri, "/") {
 		return Refused{"request path " + strconv.Quote(uri) + " does not start with /"}, nil
 	}
-	addrs := p.vetted(host)
+	addrs := []netip.Addr{lit}
+	if !isIP {
+		addrs = p.vetted(host)
+	}
 	if len(addrs) == 0 {
 		return Refused{"no permitted address for " + host}, nil
+	}
+	if tg.pin.IsValid() {
+		if !slices.Contains(addrs, tg.pin) {
+			return Refused{"address " + tg.pin.String() + " is not a permitted address of " + host}, nil
+		}
+		addrs = []netip.Addr{tg.pin}
 	}
 
 	// HTTPTimeout runs from when the rate limiter lets the first dial through,
@@ -209,11 +297,7 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 		return time.AfterFunc(e.opts.HTTPTimeout, func() { cancel(errHTTPTimeout) })
 	})
 	defer func() { deadline().Stop() }()
-	u := url.URL{Scheme: tg.scheme, Host: net.JoinHostPort(host, strconv.Itoa(tg.port))}
-	if (tg.scheme == "http" && tg.port == 80) || (tg.scheme == "https" && tg.port == 443) {
-		u.Host = host
-	}
-	reqURL := u.String() + uri
+	reqURL := (&url.URL{Scheme: tg.scheme, Host: HostPort(tg.scheme, host, strconv.Itoa(tg.port))}).String() + uri
 	hreq, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
 	if err != nil {
 		return Refused{"bad request: " + err.Error()}, nil
@@ -273,7 +357,7 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 	out := Response{
 		Status: resp.StatusCode, Header: map[string][]string(resp.Header.Clone()), Body: body,
 		Location: resp.Header.Get("Location"),
-		origin:   &origin{scheme: tg.scheme, host: host, port: tg.port},
+		origin:   &origin{scheme: tg.scheme, host: host, port: tg.port, uri: uri},
 	}
 	if resp.TLS != nil {
 		out.PeerCerts = resp.TLS.PeerCertificates

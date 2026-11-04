@@ -142,6 +142,22 @@ func (s *Scope) InScopeIP(a netip.Addr) bool {
 	return false
 }
 
+// WebHostInScope reports whether a web service or URL on host may be shown. It
+// is the one decision behind the summary counts and the web CSVs (Spec 3 D17):
+// an IP literal is in an in-scope netblock and not excluded; a name is in scope.
+func (s *Scope) WebHostInScope(host string) bool {
+	h := input.NormaliseHost(host)
+	if a, err := netip.ParseAddr(h); err == nil {
+		if a.Zone() != "" {
+			return false
+		}
+		a = a.Unmap()
+		excluded, _ := s.ExcludedAddr(a)
+		return s.InScopeIP(a) && !excluded
+	}
+	return h != "" && s.ClassifyHost(h).Class == InScope
+}
+
 // ExcludedAddr reports whether the address is in an excluded CIDR or is an
 // address of a host excluded by name.
 func (s *Scope) ExcludedAddr(a netip.Addr) (bool, string) {

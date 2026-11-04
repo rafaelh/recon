@@ -141,7 +141,8 @@ func TestAtomicRenderAndSweep(t *testing.T) {
 	}
 }
 
-// Spec 1 registered scope, candidates and excluded; Spec 2 adds the DNS files (D27).
+// Spec 1 registered scope, candidates and excluded; Spec 2 adds the DNS files (D27);
+// Spec 3 adds the web files.
 func TestDefaultRegistry(t *testing.T) {
 	var names []string
 	for _, f := range output.Default() {
@@ -152,7 +153,7 @@ func TestDefaultRegistry(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(names, ",") != "scope.csv,candidates.csv,excluded.csv,subdomains.txt,resolutions.csv,unresolved.txt,wildcard-excluded.txt,ips.csv,provider-hosts.csv" {
+	if strings.Join(names, ",") != "scope.csv,candidates.csv,excluded.csv,subdomains.txt,resolutions.csv,unresolved.txt,wildcard-excluded.txt,ips.csv,provider-hosts.csv,web-services.csv,urls.csv" {
 		t.Errorf("default files = %v", names)
 	}
 }

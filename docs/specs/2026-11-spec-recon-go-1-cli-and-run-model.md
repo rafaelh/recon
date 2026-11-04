@@ -323,6 +323,7 @@ The runner builds a `Policy` at every Scope build. It contains the Scope, the ac
 
 - **Requests:** `Get` and `Head` take a typed request, not a URL:
   - `Root(host, scheme, port)`
+  - `RootAt(host, scheme, port, addr)`, a `Root` that dials only `addr`, refused unless `addr` is one of the host's permitted addresses (added by Spec 3 D4)
   - `SensitivePath(service, index)`, indexed into the configured list
   - `Link(resp, href)`, which can only be built from a fetched `Response` and is checked to be on the same host
   - `Redirect(resp)`

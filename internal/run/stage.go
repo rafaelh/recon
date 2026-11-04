@@ -5,6 +5,7 @@ import (
 	"errors"
 	"iter"
 	"maps"
+	"net/netip"
 	"slices"
 	"strings"
 	"sync"
@@ -79,8 +80,9 @@ type Stage interface {
 
 // recordCache holds the records a View has read, for one stage pass (D28).
 type recordCache struct {
-	mu sync.Mutex
-	m  map[string][]store.Record
+	mu    sync.Mutex
+	m     map[string][]store.Record
+	hosts map[netip.Addr][]string // address -> probe hostnames, built on first use
 }
 
 // View gives a stage read access to the store and the current Scope. It
@@ -95,6 +97,10 @@ type View struct {
 
 // Scope is the Scope built at the start of the current pass.
 func (v View) Scope() *scope.Scope { return v.sc }
+
+// Warn reports a problem that does not fail a check, such as a stage running
+// with reduced capability. It is shown only with --verbose, like other warnings.
+func (v View) Warn(format string, a ...any) { v.r.warn(format, a...) }
 
 // Settings are the run's settings.
 func (v View) Settings() config.Settings { return v.r.cfg.Settings }
@@ -165,3 +171,47 @@ func (v View) ProviderHosts() []inventory.ProviderHost { return v.inv.ProviderHo
 // Seeds are the hostnames the generator stage derives names from (D14): never
 // names only the generator itself observed.
 func (v View) Seeds(generator string) []string { return v.inv.Seeds(v.sc, generator) }
+
+// OpenPort is a current open_port record: Spec 4's port stage emits one per
+// open port, keyed by netip.AddrPort.String(), with an unprompted banner if any.
+type OpenPort struct {
+	Addr   netip.AddrPort
+	Banner string
+}
+
+// OpenPorts returns the current open_port records, sorted by address and port.
+// A record whose key is not an address and port is skipped.
+func (v View) OpenPorts() []OpenPort {
+	var out []OpenPort
+	for _, rec := range v.Records("open_port") {
+		if ap, err := netip.ParseAddrPort(rec.Key); err == nil {
+			out = append(out, OpenPort{Addr: netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()), Banner: rec.Str("banner")})
+		}
+	}
+	slices.SortFunc(out, func(a, b OpenPort) int { return strings.Compare(a.Addr.String(), b.Addr.String()) })
+	return out
+}
+
+// HostsFor returns the ProbeHostnames that resolve to the address, sorted.
+func (v View) HostsFor(a netip.Addr) []string {
+	build := func() map[netip.Addr][]string {
+		idx := map[netip.Addr][]string{}
+		for _, name := range v.ProbeHostnames() {
+			for _, addr := range v.inv.Addrs()[name] {
+				if l := idx[addr]; len(l) == 0 || l[len(l)-1] != name {
+					idx[addr] = append(l, name)
+				}
+			}
+		}
+		return idx
+	}
+	if v.cache == nil {
+		return build()[a.Unmap()]
+	}
+	v.cache.mu.Lock()
+	defer v.cache.mu.Unlock()
+	if v.cache.hosts == nil {
+		v.cache.hosts = build()
+	}
+	return v.cache.hosts[a.Unmap()]
+}

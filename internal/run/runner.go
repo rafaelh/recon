@@ -152,7 +152,7 @@ func (r *Runner) Run(ctx context.Context) (int, error) {
 		r.emitSummary()
 		return code, nil
 	}
-	if rerr := r.render(); rerr != nil && err == nil {
+	if _, rerr := r.render(); rerr != nil && err == nil {
 		code, err = ExitFatal, rerr
 	}
 	return code, err
@@ -185,10 +185,11 @@ func (r *Runner) passes(ctx context.Context) (int, error) {
 				}
 			}
 		}
-		if err := r.render(); err != nil {
+		rendered, err := r.render()
+		if err != nil {
 			return ExitFatal, err
 		}
-		r.emitCounts()
+		r.emitCounts(rendered)
 		if ctx.Err() != nil {
 			return ExitInterrupted, nil
 		}
@@ -451,6 +452,9 @@ produce:
 			continue
 		}
 		stored := r.st.CheckKey(c.Key)
+		if _, dup := all[stored]; dup { // a stage may yield a key more than once
+			continue
+		}
 		all[stored] = struct{}{}
 		if _, ok := done[stored]; ok {
 			continue
@@ -539,8 +543,12 @@ func toStoreObs(obs []Observation) []store.Obs {
 }
 
 // categoryOf returns the summary category of a record ("" if it is not counted).
-func categoryOf(k kinds.Kind, rec store.Record, sc *scope.Scope) string {
+// web is the WebVisibility of sc.
+func categoryOf(k kinds.Kind, rec store.Record, sc *scope.Scope, web *output.WebVisibility) string {
 	if !k.Entity {
+		if k.HostAttr != "" && !web.Visible(k.HostAttr, rec) {
+			return ""
+		}
 		return k.Category
 	}
 	switch k.Name {
@@ -567,8 +575,10 @@ func categoryOf(k kinds.Kind, rec store.Record, sc *scope.Scope) string {
 	return k.Category
 }
 
-func (r *Runner) totals() map[string]int {
-	sc := r.sc.Load()
+// totals counts the current records by category, from the snapshot render
+// wrote the files from, so the totals match the files' rows (Spec 3 D17).
+func (r *Runner) totals(snap output.Snapshot) map[string]int {
+	sc, read := snap.Scope, snap.Records
 	totals := map[string]int{kinds.Hosts: 0}
 	for _, k := range r.cfg.Kinds.All() {
 		if k.Category == "" {
@@ -577,16 +587,11 @@ func (r *Runner) totals() map[string]int {
 		if !k.Entity {
 			totals[k.Category] += 0 // listed even when empty
 		}
-		recs, err := r.st.Records(k.Name, r.order)
-		if err != nil {
-			r.warn("counting %s: %v", k.Name, err)
-			continue
-		}
-		for _, rec := range recs {
+		for _, rec := range read[k.Name] {
 			if !rec.Current {
 				continue
 			}
-			if cat := categoryOf(k, rec, sc); cat != "" {
+			if cat := categoryOf(k, rec, sc, snap.Web); cat != "" {
 				totals[cat]++
 			}
 		}
@@ -594,8 +599,8 @@ func (r *Runner) totals() map[string]int {
 	return totals
 }
 
-func (r *Runner) emitCounts() {
-	totals := r.totals()
+func (r *Runner) emitCounts(snap output.Snapshot) {
+	totals := r.totals(snap)
 	r.lastTot = totals
 	for _, k := range slices.Sorted(maps.Keys(totals)) {
 		if r.counts[k] != totals[k] {
@@ -644,9 +649,13 @@ func (r *Runner) onNewRecord(kind, key string, attrs map[string]any) {
 	if !ok || !k.Printed {
 		return
 	}
-	if k.Entity {
+	if k.Entity || k.HostAttr != "" {
 		sc := r.sc.Load()
-		if sc == nil || sc.ClassifyHost(key).Class != scope.InScope {
+		if sc == nil {
+			return
+		}
+		if k.Entity && sc.ClassifyHost(key).Class != scope.InScope ||
+			k.HostAttr != "" && !output.WebVisible(sc, k.HostAttr, store.Record{Key: key, Attrs: attrs}) {
 			return
 		}
 	}
@@ -663,15 +672,17 @@ func (r *Runner) onNewRecord(kind, key string, attrs map[string]any) {
 	r.emit("found", f)
 }
 
-// render writes the output files from the store.
-func (r *Runner) render() error {
+// render writes the output files from the store and returns the snapshot it
+// wrote them from: the records of every kind, which it reads so a new kind's
+// file can never render empty, and the scope they were filtered by.
+func (r *Runner) render() (output.Snapshot, error) {
 	if err := r.st.Flush(); err != nil {
-		return err
+		return output.Snapshot{}, err
 	}
 	eng := r.cfg.Engagement
 	inputs, err := r.st.Inputs()
 	if err != nil {
-		return err
+		return output.Snapshot{}, err
 	}
 	snap := output.Snapshot{Today: r.today(), Inputs: inputs, Records: map[string][]store.Record{}, Scope: r.sc.Load(), Inv: r.inv.Load()}
 	if snap.Scope == nil {
@@ -680,17 +691,18 @@ func (r *Runner) render() error {
 	if snap.Inv == nil {
 		snap.Inv = inventory.New(inventory.Data{}, provider.Default())
 	}
-	for _, kind := range []string{"root", "hostname", "netblock", "excluded", "resolution", "unresolved", "ip"} {
-		recs, err := r.st.Records(kind, r.order)
+	snap.Web = output.NewWebVisibility(snap.Scope)
+	for _, k := range r.cfg.Kinds.All() {
+		recs, err := r.st.Records(k.Name, r.order)
 		if err != nil {
-			return err
+			return output.Snapshot{}, err
 		}
-		snap.Records[kind] = recs
+		snap.Records[k.Name] = recs
 	}
 	if snap.ASNNetblocks, err = r.asnNetblocks(r.inputs); err != nil {
-		return err
+		return output.Snapshot{}, err
 	}
-	return output.Render(eng.Dir(), r.cfg.Files, snap)
+	return snap, output.Render(eng.Dir(), r.cfg.Files, snap)
 }
 
 // currentRecords returns the current records of a kind.
