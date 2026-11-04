@@ -78,6 +78,12 @@ type Stage interface {
 	Run(ctx context.Context, c Check, e egress.Clients) ([]Observation, error)
 }
 
+// WorkerCounter is implemented by a stage that needs a different number of
+// workers from Settings.Concurrency (the ports stage, whose checks are slow).
+type WorkerCounter interface {
+	Workers(config.Settings) int
+}
+
 // recordCache holds the records a View has read, for one stage pass (D28).
 type recordCache struct {
 	mu    sync.Mutex
@@ -191,6 +197,13 @@ func (v View) OpenPorts() []OpenPort {
 	slices.SortFunc(out, func(a, b OpenPort) int { return strings.Compare(a.Addr.String(), b.Addr.String()) })
 	return out
 }
+
+// PortEligible reports whether the address may be port-checked: the decision
+// egress enforces and ips.csv reports.
+func (v View) PortEligible(a netip.Addr) bool { return v.inv.PortEligible(a, v.sc) }
+
+// OwnerKnown reports whether anything is known about who owns the address.
+func (v View) OwnerKnown(a netip.Addr) bool { return v.inv.OwnerKnown(a, v.sc) }
 
 // HostsFor returns the ProbeHostnames that resolve to the address, sorted.
 func (v View) HostsFor(a netip.Addr) []string {

@@ -43,6 +43,9 @@ func (p *Policy) isShared(a netip.Addr) bool { return p.Shared != nil && p.Share
 
 func (p *Policy) ownerUnknown(a netip.Addr) bool { return p.OwnerUnknown != nil && p.OwnerUnknown(a) }
 
+// owner is the Policy's scope.Owner.
+func (p *Policy) owner(a netip.Addr) (shared, known bool) { return p.isShared(a), !p.ownerUnknown(a) }
+
 func (p *Policy) reportExcluded(value, reason string) {
 	if p.Excluded != nil {
 		p.Excluded(value, reason)
@@ -77,6 +80,11 @@ type Options struct {
 	DNSTimeout, ConnectTimeout, BannerWait, HTTPTimeout time.Duration
 
 	RateDNS, RatePerHost, RatePerSource float64
+
+	// RouteLookup decides whether this machine has a route to an address when a
+	// connect fails with ENETUNREACH, EHOSTUNREACH or EACCES. Default: a UDP
+	// connect, which sends nothing.
+	RouteLookup func(netip.Addr) error
 
 	Keys     map[string]config.Secret
 	Redactor *config.Redactor // default: built from Keys

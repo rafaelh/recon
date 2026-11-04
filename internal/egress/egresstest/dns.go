@@ -81,6 +81,13 @@ func (d *DNS) Rcode(name string, rcode int) {
 	d.rcodes[norm(name)] = rcode
 }
 
+// ClearRcode removes the response code forced for name by Rcode.
+func (d *DNS) ClearRcode(name string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.rcodes, norm(name))
+}
+
 // RcodeSuffix forces a response code for every name under suffix.
 func (d *DNS) RcodeSuffix(suffix string, rcode int) {
 	d.mu.Lock()

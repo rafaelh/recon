@@ -49,8 +49,8 @@ func TestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Ports) != 100 {
-		t.Errorf("default ports = %d, want 100", len(s.Ports))
+	if len(s.Ports) != 105 {
+		t.Errorf("default ports = %d, want 105 (the nmap top 100 plus five risky ports)", len(s.Ports))
 	}
 	if got := config.FormatPorts(s.RiskyPorts); got != "21,23,445,1433,1521,3306,3389,5432,5900,6379,9200,11211,27017" {
 		t.Errorf("risky ports = %s", got)

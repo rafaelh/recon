@@ -2,6 +2,7 @@ package scope_test
 
 import (
 	"net/netip"
+	"slices"
 	"testing"
 
 	"github.com/rafaelh/recon/internal/input"
@@ -116,6 +117,12 @@ func TestIPv4AddressCount(t *testing.T) {
 	if got := s.IPv4AddressCount(); got != 512 {
 		t.Errorf("count = %d, want 512", got)
 	}
+	// IPv4Addrs yields exactly the counted addresses, each once and in order.
+	addrs := slices.Collect(s.IPv4Addrs())
+	if len(addrs) != 512 || addrs[0] != netip.MustParseAddr("10.0.0.0") || addrs[511] != netip.MustParseAddr("10.0.1.255") ||
+		!slices.IsSortedFunc(addrs, netip.Addr.Compare) || len(slices.Compact(slices.Clone(addrs))) != 512 {
+		t.Errorf("IPv4Addrs = %d addresses, want 10.0.0.0-10.0.1.255 once each", len(addrs))
+	}
 	empty := scope.New(scope.Config{})
 	if empty.IPv4AddressCount() != 0 {
 		t.Error("empty")
@@ -161,12 +168,34 @@ func TestPortEligible(t *testing.T) {
 		{"unrelated IP", "8.8.8.8", false, false, false},
 	}
 	for _, c := range cases {
-		ok, why, _ := s.PortEligible(netip.MustParseAddr(c.addr), c.shared, !c.unknown)
+		owner := func(netip.Addr) (bool, bool) { return c.shared, !c.unknown }
+		ok, why, _ := s.PortEligible(netip.MustParseAddr(c.addr), owner)
 		if ok != c.want {
 			t.Errorf("%s: PortEligible = %v (%s), want %v", c.name, ok, why, c.want)
 		}
 		if !ok && why == "" {
 			t.Errorf("%s: a refusal needs a reason", c.name)
 		}
+	}
+}
+
+// Spec 4: an in-scope netblock address that no exclusion names is decided
+// without asking who owns it, so a netblock sweep costs no owner lookups.
+func TestPortEligibleAsksOwnerOnlyWhenNeeded(t *testing.T) {
+	s := scope.New(scope.Config{
+		Netblocks:  []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
+		Exclusions: excl(t, "192.0.2.0/24"),
+	})
+	asked := 0
+	owner := func(netip.Addr) (bool, bool) { asked++; return false, true }
+	for _, a := range []string{"198.51.100.1", "192.0.2.9"} {
+		s.PortEligible(netip.MustParseAddr(a), owner)
+	}
+	if asked != 0 {
+		t.Errorf("owner asked %d times for a netblock address and an excluded-CIDR address", asked)
+	}
+	s.PortEligible(netip.MustParseAddr("203.0.113.5"), owner)
+	if asked != 1 {
+		t.Errorf("owner asked %d times for an address outside the netblocks, want 1", asked)
 	}
 }

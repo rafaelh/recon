@@ -2,12 +2,18 @@ package output_test
 
 import (
 	"encoding/csv"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/output"
+	"github.com/rafaelh/recon/internal/provider"
+	"github.com/rafaelh/recon/internal/scope"
+	"github.com/rafaelh/recon/internal/store"
 )
 
 func rows(rs ...output.Row) func(output.Snapshot) []output.Row {
@@ -142,7 +148,7 @@ func TestAtomicRenderAndSweep(t *testing.T) {
 }
 
 // Spec 1 registered scope, candidates and excluded; Spec 2 adds the DNS files (D27);
-// Spec 3 adds the web files.
+// Spec 3 adds the web files, Spec 4 open-ports.csv.
 func TestDefaultRegistry(t *testing.T) {
 	var names []string
 	for _, f := range output.Default() {
@@ -153,7 +159,51 @@ func TestDefaultRegistry(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(names, ",") != "scope.csv,candidates.csv,excluded.csv,subdomains.txt,resolutions.csv,unresolved.txt,wildcard-excluded.txt,ips.csv,provider-hosts.csv,web-services.csv,urls.csv" {
+	if strings.Join(names, ",") != "scope.csv,candidates.csv,excluded.csv,subdomains.txt,resolutions.csv,unresolved.txt,wildcard-excluded.txt,ips.csv,provider-hosts.csv,web-services.csv,urls.csv,open-ports.csv" {
 		t.Errorf("default files = %v", names)
+	}
+}
+
+// Spec 4 D9: an open_port is shown only while its address is port-eligible.
+func TestPortVisible(t *testing.T) {
+	d := inventory.Data{
+		Resolutions: []inventory.Resolution{{Name: "www.example.com", Type: "A", Value: "203.0.113.5"}, {Name: "cdn.example.com", Type: "A", Value: "104.16.0.1"}},
+		IPs:         []netip.Addr{netip.MustParseAddr("203.0.113.5"), netip.MustParseAddr("104.16.0.1")},
+		Owners: map[netip.Addr]provider.Owner{
+			netip.MustParseAddr("203.0.113.5"): {ASN: 64500, Holder: "ACME-NET", Known: true},
+			netip.MustParseAddr("104.16.0.1"):  {ASN: 13335, Holder: "CLOUDFLARENET", Known: true},
+		},
+	}
+	inv := inventory.New(d, provider.Default())
+	mk := func(excl ...string) *scope.Scope {
+		var xs []input.Exclusion
+		for _, e := range excl {
+			x, err := input.ParseExclusion(e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			xs = append(xs, x)
+		}
+		return scope.New(scope.Config{Roots: []string{"example.com"}, Netblocks: []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
+			Exclusions: xs, Resolutions: inv.Addrs(), WildcardOnly: inv.WildcardOnly()})
+	}
+	rec := func(key string) store.Record { return store.Record{Key: key, Current: true} }
+	for _, c := range []struct {
+		name, key string
+		excl      []string
+		want      bool
+	}{
+		{"hostname-resolved address", "203.0.113.5:8080", nil, true},
+		{"address in an in-scope netblock", "198.51.100.7:22", nil, true},
+		{"IPv4-mapped IPv6 key", "[::ffff:203.0.113.5]:8080", nil, true},
+		{"shared provider address", "104.16.0.1:443", nil, false},
+		{"address nothing is known about", "192.0.2.9:80", nil, false},
+		{"address excluded later", "203.0.113.5:8080", []string{"203.0.113.5/32"}, false},
+		{"netblock address excluded later", "198.51.100.7:22", []string{"198.51.100.0/28"}, false},
+		{"key that is not an address and port", "203.0.113.5", nil, false},
+	} {
+		if got := output.PortVisible(mk(c.excl...), inv, rec(c.key)); got != c.want {
+			t.Errorf("%s: PortVisible(%s) = %v, want %v", c.name, c.key, got, c.want)
+		}
 	}
 }

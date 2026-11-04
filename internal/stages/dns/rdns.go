@@ -24,15 +24,9 @@ func NewRDNS() *RDNS { return &RDNS{base{"rdns"}} }
 func (*RDNS) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		sc := v.Scope()
-		for _, p := range sc.Netblocks() {
-			if !p.Addr().Is4() {
-				continue
-			}
-			p = p.Masked()
-			for a := p.Addr(); a.IsValid() && p.Contains(a); a = a.Next() {
-				if !yield(run.Check{Key: a.String(), Input: a}, nil) {
-					return
-				}
+		for a := range sc.IPv4Addrs() {
+			if !yield(run.Check{Key: a.String(), Input: a}, nil) {
+				return
 			}
 		}
 		var found []string

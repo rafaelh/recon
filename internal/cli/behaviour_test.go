@@ -817,10 +817,15 @@ func TestStageStatesAndFound(t *testing.T) {
 	for _, e := range ofType(evs, "found") {
 		found[e.str("category")+"|"+e.str("value")] = true
 	}
-	for _, w := range []string{"web service|https://a.com", "open port|1.2.3.4:80", "host|www.a.com"} {
+	for _, w := range []string{"web service|https://a.com", "host|www.a.com"} {
 		if !found[w] {
 			t.Errorf("missing found %q in %v", w, found)
 		}
+	}
+	// 1.2.3.4 is not port-eligible, so its open port is neither printed nor
+	// counted (Spec 4 D9).
+	if found["open port|1.2.3.4:80"] {
+		t.Error("an open port on an address that is not port-eligible must not be printed")
 	}
 	for k := range found {
 		if strings.Contains(k, "/x") || strings.Contains(k, "/y") {
@@ -842,7 +847,9 @@ func TestStageStatesAndFound(t *testing.T) {
 		t.Fatalf("summaries: %d", len(sum))
 	}
 	totals := sum[0]["totals"].(map[string]any)
-	if totals["urls"] != float64(2) || totals["hosts"] != float64(1) || totals["open ports"] != float64(1) {
+	// 1.2.3.4 is neither in a netblock nor the address of an in-scope name, so
+	// its open port is not the target's and is not counted (Spec 4 D9).
+	if totals["urls"] != float64(2) || totals["hosts"] != float64(1) || totals["open ports"] != float64(0) {
 		t.Errorf("totals = %v", totals)
 	}
 	failed := sum[0]["failed"].(map[string]any)

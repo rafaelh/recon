@@ -21,6 +21,9 @@ type Kind struct {
 	// record is shown (counted, printed, written to a CSV) only while that host
 	// is in scope, which is decided when it is read.
 	HostAttr string
+	// PortKey kinds are keyed by a target address and port. Such a record is
+	// shown only while that address is port-eligible, decided when it is read.
+	PortKey bool
 }
 
 // Registry maps kind names to Kinds.
@@ -67,7 +70,7 @@ func Default() *Registry {
 		{Name: "provider_range"},
 		{Name: "web_service", Singular: "web service", Category: "web services", Printed: true, HostAttr: "host"},
 		{Name: "http_port"},
-		{Name: "open_port", Singular: "open port", Category: "open ports", Printed: true},
+		{Name: "open_port", Singular: "open port", Category: "open ports", Printed: true, PortKey: true},
 		{Name: "finding", Singular: "finding", Category: "findings", Printed: true},
 		{Name: "url", Singular: "url", Category: "urls", Counted: true, HostAttr: "host"},
 	} {

@@ -395,10 +395,16 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 	clients := r.cfg.Egress.Clients(name, s.Contact() == Target, s.Sources())
 	view := View{r: r, sc: r.sc.Load(), inv: r.inv.Load(), cache: &recordCache{m: map[string][]store.Record{}}}
 
+	workers := r.cfg.Settings.Concurrency
+	if wc, ok := s.(WorkerCounter); ok {
+		workers = wc.Workers(r.cfg.Settings)
+	}
+	// With no workers the first send on work would block forever.
+	workers = max(workers, 1)
 	work := make(chan Check)
 	var wg sync.WaitGroup
 	var attempted atomic.Int64
-	for i := 0; i < r.cfg.Settings.Concurrency; i++ {
+	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -544,9 +550,9 @@ func toStoreObs(obs []Observation) []store.Obs {
 
 // categoryOf returns the summary category of a record ("" if it is not counted).
 // web is the WebVisibility of sc.
-func categoryOf(k kinds.Kind, rec store.Record, sc *scope.Scope, web *output.WebVisibility) string {
+func categoryOf(k kinds.Kind, rec store.Record, sc *scope.Scope, inv *inventory.Inventory, web *output.WebVisibility) string {
 	if !k.Entity {
-		if k.HostAttr != "" && !web.Visible(k.HostAttr, rec) {
+		if !output.Visible(k, rec, sc, inv, web) {
 			return ""
 		}
 		return k.Category
@@ -591,7 +597,7 @@ func (r *Runner) totals(snap output.Snapshot) map[string]int {
 			if !rec.Current {
 				continue
 			}
-			if cat := categoryOf(k, rec, sc, snap.Web); cat != "" {
+			if cat := categoryOf(k, rec, sc, snap.Inv, snap.Web); cat != "" {
 				totals[cat]++
 			}
 		}
@@ -649,13 +655,13 @@ func (r *Runner) onNewRecord(kind, key string, attrs map[string]any) {
 	if !ok || !k.Printed {
 		return
 	}
-	if k.Entity || k.HostAttr != "" {
-		sc := r.sc.Load()
-		if sc == nil {
+	if k.Entity || k.HostAttr != "" || k.PortKey {
+		sc, inv := r.sc.Load(), r.inv.Load()
+		if sc == nil || inv == nil {
 			return
 		}
 		if k.Entity && sc.ClassifyHost(key).Class != scope.InScope ||
-			k.HostAttr != "" && !output.WebVisible(sc, k.HostAttr, store.Record{Key: key, Attrs: attrs}) {
+			!k.Entity && !output.Visible(k, store.Record{Key: key, Attrs: attrs}, sc, inv, nil) {
 			return
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -62,7 +63,11 @@ func newWorld(t *testing.T) *world {
 		}
 		return nil
 	}}
-	w.h = newHarness(t, append(cli.DefaultDeps().Stages, w.probe)...)
+	// The real ports stage sweeps every eligible address on every listed port, and
+	// only the Spec 4 tests map those connects to local listeners; the others
+	// leave it out so nothing they run can reach the network.
+	stages := slices.DeleteFunc(cli.DefaultDeps().Stages, func(s run.Stage) bool { return s.Name() == "ports" })
+	w.h = newHarness(t, append(stages, w.probe)...)
 	w.dns = egresstest.NewDNS(t)
 	// The input root is resolved too, like any in-scope name; give it an address.
 	w.dns.A("example.com", "203.0.113.250")

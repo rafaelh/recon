@@ -4,6 +4,7 @@ package scope
 
 import (
 	"fmt"
+	"iter"
 	"net/netip"
 	"slices"
 	"sort"
@@ -182,22 +183,32 @@ func (s *Scope) ExcludedFor(a netip.Addr, shared bool) (bool, string) {
 	return ok && (!shared || s.ExcludedCIDR(a)), why
 }
 
+// Owner reports what is known about who owns an address: whether it is shared
+// provider infrastructure, and whether anything is known about its owner at
+// all (false fails closed). An unknown owner is not shared.
+type Owner func(netip.Addr) (shared, known bool)
+
 // PortEligible is the single decision whether an address may be port-checked,
-// used both by egress and by the ips.csv report. shared is true for shared
-// provider infrastructure; ownerKnown is false when nothing is known about who
-// owns the address (fail closed). Exclusions apply first (ExcludedFor). Then an
-// address is eligible if it is in an in-scope netblock, or if its owner is
-// known, it is not shared, and an in-scope hostname that is not wildcard-only
-// resolves to it. excluded is true when the refusal is an exclusion.
-func (s *Scope) PortEligible(a netip.Addr, shared, ownerKnown bool) (ok bool, why string, excluded bool) {
+// used both by egress and by the ips.csv report. Exclusions apply first
+// (ExcludedFor). Then an address is eligible if it is in an in-scope netblock,
+// or if its owner is known, it is not shared, and an in-scope hostname that is
+// not wildcard-only resolves to it. owner is asked only when the decision needs
+// it, so an in-scope netblock address costs no owner lookup. excluded is true
+// when the refusal is an exclusion.
+func (s *Scope) PortEligible(a netip.Addr, owner Owner) (ok bool, why string, excluded bool) {
 	a = a.Unmap()
-	if ex, why := s.ExcludedFor(a, shared); ex {
-		return false, why, true
+	if ex, why := s.ExcludedAddr(a); ex {
+		if s.ExcludedCIDR(a) {
+			return false, why, true
+		}
+		if shared, _ := owner(a); !shared {
+			return false, why, true
+		}
 	}
 	if s.InScopeIP(a) {
 		return true, "", false
 	}
-	if shared || !ownerKnown {
+	if shared, known := owner(a); shared || !known {
 		return false, "address " + a.String() + " is shared provider infrastructure or its owner is unknown", false
 	}
 	if s.hostAddrs[a] {
@@ -215,11 +226,13 @@ func (s *Scope) HasNetblock(key string) bool {
 	return err == nil && s.blockSet[p.Masked()]
 }
 
-// IPv4AddressCount is the number of distinct IPv4 addresses in the in-scope
-// netblocks; overlapping netblocks are counted once.
-func (s *Scope) IPv4AddressCount() uint64 {
-	type iv struct{ lo, hi uint64 }
-	var ivs []iv
+// ipv4Range is an inclusive range of IPv4 addresses held as integers.
+type ipv4Range struct{ lo, hi uint64 }
+
+// ipv4Ranges returns the in-scope IPv4 netblocks as sorted ranges with the
+// overlapping and adjacent ones merged, so each address is in exactly one.
+func (s *Scope) ipv4Ranges() []ipv4Range {
+	var ivs []ipv4Range
 	for _, p := range s.netblocks {
 		if !p.Addr().Is4() {
 			continue
@@ -227,24 +240,40 @@ func (s *Scope) IPv4AddressCount() uint64 {
 		p = p.Masked()
 		b := p.Addr().As4()
 		lo := uint64(b[0])<<24 | uint64(b[1])<<16 | uint64(b[2])<<8 | uint64(b[3])
-		ivs = append(ivs, iv{lo, lo + (1 << (32 - p.Bits())) - 1})
+		ivs = append(ivs, ipv4Range{lo, lo + (1 << (32 - p.Bits())) - 1})
 	}
 	sort.Slice(ivs, func(i, j int) bool { return ivs[i].lo < ivs[j].lo })
-	var total uint64
-	var cur *iv
-	for i := range ivs {
-		if cur == nil || ivs[i].lo > cur.hi+1 {
-			if cur != nil {
-				total += cur.hi - cur.lo + 1
-			}
-			c := ivs[i]
-			cur = &c
-		} else if ivs[i].hi > cur.hi {
-			cur.hi = ivs[i].hi
+	var out []ipv4Range
+	for _, r := range ivs {
+		if n := len(out); n > 0 && r.lo <= out[n-1].hi+1 {
+			out[n-1].hi = max(out[n-1].hi, r.hi)
+			continue
 		}
+		out = append(out, r)
 	}
-	if cur != nil {
-		total += cur.hi - cur.lo + 1
+	return out
+}
+
+// IPv4AddressCount is the number of distinct IPv4 addresses in the in-scope
+// netblocks; overlapping netblocks are counted once.
+func (s *Scope) IPv4AddressCount() uint64 {
+	var total uint64
+	for _, r := range s.ipv4Ranges() {
+		total += r.hi - r.lo + 1
 	}
 	return total
+}
+
+// IPv4Addrs yields the distinct IPv4 addresses of the in-scope netblocks in
+// ascending order: the addresses IPv4AddressCount counts.
+func (s *Scope) IPv4Addrs() iter.Seq[netip.Addr] {
+	return func(yield func(netip.Addr) bool) {
+		for _, r := range s.ipv4Ranges() {
+			for v := r.lo; v <= r.hi; v++ {
+				if !yield(netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})) {
+					return
+				}
+			}
+		}
+	}
 }

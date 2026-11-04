@@ -321,7 +321,7 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 				if err == nil {
 					return c, nil
 				}
-				last = err
+				last = localRoute(err, a, e.routeLookup())
 			}
 			return nil, last
 		},

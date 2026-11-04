@@ -31,6 +31,7 @@ import (
 	"github.com/rafaelh/recon/internal/stages/asn"
 	"github.com/rafaelh/recon/internal/stages/dns"
 	"github.com/rafaelh/recon/internal/stages/orgpivot"
+	"github.com/rafaelh/recon/internal/stages/ports"
 	"github.com/rafaelh/recon/internal/stages/providerranges"
 	"github.com/rafaelh/recon/internal/stages/shodan"
 	"github.com/rafaelh/recon/internal/stages/subdomains"
@@ -65,7 +66,9 @@ func DefaultDeps() Deps {
 
 // defaultStages is the registry order (Spec 2 D25): sources first, then DNS,
 // then the stages derived from what the sources found. Passes repeat, so
-// late discoveries are picked up.
+// late discoveries are picked up. The port sweep is last so that probing
+// hostnames on 80 and 443 does not wait for a sweep that can take hours; the
+// pass after it probes the ports it found (Spec 4 D1).
 func defaultStages() []run.Stage {
 	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails
 	stages := []run.Stage{asn.New(), orgpivot.NewOrgASN(), orgpivot.NewCTOrg(), orgpivot.NewWhoisXML()}
@@ -73,7 +76,7 @@ func defaultStages() []run.Stage {
 	return append(stages,
 		shodan.New(), providerranges.New(),
 		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner(),
-		web.NewProbe(), web.NewCrawl())
+		web.NewProbe(), web.NewCrawl(), ports.New())
 }
 
 type options struct {

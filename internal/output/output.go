@@ -18,6 +18,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/fault"
 	"github.com/rafaelh/recon/internal/inventory"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
 )
@@ -167,7 +168,7 @@ func csvSafe(s string) string {
 }
 
 // Default returns the registered files: Spec 1's scope, candidates and excluded,
-// then Spec 2's DNS files (D27) and Spec 3's web files.
+// then Spec 2's DNS files (D27), Spec 3's web files and Spec 4's open-ports.csv.
 func Default() []File {
 	return []File{
 		{Name: "scope.csv", Format: CSV, Columns: []string{"type", "value", "source"}, Rows: scopeRows},
@@ -181,6 +182,7 @@ func Default() []File {
 		{Name: "provider-hosts.csv", Format: CSV, Columns: []string{"hostname", "provider", "service", "evidence", "cname", "resolves"}, Rows: providerHostRows},
 		{Name: "web-services.csv", Format: CSV, Columns: webServiceColumns, Rows: webServiceRows},
 		{Name: "urls.csv", Format: CSV, Columns: []string{"url", "host", "status", "found_by"}, Rows: urlRows},
+		{Name: "open-ports.csv", Format: CSV, Columns: []string{"ip", "port", "banner", "hostnames"}, Rows: openPortRows},
 	}
 }
 
@@ -270,6 +272,56 @@ func urlRows(s Snapshot) []Row {
 		if s.webVisible(r) {
 			rows = append(rows, recordRow(r, r.Key, attrCell(r, "host"), attrCell(r, "status"), strings.Join(r.Stages, ",")))
 		}
+	}
+	return rows
+}
+
+// Visible reports whether a record of a non-entity kind is shown: counted,
+// printed and written. A web record (HostAttr) is shown while its host is in
+// scope (Spec 3 D17), an address-and-port record (PortKey) while its address is
+// port-eligible (Spec 4 D9). web, the WebVisibility of sc, may be nil.
+func Visible(k kinds.Kind, r store.Record, sc *scope.Scope, inv *inventory.Inventory, web *WebVisibility) bool {
+	switch {
+	case k.PortKey:
+		return PortVisible(sc, inv, r)
+	case k.HostAttr == "":
+		return true
+	case web != nil:
+		return web.Visible(k.HostAttr, r)
+	}
+	return WebVisible(sc, k.HostAttr, r)
+}
+
+// PortVisible reports whether an open_port record is shown: only while its
+// address is port-eligible, so a reassigned cloud IP or an address excluded
+// later is not reported as the target's (Spec 1 D16). The record's key is
+// authoritative for the address and port. The summary counts and the open-ports
+// file both call it; so must anything that reports on open ports.
+func PortVisible(sc *scope.Scope, inv *inventory.Inventory, r store.Record) bool {
+	_, ok := visiblePort(sc, inv, r)
+	return ok
+}
+
+// visiblePort is PortVisible that also returns the address and port of the key.
+func visiblePort(sc *scope.Scope, inv *inventory.Inventory, r store.Record) (netip.AddrPort, bool) {
+	ap, err := netip.ParseAddrPort(r.Key)
+	return ap, err == nil && inv.PortEligible(ap.Addr(), sc)
+}
+
+func openPortRows(s Snapshot) []Row {
+	recs := s.Records["open_port"]
+	if len(recs) == 0 {
+		return nil
+	}
+	hostnames := s.Inv.HostnamesByIP(s.Scope)
+	var rows []Row
+	for _, r := range recs {
+		ap, ok := visiblePort(s.Scope, s.Inv, r)
+		if !ok {
+			continue
+		}
+		addr := ap.Addr().Unmap()
+		rows = append(rows, recordRow(r, addr.String(), strconv.Itoa(int(ap.Port())), r.Str("banner"), strings.Join(hostnames[addr], ";")))
 	}
 	return rows
 }

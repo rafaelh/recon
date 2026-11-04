@@ -60,26 +60,30 @@ type Settings struct {
 	WordlistHash  string
 	Permutations  Permutations
 	Concurrency   int
-	Rate          Rate
-	Crawl         Crawl
-	Archive       Archive
-	OutputDir     string
-	NetblockLimit int // IPv4 addresses
+	// PortConcurrency is the number of workers of the ports stage, which is
+	// slow per check (a silent port costs the connect timeout) and so needs more.
+	PortConcurrency int
+	Rate            Rate
+	Crawl           Crawl
+	Archive         Archive
+	OutputDir       string
+	NetblockLimit   int // IPv4 addresses
 }
 
 // Defaults returns the default settings.
 func Defaults() Settings {
 	return Settings{
-		Keys:          map[string]Secret{},
-		Ports:         DefaultPorts(),
-		RiskyPorts:    append([]int(nil), defaultRisky...),
-		Concurrency:   10,
-		Rate:          Rate{PerHost: 5, PerSource: 1, DNS: 50},
-		Crawl:         Crawl{MaxDepth: 2, MaxPages: 100},
-		Archive:       Archive{MaxURLs: 20000},
-		OutputDir:     ".",
-		NetblockLimit: 4096,
-		Permutations:  Permutations{Enabled: true, MaxPerSeed: 200},
+		Keys:            map[string]Secret{},
+		Ports:           DefaultPorts(),
+		RiskyPorts:      append([]int(nil), defaultRisky...),
+		Concurrency:     10,
+		PortConcurrency: 100,
+		Rate:            Rate{PerHost: 5, PerSource: 1, DNS: 50},
+		Crawl:           Crawl{MaxDepth: 2, MaxPages: 100},
+		Archive:         Archive{MaxURLs: 20000},
+		OutputDir:       ".",
+		NetblockLimit:   4096,
+		Permutations:    Permutations{Enabled: true, MaxPerSeed: 200},
 	}
 }
 
@@ -157,7 +161,7 @@ type setting struct{ flag, key string }
 
 var settingTable = []setting{
 	{"ports", "ports"}, {"risky-ports", "risky_ports"}, {"sensitive-paths", "sensitive_paths"},
-	{"wordlist", "wordlist"}, {"concurrency", "concurrency"}, {"rate-per-host", "rate.per_host"},
+	{"wordlist", "wordlist"}, {"concurrency", "concurrency"}, {"port-concurrency", "port_concurrency"}, {"rate-per-host", "rate.per_host"},
 	{"rate-per-source", "rate.per_source"}, {"rate-dns", "rate.dns"}, {"crawl-depth", "crawl.max_depth"},
 	{"crawl-pages", "crawl.max_pages"}, {"output-dir", "output_dir"}, {"netblock-limit", "netblock_limit"},
 	{"permutations-max", "permutations.max_per_seed"}, {"archive-max-urls", "archive.max_urls"},
@@ -172,7 +176,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.Var(portsFlag{&riskyRaw, &rt}, "risky-ports", "ports whose being open is reported as a risk")
 	fs.String("sensitive-paths", "", "YAML file of sensitive paths to request (default: "+BuiltinSensitivePathsLabel()+")")
 	fs.String("wordlist", "", "subdomain wordlist file (default: "+BuiltinWordlistLabel()+")")
-	fs.Int("concurrency", d.Concurrency, "workers per stage")
+	fs.Int("concurrency", d.Concurrency, "workers per stage (ports: --port-concurrency)")
+	fs.Int("port-concurrency", d.PortConcurrency, "workers for the port sweep, whose silent ports each wait out the connect timeout")
 	fs.Float64("rate-per-host", d.Rate.PerHost, "requests per second per dialled target IP (HTTP requests and TCP connects)")
 	fs.Float64("rate-per-source", d.Rate.PerSource, "requests per second per third-party source")
 	fs.Float64("rate-dns", d.Rate.DNS, "DNS queries per second in total across public resolvers")
@@ -186,13 +191,14 @@ func RegisterFlags(fs *pflag.FlagSet) {
 }
 
 type rawSettings struct {
-	Keys           map[string]string `mapstructure:"keys"`
-	Ports          []string          `mapstructure:"ports"`
-	RiskyPorts     []string          `mapstructure:"risky_ports"`
-	SensitivePaths string            `mapstructure:"sensitive_paths"`
-	Wordlist       string            `mapstructure:"wordlist"`
-	Concurrency    string            `mapstructure:"concurrency"`
-	Rate           struct {
+	Keys            map[string]string `mapstructure:"keys"`
+	Ports           []string          `mapstructure:"ports"`
+	RiskyPorts      []string          `mapstructure:"risky_ports"`
+	SensitivePaths  string            `mapstructure:"sensitive_paths"`
+	Wordlist        string            `mapstructure:"wordlist"`
+	Concurrency     string            `mapstructure:"concurrency"`
+	PortConcurrency string            `mapstructure:"port_concurrency"`
+	Rate            struct {
 		PerHost   string `mapstructure:"per_host"`
 		PerSource string `mapstructure:"per_source"`
 		DNS       string `mapstructure:"dns"`
@@ -224,7 +230,8 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	defaults := map[string]any{
 		"ports": FormatPorts(d.Ports), "risky_ports": FormatPorts(d.RiskyPorts),
 		"sensitive_paths": "", "wordlist": "", "concurrency": d.Concurrency,
-		"rate.per_host": d.Rate.PerHost, "rate.per_source": d.Rate.PerSource, "rate.dns": d.Rate.DNS,
+		"port_concurrency": d.PortConcurrency,
+		"rate.per_host":    d.Rate.PerHost, "rate.per_source": d.Rate.PerSource, "rate.dns": d.Rate.DNS,
 		"crawl.max_depth": d.Crawl.MaxDepth, "crawl.max_pages": d.Crawl.MaxPages, "archive.max_urls": d.Archive.MaxURLs,
 		"output_dir": d.OutputDir, "netblock_limit": d.NetblockLimit,
 		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed,
@@ -306,6 +313,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		}
 	}
 	posInt("concurrency", raw.Concurrency, 1, &s.Concurrency)
+	posInt("port_concurrency", raw.PortConcurrency, 1, &s.PortConcurrency)
 	posFloat("rate.per_host", raw.Rate.PerHost, &s.Rate.PerHost)
 	posFloat("rate.per_source", raw.Rate.PerSource, &s.Rate.PerSource)
 	posFloat("rate.dns", raw.Rate.DNS, &s.Rate.DNS)

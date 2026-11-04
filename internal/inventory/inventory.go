@@ -240,7 +240,23 @@ func (i *Inventory) Shared(a netip.Addr) bool { return i.result(a).Shared }
 // OwnerKnown reports whether anything is known about who owns the address: it
 // is in an in-scope netblock, has an owner record, or a provider range covers it.
 func (i *Inventory) OwnerKnown(a netip.Addr, sc *scope.Scope) bool {
-	return sc.InScopeIP(a) || i.result(a).Known
+	return sc.InScopeIP(a.Unmap()) || i.result(a).Known
+}
+
+// PortEligible reports whether the address may be port-checked. It is the one
+// decision behind the port sweep, open-port visibility and ips.csv's
+// port_eligible column; egress makes the same scope.PortEligible decision from
+// its Policy.
+func (i *Inventory) PortEligible(a netip.Addr, sc *scope.Scope) bool {
+	ok, _, _ := sc.PortEligible(a, i.owner)
+	return ok
+}
+
+// owner is the inventory's scope.Owner. PortEligible checks the netblocks
+// itself, so only the provider result is needed.
+func (i *Inventory) owner(a netip.Addr) (shared, known bool) {
+	r := i.result(a)
+	return r.Shared, r.Known
 }
 
 // ProbeHostnames are the resolved in-scope, non-excluded names that are not
@@ -296,9 +312,17 @@ func (i *Inventory) ProviderHosts(sc *scope.Scope) []ProviderHost {
 	return out
 }
 
-// IPRows lists every known address with its owner, provider label and whether
-// it may be port-checked (the same decision egress makes).
-func (i *Inventory) IPRows(sc *scope.Scope) []IPRow {
+// HostnamesByIP maps every known address to the sorted names, not excluded,
+// that resolve to it or that rDNS gave it: the hostnames column of ips.csv.
+func (i *Inventory) HostnamesByIP(sc *scope.Scope) map[netip.Addr][]string {
+	out := map[netip.Addr][]string{}
+	for a, names := range i.namesByIP(sc) {
+		out[a] = slices.Sorted(maps.Keys(names))
+	}
+	return out
+}
+
+func (i *Inventory) namesByIP(sc *scope.Scope) map[netip.Addr]map[string]bool {
 	byIP := map[netip.Addr]map[string]bool{}
 	touch := func(a netip.Addr) map[string]bool {
 		a = a.Unmap()
@@ -325,13 +349,19 @@ func (i *Inventory) IPRows(sc *scope.Scope) []IPRow {
 			touch(a)[name] = true
 		}
 	}
-	rows := make([]IPRow, 0, len(byIP))
-	for a, names := range byIP {
+	return byIP
+}
+
+// IPRows lists every known address with its owner, provider label and whether
+// it may be port-checked (the same decision egress makes).
+func (i *Inventory) IPRows(sc *scope.Scope) []IPRow {
+	hostnames := i.HostnamesByIP(sc)
+	rows := make([]IPRow, 0, len(hostnames))
+	for a, names := range hostnames {
 		res := i.result(a)
 		owner := i.d.Owners[a]
-		eligible, _, _ := sc.PortEligible(a, res.Shared, i.OwnerKnown(a, sc))
 		row := IPRow{IP: a, Provider: res.Provider, Service: res.Service, InScope: sc.InScopeIP(a),
-			PortEligible: eligible, Hostnames: slices.Sorted(maps.Keys(names))}
+			PortEligible: i.PortEligible(a, sc), Hostnames: names}
 		switch {
 		case owner.Known:
 			row.ASN, row.Owner = owner.ASN, owner.Holder

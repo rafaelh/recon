@@ -329,3 +329,37 @@ func TestCNAMESharedLabelIsStable(t *testing.T) {
 		}
 	}
 }
+
+// Spec 4 D2: one eligibility function for the sweep, egress and ips.csv.
+func TestPortEligibleMatchesIPRows(t *testing.T) {
+	var d inventory.Data
+	resolve(&d, "www.example.com", "203.0.113.5")
+	resolve(&d, "cdn.example.com", "104.16.0.1")
+	resolve(&d, "edge.example.com", "104.16.0.2") // owner unknown
+	resolve(&d, "admin.example.com", "203.0.113.6")
+	d.IPs = append(d.IPs, ip("198.51.100.9"))
+	d.Owners = map[netip.Addr]provider.Owner{
+		ip("203.0.113.5"): {ASN: 64500, Holder: "ACME-NET", Known: true},
+		ip("104.16.0.1"):  {ASN: 13335, Holder: "CLOUDFLARENET", Known: true},
+		ip("203.0.113.6"): {ASN: 64500, Holder: "ACME-NET", Known: true},
+	}
+	inv := inventory.New(d, provider.Default())
+	sc := newScope(inv, d, "admin.example.com")
+
+	want := map[string]bool{"203.0.113.5": true, "198.51.100.9": true, "104.16.0.1": false, "104.16.0.2": false, "203.0.113.6": false}
+	for _, r := range inv.IPRows(sc) {
+		if got := inv.PortEligible(r.IP, sc); got != r.PortEligible || got != want[r.IP.String()] {
+			t.Errorf("%s: PortEligible = %v, row = %v, want %v", r.IP, got, r.PortEligible, want[r.IP.String()])
+		}
+	}
+	// An address nothing is known about, an IPv4-mapped form and an in-scope netblock address.
+	if inv.PortEligible(ip("192.0.2.77"), sc) {
+		t.Error("an address with no hostname, owner or netblock must not be eligible")
+	}
+	if !inv.PortEligible(ip("::ffff:203.0.113.5"), sc) {
+		t.Error("an IPv4-mapped address must be decided as the IPv4 address")
+	}
+	if !inv.PortEligible(ip("198.51.100.200"), sc) {
+		t.Error("an address inside an in-scope netblock is eligible")
+	}
+}
