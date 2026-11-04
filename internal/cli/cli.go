@@ -29,11 +29,17 @@ import (
 	"github.com/rafaelh/recon/internal/report"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/stages/asn"
+	"github.com/rafaelh/recon/internal/stages/dns"
+	"github.com/rafaelh/recon/internal/stages/orgpivot"
+	"github.com/rafaelh/recon/internal/stages/providerranges"
+	"github.com/rafaelh/recon/internal/stages/shodan"
+	"github.com/rafaelh/recon/internal/stages/subdomains"
 )
 
 // Deps are the collaborators of Execute, replaceable in tests.
 type Deps struct {
 	Stages        []run.Stage // in registry order
+	Files         []output.File
 	Egress        egress.Options
 	Kinds         *kinds.Registry
 	Stdin         io.Reader
@@ -48,12 +54,24 @@ type Deps struct {
 // DefaultDeps returns the production dependencies.
 func DefaultDeps() Deps {
 	return Deps{
-		Stages: []run.Stage{asn.New()}, Kinds: kinds.Default(),
+		Stages: defaultStages(), Files: output.Default(), Kinds: kinds.Default(),
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
 		StdinIsTTY:  func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		StdoutIsTTY: func() bool { return term.IsTerminal(int(os.Stdout.Fd())) },
 		Clock:       time.Now, HandleSignals: true,
 	}
+}
+
+// defaultStages is the registry order (Spec 2 D25): sources first, then DNS,
+// then the stages derived from what the sources found. Passes repeat, so
+// late discoveries are picked up.
+func defaultStages() []run.Stage {
+	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails
+	stages := []run.Stage{asn.New(), orgpivot.NewOrgASN(), orgpivot.NewCTOrg(), orgpivot.NewWhoisXML()}
+	stages = append(stages, sub...)
+	return append(stages,
+		shodan.New(), providerranges.New(),
+		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner())
 }
 
 type options struct {
@@ -68,6 +86,9 @@ const ackPrompt = "Confirm you are authorised to test this engagement's scope [y
 func Execute(ctx context.Context, args []string, d Deps) int {
 	if d.Kinds == nil {
 		d.Kinds = kinds.Default()
+	}
+	if d.Files == nil {
+		d.Files = output.Default()
 	}
 	if d.Clock == nil {
 		d.Clock = time.Now
@@ -262,7 +283,7 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 	eg := egress.New(d.Egress.WithSettings(settings, red))
 	runner := run.New(run.Config{
 		Engagement: eng, Settings: settings, Stages: d.Stages, Egress: eg, Emitter: em,
-		Files: output.Default(), Kinds: d.Kinds, Clock: d.Clock,
+		Files: d.Files, Kinds: d.Kinds, Clock: d.Clock,
 		Passive: o.passive, AllowLargeNetblocks: o.allowLarge, Verbose: o.verbose, Redo: o.redo,
 	})
 	code, err = runner.Run(ctx)

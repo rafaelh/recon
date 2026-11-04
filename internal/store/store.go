@@ -59,6 +59,9 @@ type Record struct {
 	Stages              []string // sorted stages currently observing the record
 }
 
+// Str returns the string attribute k, or "" if it is absent or not a string.
+func (r Record) Str(k string) string { s, _ := r.Attrs[k].(string); return s }
+
 // ObsRow is one stored observation.
 type ObsRow struct{ Kind, Key, Stage, CheckKey string }
 
@@ -97,10 +100,12 @@ type Store struct {
 	// is never closed under a sender. The writer never takes it.
 	chMu   sync.RWMutex
 	closed bool       // guarded by chMu
-	mu     sync.Mutex // guards err, onNew
+	mu     sync.Mutex // guards err, onNew, versions
 	err    error
 	onNew  func(kind, key string, attrs map[string]any)
-	once   sync.Once
+	// versions counts the committed transactions that changed records of a kind.
+	versions map[string]uint64
+	once     sync.Once
 }
 
 // Open opens or initialises the state database at path.
@@ -123,7 +128,7 @@ func Open(path string, o Options) (*Store, error) {
 	if clock == nil {
 		clock = time.Now
 	}
-	s := &Store{db: db, clock: clock, red: o.Redactor, ch: make(chan op, 1024)}
+	s := &Store{db: db, clock: clock, red: o.Redactor, ch: make(chan op, 1024), versions: map[string]uint64{}}
 	s.wg.Add(1)
 	go s.writer()
 	return s, nil
@@ -284,6 +289,23 @@ func (s *Store) commit(batch []op) {
 	}
 }
 
+// KindVersion changes whenever a committed write adds, updates or drops an
+// observation of kind, so a caller can cache what it derives from the kind's
+// records. Call it after Flush to see the writes made so far.
+func (s *Store) KindVersion(kind string) uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.versions[kind]
+}
+
+func (s *Store) bump(kinds map[string]bool) {
+	s.mu.Lock()
+	for k := range kinds {
+		s.versions[k]++
+	}
+	s.mu.Unlock()
+}
+
 func (s *Store) setErr(err error) {
 	s.mu.Lock()
 	if s.err == nil {
@@ -301,11 +323,12 @@ func (s *Store) commitOps(batch []op) []newRec {
 	defer tx.Rollback()
 	today := s.today()
 	var news []newRec
+	kinds := map[string]bool{}
 	wrote := false
 	for _, o := range batch {
 		switch o.kind {
 		case opComplete:
-			n, err := s.applyComplete(tx, o, today)
+			n, err := s.applyComplete(tx, o, today, kinds)
 			if err != nil {
 				s.setErr(err)
 				return nil
@@ -329,11 +352,13 @@ func (s *Store) commitOps(batch []op) []newRec {
 		s.setErr(err)
 		return nil
 	}
+	s.bump(kinds)
 	fault.Point("after-commit")
 	return news
 }
 
-func (s *Store) applyComplete(tx *sql.Tx, o op, today string) ([]newRec, error) {
+// applyComplete adds the kind of every record it touches to kinds.
+func (s *Store) applyComplete(tx *sql.Tx, o op, today string, kinds map[string]bool) ([]newRec, error) {
 	// Later observations of the same record in one check win.
 	type rk struct{ kind, key string }
 	seen := map[rk]Obs{}
@@ -405,6 +430,7 @@ func (s *Store) applyComplete(tx *sql.Tx, o op, today string) ([]newRec, error) 
 		if err := refreshCurrent(tx, k.kind, k.key); err != nil {
 			return nil, err
 		}
+		kinds[k.kind] = true
 	}
 	if _, err := tx.Exec("INSERT OR REPLACE INTO checks(stage,key,completed_at) VALUES(?,?,?)", o.stage, o.check, today); err != nil {
 		return nil, err
@@ -669,6 +695,7 @@ func (s *Store) FinishRedo(stage string, valid map[string]struct{}) error {
 		}
 	}
 	rows.Close()
+	kinds := map[string]bool{}
 	for _, o := range orphans {
 		if _, err := tx.Exec("DELETE FROM observations WHERE kind=? AND key=? AND stage=? AND check_key=?", o.kind, o.key, stage, o.check); err != nil {
 			return err
@@ -676,9 +703,14 @@ func (s *Store) FinishRedo(stage string, valid map[string]struct{}) error {
 		if err := refreshCurrent(tx, o.kind, o.key); err != nil {
 			return err
 		}
+		kinds[o.kind] = true
 	}
 	if _, err := tx.Exec("DELETE FROM meta WHERE key=?", "redo:"+stage); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.bump(kinds)
+	return nil
 }

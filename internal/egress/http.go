@@ -288,7 +288,7 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 func (p *Policy) vetted(host string) []netip.Addr {
 	var out []netip.Addr
 	for _, a := range p.Resolutions[host] {
-		if ok, why := p.Scope.ExcludedAddr(a); ok && (p.Scope.ExcludedCIDR(a) || !p.isShared(a)) {
+		if ok, why := p.Scope.ExcludedFor(a, p.isShared(a)); ok {
 			p.reportExcluded(a.String(), why)
 			continue
 		}

@@ -354,3 +354,41 @@ func TestOpenRejectsForeignDB(t *testing.T) {
 		t.Fatal("garbage file must not open")
 	}
 }
+
+// KindVersion moves when a kind's records change, including when a redo drops
+// them, and not for other kinds' writes.
+func TestKindVersion(t *testing.T) {
+	s, _ := open(t, newClock(), nil)
+	if s.KindVersion("x") != 0 {
+		t.Fatal("fresh store")
+	}
+	s.Complete("st", "c1", []store.Obs{{Kind: "x", Key: "a"}})
+	mustFlush(t, s)
+	v1 := s.KindVersion("x")
+	if v1 == 0 {
+		t.Fatal("a new record must change the version")
+	}
+	s.Complete("st", "c2", []store.Obs{{Kind: "y", Key: "b"}})
+	mustFlush(t, s)
+	if s.KindVersion("x") != v1 {
+		t.Error("another kind's write must not change the version")
+	}
+	s.Complete("st", "c1", nil) // c1 no longer produces a
+	mustFlush(t, s)
+	v2 := s.KindVersion("x")
+	if v2 == v1 {
+		t.Error("a dropped observation must change the version")
+	}
+	s.Complete("st", "c3", []store.Obs{{Kind: "x", Key: "c"}})
+	mustFlush(t, s)
+	if err := s.Redo("st"); err != nil {
+		t.Fatal(err)
+	}
+	v3 := s.KindVersion("x")
+	if err := s.FinishRedo("st", map[string]struct{}{}); err != nil {
+		t.Fatal(err)
+	}
+	if s.KindVersion("x") == v3 {
+		t.Error("a redo sweep must change the version")
+	}
+}

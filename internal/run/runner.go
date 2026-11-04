@@ -21,8 +21,10 @@ import (
 	"github.com/rafaelh/recon/internal/engagement"
 	"github.com/rafaelh/recon/internal/fault"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/output"
+	"github.com/rafaelh/recon/internal/provider"
 	"github.com/rafaelh/recon/internal/report"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
@@ -68,6 +70,12 @@ type Runner struct {
 
 	inputs input.Parsed
 	sc     atomic.Pointer[scope.Scope]
+	inv    atomic.Pointer[inventory.Inventory]
+
+	// ranges caches the indexed provider_range records (thousands of rows) as
+	// of store KindVersion rangesVer; buildScope runs after every stage.
+	ranges    *provider.Ranges
+	rangesVer uint64
 
 	mu      sync.Mutex
 	failed  map[string]map[string]bool // stage -> check key, failed this run
@@ -232,46 +240,40 @@ func (r *Runner) buildScope() error {
 			blocks = append(blocks, p.Masked())
 		}
 	}
-	res := map[string][]netip.Addr{}
-	recs, err := r.st.Records("resolution", r.order)
+	data, err := r.inventoryData()
 	if err != nil {
 		return err
 	}
-	for _, rec := range recs {
-		if !rec.Current {
-			continue
-		}
-		name, _ := rec.Attrs["name"].(string)
-		typ, _ := rec.Attrs["type"].(string)
-		val, _ := rec.Attrs["value"].(string)
-		if typ != "A" && typ != "AAAA" {
-			continue
-		}
-		if a, err := netip.ParseAddr(val); err == nil && name != "" {
-			name = input.NormaliseHost(name)
-			res[name] = append(res[name], a)
-		}
-	}
-	sc := scope.New(scope.Config{Roots: in.Roots, Netblocks: blocks, Exclusions: excl, Resolutions: res})
+	inv := inventory.New(data, provider.Default())
+	res := inv.Addrs()
+	sc := scope.New(scope.Config{Roots: in.Roots, Netblocks: blocks, Exclusions: excl, Resolutions: res, WildcardOnly: inv.WildcardOnly()})
 	r.sc.Store(sc)
+	r.inv.Store(inv)
 
 	cands := map[string]bool{}
-	for _, kind := range []string{"hostname", "root"} {
-		hs, err := r.st.Records(kind, r.order)
-		if err != nil {
-			return err
-		}
-		for _, h := range hs {
-			if h.Current && sc.ClassifyHost(h.Key).Class == scope.Candidate {
-				cands[input.NormaliseHost(h.Key)] = true
-			}
+	roots, err := r.currentRecords("root")
+	if err != nil {
+		return err
+	}
+	names := make([]string, 0, len(data.Hosts)+len(roots))
+	for _, h := range data.Hosts {
+		names = append(names, h.Name)
+	}
+	for _, rec := range roots {
+		names = append(names, input.NormaliseHost(rec.Key))
+	}
+	for _, n := range names {
+		if sc.ClassifyHost(n).Class == scope.Candidate {
+			cands[n] = true
 		}
 	}
 	r.cfg.Egress.SetPolicy(&egress.Policy{
 		Scope: sc, Ack: eng.Acked(), Passive: r.cfg.Passive,
 		Ports: r.cfg.Settings.Ports, SensitivePaths: r.cfg.Settings.SensitivePathList,
 		Resolutions: res, Candidates: cands,
-		Excluded: r.guard,
+		Shared:       inv.Shared,
+		OwnerUnknown: func(a netip.Addr) bool { return !inv.OwnerKnown(a, sc) },
+		Excluded:     r.guard,
 	})
 
 	count := sc.IPv4AddressCount()
@@ -390,7 +392,7 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 	redoPending := slices.Contains(pend, name)
 	failedSet := r.failedSet(name)
 	clients := r.cfg.Egress.Clients(name, s.Contact() == Target, s.Sources())
-	view := View{r: r, sc: r.sc.Load()}
+	view := View{r: r, sc: r.sc.Load(), inv: r.inv.Load(), cache: &recordCache{m: map[string][]store.Record{}}}
 
 	work := make(chan Check)
 	var wg sync.WaitGroup
@@ -671,11 +673,14 @@ func (r *Runner) render() error {
 	if err != nil {
 		return err
 	}
-	snap := output.Snapshot{Today: r.today(), Inputs: inputs, Records: map[string][]store.Record{}, Scope: r.sc.Load()}
+	snap := output.Snapshot{Today: r.today(), Inputs: inputs, Records: map[string][]store.Record{}, Scope: r.sc.Load(), Inv: r.inv.Load()}
 	if snap.Scope == nil {
 		snap.Scope = scope.New(scope.Config{})
 	}
-	for _, kind := range []string{"root", "hostname", "netblock", "excluded"} {
+	if snap.Inv == nil {
+		snap.Inv = inventory.New(inventory.Data{}, provider.Default())
+	}
+	for _, kind := range []string{"root", "hostname", "netblock", "excluded", "resolution", "unresolved", "ip"} {
 		recs, err := r.st.Records(kind, r.order)
 		if err != nil {
 			return err
@@ -686,4 +691,107 @@ func (r *Runner) render() error {
 		return err
 	}
 	return output.Render(eng.Dir(), r.cfg.Files, snap)
+}
+
+// currentRecords returns the current records of a kind.
+func (r *Runner) currentRecords(kind string) ([]store.Record, error) {
+	recs, err := r.st.Records(kind, r.order)
+	if err != nil {
+		return nil, err
+	}
+	out := recs[:0]
+	for _, rec := range recs {
+		if rec.Current {
+			out = append(out, rec)
+		}
+	}
+	return out, nil
+}
+
+// inventoryData reads the current records the inventory is computed from.
+func (r *Runner) inventoryData() (inventory.Data, error) {
+	var d inventory.Data
+	hosts, err := r.currentRecords("hostname")
+	if err != nil {
+		return d, err
+	}
+	for _, rec := range hosts {
+		d.Hosts = append(d.Hosts, inventory.Host{Name: input.NormaliseHost(rec.Key), Stages: rec.Stages})
+	}
+	recs, err := r.currentRecords("resolution")
+	if err != nil {
+		return d, err
+	}
+	for _, rec := range recs {
+		name := input.NormaliseHost(rec.Str("name"))
+		if name != "" {
+			d.Resolutions = append(d.Resolutions, inventory.Resolution{Name: name, Type: rec.Str("type"), Value: rec.Str("value")})
+		}
+	}
+	if recs, err = r.currentRecords("wildcard"); err != nil {
+		return d, err
+	}
+	for _, rec := range recs {
+		w := inventory.Wildcard{Zone: rec.Key, CNAME: rec.Str("cname")}
+		list, _ := rec.Attrs["addrs"].([]any)
+		for _, a := range list {
+			if s, ok := a.(string); ok {
+				if addr, err := netip.ParseAddr(s); err == nil {
+					w.Addrs = append(w.Addrs, addr)
+				}
+			}
+		}
+		d.Wildcards = append(d.Wildcards, w)
+	}
+	if recs, err = r.currentRecords("ip"); err != nil {
+		return d, err
+	}
+	for _, rec := range recs {
+		if a, err := netip.ParseAddr(rec.Key); err == nil {
+			d.IPs = append(d.IPs, a.Unmap())
+		}
+	}
+	if recs, err = r.currentRecords("ip_owner"); err != nil {
+		return d, err
+	}
+	d.Owners = map[netip.Addr]provider.Owner{}
+	for _, rec := range recs {
+		if a, err := netip.ParseAddr(rec.Key); err == nil {
+			asn, _ := rec.Attrs["asn"].(float64)
+			d.Owners[a.Unmap()] = provider.Owner{ASN: int(asn), Holder: rec.Str("holder"), Known: true}
+		}
+	}
+	if d.Ranges, err = r.providerRanges(); err != nil {
+		return d, err
+	}
+	if recs, err = r.currentRecords("ip_hostname"); err != nil {
+		return d, err
+	}
+	for _, rec := range recs {
+		if a, err := netip.ParseAddr(rec.Str("ip")); err == nil {
+			d.IPHostnames = append(d.IPHostnames, inventory.IPHostname{IP: a.Unmap(), Hostname: input.NormaliseHost(rec.Str("hostname")), Source: rec.Str("source")})
+		}
+	}
+	return d, nil
+}
+
+// providerRanges returns the indexed provider_range records, re-reading them
+// only when the store says they have changed since the last call.
+func (r *Runner) providerRanges() (*provider.Ranges, error) {
+	ver := r.st.KindVersion("provider_range")
+	if r.ranges != nil && ver == r.rangesVer {
+		return r.ranges, nil
+	}
+	recs, err := r.currentRecords("provider_range")
+	if err != nil {
+		return nil, err
+	}
+	var rs []provider.Range
+	for _, rec := range recs {
+		if p, err := netip.ParsePrefix(rec.Str("prefix")); err == nil {
+			rs = append(rs, provider.Range{Prefix: p.Masked(), Provider: rec.Str("provider"), Service: rec.Str("service"), Region: rec.Str("region")})
+		}
+	}
+	r.ranges, r.rangesVer = provider.NewRanges(rs), ver
+	return r.ranges, nil
 }

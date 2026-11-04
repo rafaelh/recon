@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 
 	"github.com/rafaelh/recon/internal/run"
@@ -20,3 +21,5 @@ func newPrefixServer(t *testing.T, prefix *string) string {
 	t.Cleanup(srv.Close)
 	return srv.URL
 }
+
+func mustAddr(s string) netip.Addr { return netip.MustParseAddr(s) }

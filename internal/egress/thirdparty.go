@@ -3,19 +3,24 @@ package egress
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/scope"
 )
 
-const maxThirdPartyBody = 10 << 20
+const (
+	maxThirdPartyBody = 10 << 20
+	maxThirdPartyWait = 120 * time.Second
+)
 
 // ThirdPartyRequest is a request to a third-party source.
 type ThirdPartyRequest struct {
@@ -26,6 +31,11 @@ type ThirdPartyRequest struct {
 	// KeySource names a configured key to attach, as header KeyHeader and/or
 	// query parameter KeyParam. The client attaches it; stages never handle it.
 	KeySource, KeyHeader, KeyParam string
+	// KeyBodyField, with KeySource, sets this field of the JSON object in Body
+	// to the key, so a source that wants the key in the body never exposes it to the stage.
+	KeyBodyField string
+	// Timeout overrides the default HTTP timeout for this request (at most 120 s).
+	Timeout time.Duration
 }
 
 // ThirdPartyResponse is a response from a third-party source (body capped at 10 MiB).
@@ -33,6 +43,9 @@ type ThirdPartyResponse struct {
 	Status int
 	Header map[string][]string
 	Body   []byte
+	// Truncated is set when the 10 MiB cap cut the body. A stage that needs the
+	// whole body must treat it as an error.
+	Truncated bool
 }
 
 // ThirdPartyHTTP talks to the hosts a stage declared in Sources().
@@ -104,11 +117,23 @@ func (t *thirdParty) Do(ctx context.Context, r ThirdPartyRequest) (ThirdPartyRes
 			q.Set(r.KeyParam, key.Reveal())
 			u.RawQuery = q.Encode()
 		}
+		if r.KeyBodyField != "" {
+			var obj map[string]any
+			if err := json.Unmarshal(r.Body, &obj); err != nil || obj == nil {
+				return ThirdPartyResponse{}, errors.New("a key body field needs a JSON object body")
+			}
+			obj[r.KeyBodyField] = key.Reveal()
+			r.Body, _ = json.Marshal(obj)
+		}
 	}
 	if err := e.sourceLimiter(pattern).Wait(ctx); err != nil {
 		return ThirdPartyResponse{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, e.opts.HTTPTimeout)
+	timeout := e.opts.HTTPTimeout
+	if r.Timeout > 0 {
+		timeout = min(r.Timeout, maxThirdPartyWait)
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var body io.Reader
 	if len(r.Body) > 0 {
@@ -130,11 +155,15 @@ func (t *thirdParty) Do(ctx context.Context, r ThirdPartyRequest) (ThirdPartyRes
 		return ThirdPartyResponse{}, t.scrub(err)
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxThirdPartyBody))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxThirdPartyBody+1))
 	if err != nil {
 		return ThirdPartyResponse{}, t.scrub(err)
 	}
-	return ThirdPartyResponse{Status: resp.StatusCode, Header: map[string][]string(resp.Header.Clone()), Body: data}, nil
+	truncated := len(data) > maxThirdPartyBody
+	if truncated {
+		data = data[:maxThirdPartyBody]
+	}
+	return ThirdPartyResponse{Status: resp.StatusCode, Header: map[string][]string(resp.Header.Clone()), Body: data, Truncated: truncated}, nil
 }
 
 // scrub removes key values from an error, including the URL net/http embeds.

@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/rafaelh/recon/internal/fault"
+	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
 )
@@ -40,6 +41,7 @@ type Snapshot struct {
 	Inputs  []store.Input
 	Records map[string][]store.Record // by kind, including not-current records
 	Scope   *scope.Scope
+	Inv     *inventory.Inventory
 	// ASNNetblocks maps an in-scope netblock to the "AS<n>" input it came from.
 	ASNNetblocks map[string]string
 }
@@ -156,12 +158,19 @@ func csvSafe(s string) string {
 	return stripControl(s)
 }
 
-// Default returns the files registered by Spec 1: scope, candidates, excluded.
+// Default returns the registered files: Spec 1's scope, candidates and excluded,
+// then Spec 2's DNS files (D27).
 func Default() []File {
 	return []File{
 		{Name: "scope.csv", Format: CSV, Columns: []string{"type", "value", "source"}, Rows: scopeRows},
 		{Name: "candidates.csv", Format: CSV, Columns: []string{"type", "value", "found_by"}, Rows: candidateRows},
 		{Name: "excluded.csv", Format: CSV, Columns: []string{"value", "reason"}, Rows: excludedRows},
+		{Name: "subdomains.txt", Format: TXT, Rows: inScopeHostRows(false)},
+		{Name: "resolutions.csv", Format: CSV, Columns: []string{"name", "type", "value"}, Rows: resolutionRows},
+		{Name: "unresolved.txt", Format: TXT, Rows: unresolvedRows},
+		{Name: "wildcard-excluded.txt", Format: TXT, Rows: inScopeHostRows(true)},
+		{Name: "ips.csv", Format: CSV, Columns: []string{"ip", "asn", "owner", "provider", "service", "in_scope", "port_eligible", "hostnames"}, Rows: ipRows},
+		{Name: "provider-hosts.csv", Format: CSV, Columns: []string{"hostname", "provider", "service", "evidence", "cname", "resolves"}, Rows: providerHostRows},
 	}
 }
 
@@ -218,8 +227,77 @@ func excludedRows(s Snapshot) []Row {
 		if seen[r.Key] {
 			continue
 		}
-		reason, _ := r.Attrs["reason"].(string)
-		rows = append(rows, recordRow(r, r.Key, reason))
+		rows = append(rows, recordRow(r, r.Key, r.Str("reason")))
 	}
 	return rows
+}
+
+// inScopeHostRows lists the in-scope hostnames that exist only because of a
+// wildcard (wildcard-excluded.txt), or all the others (subdomains.txt).
+func inScopeHostRows(wildcardOnly bool) func(Snapshot) []Row {
+	return func(s Snapshot) []Row {
+		var rows []Row
+		wo := s.Inv.WildcardOnly()
+		for _, r := range s.Records["hostname"] {
+			if wo[r.Key] == wildcardOnly && s.Scope.ClassifyHost(r.Key).Class == scope.InScope {
+				rows = append(rows, recordRow(r, r.Key))
+			}
+		}
+		return rows
+	}
+}
+
+func unresolvedRows(s Snapshot) []Row {
+	var rows []Row
+	for _, r := range s.Records["unresolved"] {
+		rows = append(rows, recordRow(r, r.Key))
+	}
+	return rows
+}
+
+func resolutionRows(s Snapshot) []Row {
+	var rows []Row
+	for _, r := range s.Records["resolution"] {
+		rows = append(rows, recordRow(r, r.Str("name"), r.Str("type"), r.Str("value")))
+	}
+	return rows
+}
+
+// derivedRows builds rows computed from the inventory. Each is dated by the
+// record of kind whose key is the row's first cell, or today if there is none.
+func derivedRows(s Snapshot, kind string, cells [][]string) []Row {
+	seen := map[string]store.Record{}
+	for _, r := range s.Records[kind] {
+		seen[r.Key] = r
+	}
+	rows := make([]Row, 0, len(cells))
+	for _, c := range cells {
+		row := Row{Cells: c, Current: true, FirstSeen: s.Today, LastSeen: s.Today}
+		if rec, ok := seen[c[0]]; ok {
+			row.FirstSeen, row.LastSeen = rec.FirstSeen, rec.LastSeen
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func ipRows(s Snapshot) []Row {
+	var cells [][]string
+	for _, ir := range s.Inv.IPRows(s.Scope) {
+		asn := ""
+		if ir.ASN != 0 {
+			asn = fmt.Sprintf("AS%d", ir.ASN)
+		}
+		cells = append(cells, []string{ir.IP.String(), asn, ir.Owner, ir.Provider, ir.Service,
+			fmt.Sprint(ir.InScope), fmt.Sprint(ir.PortEligible), strings.Join(ir.Hostnames, ";")})
+	}
+	return derivedRows(s, "ip", cells)
+}
+
+func providerHostRows(s Snapshot) []Row {
+	var cells [][]string
+	for _, ph := range s.Inv.ProviderHosts(s.Scope) {
+		cells = append(cells, []string{ph.Hostname, ph.Provider, ph.Service, ph.Evidence, ph.CNAME, fmt.Sprint(ph.Resolves)})
+	}
+	return derivedRows(s, "hostname", cells)
 }

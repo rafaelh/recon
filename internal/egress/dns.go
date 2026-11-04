@@ -11,6 +11,15 @@ import (
 	"github.com/rafaelh/recon/internal/input"
 )
 
+// Record types for Resolver.Query, so stages never import a DNS library.
+const (
+	TypeA     = dns.TypeA
+	TypeAAAA  = dns.TypeAAAA
+	TypeCNAME = dns.TypeCNAME
+	TypePTR   = dns.TypePTR
+	TypeTXT   = dns.TypeTXT
+)
+
 // DNS response codes returned in DNSResult.RCode.
 const (
 	RCodeSuccess  = dns.RcodeSuccess
@@ -24,12 +33,17 @@ type Answer struct {
 	TTL               uint32
 }
 
+// CNAME is one link of an alias chain: Name is an alias of Target.
+type CNAME struct{ Name, Target string }
+
 // DNSResult is the outcome of a DNS query. NXDOMAIN, NODATA and SERVFAIL are
 // results, not errors; only a failure to get any response is an error.
 type DNSResult struct {
-	RCode      int
-	Answers    []Answer // CNAME records are reported in CNAMEChain, not here
-	CNAMEChain []string
+	RCode   int
+	Answers []Answer // CNAME records are reported in CNAMEs, not here (unless CNAME was queried)
+	// CNAMEs is the alias chain in answer order. It is populated for every
+	// rcode, so a chain ending in NXDOMAIN or NODATA is visible.
+	CNAMEs []CNAME
 }
 
 // Resolver queries the fixed public resolver set. It has no zone-transfer API.
@@ -88,7 +102,7 @@ func toResult(m *dns.Msg, qtype uint16) DNSResult {
 	for _, rr := range m.Answer {
 		h := rr.Header()
 		if cn, ok := rr.(*dns.CNAME); ok {
-			res.CNAMEChain = append(res.CNAMEChain, input.NormaliseHost(cn.Target))
+			res.CNAMEs = append(res.CNAMEs, CNAME{Name: input.NormaliseHost(h.Name), Target: input.NormaliseHost(cn.Target)})
 			if qtype != dns.TypeCNAME {
 				continue
 			}

@@ -4,7 +4,9 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"net/url"
@@ -34,6 +36,12 @@ type Rate struct {
 // Crawl holds the crawl limits.
 type Crawl struct{ MaxDepth, MaxPages int }
 
+// Permutations holds the subdomain-permutation settings.
+type Permutations struct {
+	Enabled    bool
+	MaxPerSeed int
+}
+
 // Settings are the validated settings for a run.
 type Settings struct {
 	Keys           map[string]Secret
@@ -43,11 +51,16 @@ type Settings struct {
 	// SensitivePathList is the parsed list from SensitivePaths (or the built-in list).
 	SensitivePathList []string
 	Wordlist          string // file path; empty means the built-in list
-	Concurrency       int
-	Rate              Rate
-	Crawl             Crawl
-	OutputDir         string
-	NetblockLimit     int // IPv4 addresses
+	// WordlistWords is the parsed list from Wordlist (or the built-in list) and
+	// WordlistHash identifies its content, so a changed list creates new checks.
+	WordlistWords []string
+	WordlistHash  string
+	Permutations  Permutations
+	Concurrency   int
+	Rate          Rate
+	Crawl         Crawl
+	OutputDir     string
+	NetblockLimit int // IPv4 addresses
 }
 
 // Defaults returns the default settings.
@@ -61,6 +74,7 @@ func Defaults() Settings {
 		Crawl:         Crawl{MaxDepth: 2, MaxPages: 100},
 		OutputDir:     ".",
 		NetblockLimit: 4096,
+		Permutations:  Permutations{Enabled: true, MaxPerSeed: 200},
 	}
 }
 
@@ -73,11 +87,15 @@ func (s Settings) KeyValues() []string {
 	return out
 }
 
-// BuiltinWordlistLabel is "built-in (N entries)".
-func BuiltinWordlistLabel() string {
+func builtinWordlist() []string {
 	b, _ := builtin.ReadFile("builtin/wordlist.txt")
 	list, _ := input.ParseList(bytes.NewReader(b))
-	return fmt.Sprintf("built-in (%d entries)", len(list))
+	return list
+}
+
+// BuiltinWordlistLabel is "built-in (N entries)".
+func BuiltinWordlistLabel() string {
+	return fmt.Sprintf("built-in (%d entries)", len(builtinWordlist()))
 }
 
 // BuiltinSensitivePathsLabel is "built-in (N entries)".
@@ -137,6 +155,7 @@ var settingTable = []setting{
 	{"wordlist", "wordlist"}, {"concurrency", "concurrency"}, {"rate-per-host", "rate.per_host"},
 	{"rate-per-source", "rate.per_source"}, {"rate-dns", "rate.dns"}, {"crawl-depth", "crawl.max_depth"},
 	{"crawl-pages", "crawl.max_pages"}, {"output-dir", "output_dir"}, {"netblock-limit", "netblock_limit"},
+	{"permutations-max", "permutations.max_per_seed"},
 }
 
 // RegisterFlags adds one flag per setting to fs. There is deliberately no flag for API keys.
@@ -155,6 +174,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.Int("crawl-depth", d.Crawl.MaxDepth, "maximum crawl depth")
 	fs.Int("crawl-pages", d.Crawl.MaxPages, "maximum pages crawled per web service")
 	fs.String("output-dir", d.OutputDir, "directory in which engagement directories are created")
+	fs.Bool("no-permutations", false, "do not resolve permutations of discovered subdomain labels (default: on, including with --passive)")
+	fs.Int("permutations-max", d.Permutations.MaxPerSeed, "maximum permutations generated per discovered subdomain label")
 	fs.Int("netblock-limit", d.NetblockLimit, "IPv4 address count above which the run stops unless --allow-large-netblocks is given")
 }
 
@@ -176,6 +197,10 @@ type rawSettings struct {
 	} `mapstructure:"crawl"`
 	OutputDir     string `mapstructure:"output_dir"`
 	NetblockLimit string `mapstructure:"netblock_limit"`
+	Permutations  struct {
+		Enabled    string `mapstructure:"enabled"`
+		MaxPerSeed string `mapstructure:"max_per_seed"`
+	} `mapstructure:"permutations"`
 }
 
 // Load merges defaults, the config file, RECON_* environment variables and the
@@ -193,6 +218,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		"rate.per_host": d.Rate.PerHost, "rate.per_source": d.Rate.PerSource, "rate.dns": d.Rate.DNS,
 		"crawl.max_depth": d.Crawl.MaxDepth, "crawl.max_pages": d.Crawl.MaxPages,
 		"output_dir": d.OutputDir, "netblock_limit": d.NetblockLimit,
+		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed,
 	}
 	for k, val := range defaults {
 		v.SetDefault(k, val)
@@ -277,6 +303,17 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	posInt("crawl.max_depth", raw.Crawl.MaxDepth, 0, &s.Crawl.MaxDepth)
 	posInt("crawl.max_pages", raw.Crawl.MaxPages, 0, &s.Crawl.MaxPages)
 	posInt("netblock_limit", raw.NetblockLimit, 1, &s.NetblockLimit)
+	posInt("permutations.max_per_seed", raw.Permutations.MaxPerSeed, 1, &s.Permutations.MaxPerSeed)
+	if enabled, err := strconv.ParseBool(strings.TrimSpace(raw.Permutations.Enabled)); err != nil {
+		bad("permutations.enabled", raw.Permutations.Enabled, "not true or false")
+	} else {
+		s.Permutations.Enabled = enabled
+	}
+	if fs != nil {
+		if f := fs.Lookup("no-permutations"); f != nil && f.Changed && f.Value.String() == "true" {
+			s.Permutations.Enabled = false
+		}
+	}
 	s.OutputDir = raw.OutputDir
 	if s.OutputDir == "" {
 		bad("output_dir", "", "must not be empty")
@@ -286,9 +323,16 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		if f, err := os.Open(s.Wordlist); err != nil {
 			bad("wordlist", s.Wordlist, "cannot read file: "+errText(err))
 		} else {
+			if s.WordlistWords, err = input.ParseList(f); err != nil {
+				bad("wordlist", s.Wordlist, "cannot read file: "+errText(err))
+			}
 			f.Close()
 		}
+	} else {
+		s.WordlistWords = builtinWordlist()
 	}
+	sum := sha256.Sum256([]byte(strings.Join(s.WordlistWords, "\n")))
+	s.WordlistHash = hex.EncodeToString(sum[:6])
 	s.SensitivePathList = builtinSensitivePaths()
 	if s.SensitivePaths != "" {
 		b, err := os.ReadFile(s.SensitivePaths)

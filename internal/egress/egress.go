@@ -29,17 +29,19 @@ type Policy struct {
 	Resolutions map[string][]netip.Addr
 	// Candidates are discovered out-of-scope hostnames; ThirdPartyHTTP never contacts them.
 	Candidates map[string]bool
-	// Shared reports whether an address is shared provider infrastructure (always
-	// false until Spec 2.8 populates it).
+	// Shared reports whether an address is shared provider infrastructure.
 	Shared func(netip.Addr) bool
+	// OwnerUnknown reports whether nothing is known about an address's owner.
+	// Port checks fail closed for such addresses, but unlike Shared it never
+	// widens what HTTP may do.
+	OwnerUnknown func(netip.Addr) bool
 	// Excluded is told about each address that triggered an exclusion at dial time.
 	Excluded func(value, reason string)
-
-	addrsOnce      sync.Once
-	inScopeHostIPs map[netip.Addr]bool
 }
 
 func (p *Policy) isShared(a netip.Addr) bool { return p.Shared != nil && p.Shared(a) }
+
+func (p *Policy) ownerUnknown(a netip.Addr) bool { return p.OwnerUnknown != nil && p.OwnerUnknown(a) }
 
 func (p *Policy) reportExcluded(value, reason string) {
 	if p.Excluded != nil {
@@ -63,24 +65,6 @@ func (p *Policy) targetRefusal() (Refused, bool) {
 		return Refused{"no authorisation"}, true
 	}
 	return Refused{}, false
-}
-
-// hostAddrs returns the addresses of in-scope hostnames that are not shared.
-func (p *Policy) hostAddrs() map[netip.Addr]bool {
-	p.addrsOnce.Do(func() {
-		p.inScopeHostIPs = map[netip.Addr]bool{}
-		for h, addrs := range p.Resolutions {
-			if p.Scope.ClassifyHost(h).Class != scope.InScope {
-				continue
-			}
-			for _, a := range addrs {
-				if !p.isShared(a) {
-					p.inScopeHostIPs[a] = true
-				}
-			}
-		}
-	})
-	return p.inScopeHostIPs
 }
 
 // Options configure an Egress. The test hooks (ResolverAddrs, SourceBaseURLs,

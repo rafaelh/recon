@@ -1,0 +1,74 @@
+# Shared-infrastructure recognition (Spec 2, B8). Embedded in the binary; edit and rebuild to extend.
+#
+# cname: a CNAME target that ends with `suffix` (on a label boundary) is hosted by that provider.
+# asn:   an address whose origin AS is listed belongs to the provider. `class` is
+#        cdn and shared-hosting (always shared) or hyperscaler (shared unless a
+#        provider range proves the address is a dedicated virtual machine).
+cname:
+  - {suffix: cloudfront.net, provider: aws, service: CloudFront}
+  - {suffix: elb.amazonaws.com, provider: aws, service: ELB}
+  - {suffix: s3.amazonaws.com, provider: aws, service: S3}
+  - {suffix: s3-website.amazonaws.com, provider: aws, service: S3}
+  - {suffix: execute-api.amazonaws.com, provider: aws, service: API Gateway}
+  - {suffix: elasticbeanstalk.com, provider: aws, service: Elastic Beanstalk}
+  - {suffix: awsglobalaccelerator.com, provider: aws, service: Global Accelerator}
+  - {suffix: azurewebsites.net, provider: azure, service: App Service}
+  - {suffix: cloudapp.azure.com, provider: azure, service: Cloud Services}
+  - {suffix: cloudapp.net, provider: azure, service: Cloud Services}
+  - {suffix: blob.core.windows.net, provider: azure, service: Blob Storage}
+  - {suffix: azureedge.net, provider: azure, service: CDN}
+  - {suffix: azurefd.net, provider: azure, service: Front Door}
+  - {suffix: trafficmanager.net, provider: azure, service: Traffic Manager}
+  - {suffix: appspot.com, provider: gcp, service: App Engine}
+  - {suffix: run.app, provider: gcp, service: Cloud Run}
+  - {suffix: storage.googleapis.com, provider: gcp, service: Cloud Storage}
+  - {suffix: ghs.googlehosted.com, provider: gcp, service: Google Sites}
+  - {suffix: herokuapp.com, provider: heroku, service: Heroku}
+  - {suffix: herokudns.com, provider: heroku, service: Heroku}
+  - {suffix: github.io, provider: github, service: Pages}
+  - {suffix: netlify.app, provider: netlify, service: Netlify}
+  - {suffix: netlify.com, provider: netlify, service: Netlify}
+  - {suffix: vercel.app, provider: vercel, service: Vercel}
+  - {suffix: vercel-dns.com, provider: vercel, service: Vercel}
+  - {suffix: pages.dev, provider: cloudflare, service: Pages}
+  - {suffix: workers.dev, provider: cloudflare, service: Workers}
+  - {suffix: cdn.cloudflare.net, provider: cloudflare, service: CDN}
+  - {suffix: fastly.net, provider: fastly, service: CDN}
+  - {suffix: akamaiedge.net, provider: akamai, service: CDN}
+  - {suffix: edgekey.net, provider: akamai, service: CDN}
+  - {suffix: edgesuite.net, provider: akamai, service: CDN}
+  - {suffix: myshopify.com, provider: shopify, service: Shopify}
+  - {suffix: zendesk.com, provider: zendesk, service: Zendesk}
+  - {suffix: readme.io, provider: readme, service: ReadMe}
+  - {suffix: wpengine.com, provider: wpengine, service: WP Engine}
+  - {suffix: squarespace.com, provider: squarespace, service: Squarespace}
+  - {suffix: wixdns.net, provider: wix, service: Wix}
+  - {suffix: statuspage.io, provider: atlassian, service: Statuspage}
+  - {suffix: unbouncepages.com, provider: unbounce, service: Unbounce}
+  - {suffix: ghost.io, provider: ghost, service: Ghost}
+asn:
+  - {asn: 13335, provider: cloudflare, class: cdn}
+  - {asn: 209242, provider: cloudflare, class: cdn}
+  - {asn: 54113, provider: fastly, class: cdn}
+  - {asn: 20940, provider: akamai, class: cdn}
+  - {asn: 16625, provider: akamai, class: cdn}
+  - {asn: 12222, provider: akamai, class: cdn}
+  - {asn: 35994, provider: akamai, class: cdn}
+  - {asn: 14618, provider: aws, class: hyperscaler}
+  - {asn: 16509, provider: aws, class: hyperscaler}
+  - {asn: 8075, provider: azure, class: hyperscaler}
+  - {asn: 8068, provider: azure, class: hyperscaler}
+  - {asn: 8069, provider: azure, class: hyperscaler}
+  - {asn: 15169, provider: gcp, class: hyperscaler}
+  - {asn: 396982, provider: gcp, class: hyperscaler}
+  - {asn: 19527, provider: gcp, class: hyperscaler}
+  - {asn: 13238, provider: yandex, class: cdn}
+  - {asn: 19551, provider: incapsula, class: cdn}
+  - {asn: 30148, provider: sucuri, class: cdn}
+  - {asn: 394536, provider: vercel, class: cdn}
+  - {asn: 62679, provider: shopify, class: shared-hosting}
+  - {asn: 36351, provider: softlayer, class: shared-hosting}
+  - {asn: 46606, provider: unified-layer, class: shared-hosting}
+  - {asn: 26496, provider: godaddy, class: shared-hosting}
+  - {asn: 398101, provider: godaddy, class: shared-hosting}
+  - {asn: 14061, provider: digitalocean, class: shared-hosting}

@@ -100,7 +100,7 @@ func TestResolverResults(t *testing.T) {
 		t.Errorf("SERVFAIL: %+v %v", res, err)
 	}
 	res, err = dnsc.Query(context.Background(), "alias.example.com", mdns.TypeA)
-	if err != nil || len(res.CNAMEChain) != 1 || res.CNAMEChain[0] != "real.example.com" || len(res.Answers) != 1 || res.Answers[0].Value != "192.0.2.1" {
+	if err != nil || len(res.CNAMEs) != 1 || res.CNAMEs[0] != (egress.CNAME{Name: "alias.example.com", Target: "real.example.com"}) || len(res.Answers) != 1 || res.Answers[0].Value != "192.0.2.1" {
 		t.Errorf("CNAME: %+v %v", res, err)
 	}
 }

@@ -35,6 +35,9 @@ type Config struct {
 	Netblocks   []netip.Prefix          // CIDR inputs and ASN netblocks
 	Exclusions  []input.Exclusion       // hostnames, wildcards and CIDRs
 	Resolutions map[string][]netip.Addr // hostname -> addresses
+	// WildcardOnly names resolve only because of a wildcard record; they do not
+	// make an address port-check eligible.
+	WildcardOnly map[string]bool
 }
 
 // Scope classifies names and addresses.
@@ -46,12 +49,13 @@ type Scope struct {
 	exclCIDRs []input.Exclusion
 	resolved  map[string][]netip.Addr
 	exclAddrs map[netip.Addr]string // addresses of hosts excluded by name
+	hostAddrs map[netip.Addr]bool   // addresses of in-scope, non-wildcard-only hostnames
 }
 
 // New builds a Scope.
 func New(c Config) *Scope {
 	s := &Scope{roots: normaliseAll(c.Roots), netblocks: c.Netblocks, blockSet: map[netip.Prefix]bool{},
-		resolved: map[string][]netip.Addr{}, exclAddrs: map[netip.Addr]string{}}
+		resolved: map[string][]netip.Addr{}, exclAddrs: map[netip.Addr]string{}, hostAddrs: map[netip.Addr]bool{}}
 	for _, p := range c.Netblocks {
 		s.blockSet[p] = true
 	}
@@ -69,6 +73,14 @@ func New(c Config) *Scope {
 			for _, a := range addrs {
 				s.exclAddrs[a] = fmt.Sprintf("address %s of excluded host %s (matched %s)", a, h, e.Entry)
 			}
+		}
+	}
+	for h, addrs := range s.resolved {
+		if c.WildcardOnly[h] || s.ClassifyHost(h).Class != InScope {
+			continue
+		}
+		for _, a := range addrs {
+			s.hostAddrs[a] = true
 		}
 	}
 	return s
@@ -145,6 +157,38 @@ func (s *Scope) ExcludedAddr(a netip.Addr) (bool, string) {
 // ExcludedCIDR reports whether the address is inside an excluded CIDR (and so
 // excluded regardless of shared infrastructure).
 func (s *Scope) ExcludedCIDR(a netip.Addr) bool { _, ok := s.cidrOf(a); return ok }
+
+// ExcludedFor reports whether an exclusion refuses traffic to the address: an
+// excluded CIDR always does; the address of a host excluded by name does unless
+// it is shared provider infrastructure (D20). An unknown owner is not shared.
+func (s *Scope) ExcludedFor(a netip.Addr, shared bool) (bool, string) {
+	ok, why := s.ExcludedAddr(a)
+	return ok && (!shared || s.ExcludedCIDR(a)), why
+}
+
+// PortEligible is the single decision whether an address may be port-checked,
+// used both by egress and by the ips.csv report. shared is true for shared
+// provider infrastructure; ownerKnown is false when nothing is known about who
+// owns the address (fail closed). Exclusions apply first (ExcludedFor). Then an
+// address is eligible if it is in an in-scope netblock, or if its owner is
+// known, it is not shared, and an in-scope hostname that is not wildcard-only
+// resolves to it. excluded is true when the refusal is an exclusion.
+func (s *Scope) PortEligible(a netip.Addr, shared, ownerKnown bool) (ok bool, why string, excluded bool) {
+	a = a.Unmap()
+	if ex, why := s.ExcludedFor(a, shared); ex {
+		return false, why, true
+	}
+	if s.InScopeIP(a) {
+		return true, "", false
+	}
+	if shared || !ownerKnown {
+		return false, "address " + a.String() + " is shared provider infrastructure or its owner is unknown", false
+	}
+	if s.hostAddrs[a] {
+		return true, "", false
+	}
+	return false, "address " + a.String() + " is not in scope", false
+}
 
 // Netblocks returns the in-scope netblocks.
 func (s *Scope) Netblocks() []netip.Prefix { return slices.Clone(s.netblocks) }

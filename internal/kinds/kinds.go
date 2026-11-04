@@ -46,7 +46,7 @@ const (
 	Excluded   = "excluded"
 )
 
-// Default returns the registry of Spec 1 kinds.
+// Default returns the registry of the Spec 1 and Spec 2 kinds.
 func Default() *Registry {
 	r := &Registry{m: map[string]Kind{}}
 	for _, k := range []Kind{
@@ -55,6 +55,12 @@ func Default() *Registry {
 		{Name: "netblock", Singular: "netblock", Category: Netblocks, Entity: true},
 		{Name: "excluded", Singular: "excluded", Category: Excluded, Entity: true},
 		{Name: "resolution"},
+		{Name: "ip", Singular: "ip", Category: "ips", Counted: true},
+		{Name: "unresolved", Singular: "unresolved name", Category: "unresolved names", Counted: true},
+		{Name: "wildcard"},
+		{Name: "ip_owner"},
+		{Name: "ip_hostname"},
+		{Name: "provider_range"},
 		{Name: "web_service", Singular: "web service", Category: "web services", Printed: true},
 		{Name: "open_port", Singular: "open port", Category: "open ports", Printed: true},
 		{Name: "finding", Singular: "finding", Category: "findings", Printed: true},

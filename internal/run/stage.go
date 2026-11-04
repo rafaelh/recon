@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"iter"
+	"maps"
+	"slices"
 	"strings"
+	"sync"
 
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
 )
@@ -73,10 +77,20 @@ type Stage interface {
 	Run(ctx context.Context, c Check, e egress.Clients) ([]Observation, error)
 }
 
-// View gives a stage read access to the store and the current Scope.
+// recordCache holds the records a View has read, for one stage pass (D28).
+type recordCache struct {
+	mu sync.Mutex
+	m  map[string][]store.Record
+}
+
+// View gives a stage read access to the store and the current Scope. It
+// caches the records it reads for its lifetime, one stage pass, so callers must
+// not modify the returned slices.
 type View struct {
-	r  *Runner
-	sc *scope.Scope
+	r     *Runner
+	sc    *scope.Scope
+	inv   *inventory.Inventory
+	cache *recordCache
 }
 
 // Scope is the Scope built at the start of the current pass.
@@ -90,21 +104,26 @@ func (v View) Inputs() input.Parsed { return v.r.inputs }
 
 // Records returns the current records of a kind.
 func (v View) Records(kind string) []store.Record {
-	recs, err := v.r.st.Records(kind, v.r.order)
+	if v.cache != nil {
+		v.cache.mu.Lock()
+		defer v.cache.mu.Unlock()
+		if recs, ok := v.cache.m[kind]; ok {
+			return recs
+		}
+	}
+	out, err := v.r.currentRecords(kind)
 	if err != nil {
 		v.r.warn("reading %s records: %v", kind, err)
 		return nil
 	}
-	out := recs[:0]
-	for _, rec := range recs {
-		if rec.Current {
-			out = append(out, rec)
-		}
+	if v.cache != nil {
+		v.cache.m[kind] = out
 	}
 	return out
 }
 
-// InScopeHostnames returns the current in-scope hostname records, sorted.
+// InScopeHostnames returns the current in-scope hostname records, sorted. It is
+// not wildcard-aware: use ProbeHostnames for anything that contacts a name.
 func (v View) InScopeHostnames() []string {
 	var out []string
 	for _, rec := range v.Records("hostname") {
@@ -114,3 +133,35 @@ func (v View) InScopeHostnames() []string {
 	}
 	return out
 }
+
+// ResolvableHostnames are the names the resolve stage looks up: in-scope and
+// excluded hostnames (exclusion by resolved address needs their addresses) and
+// the input roots, never candidates. Sorted.
+func (v View) ResolvableHostnames() []string {
+	set := map[string]bool{}
+	add := func(h string) {
+		if v.sc.ClassifyHost(h).Class != scope.Candidate {
+			set[input.NormaliseHost(h)] = true
+		}
+	}
+	for _, rec := range v.Records("hostname") {
+		add(rec.Key)
+	}
+	for _, root := range v.Inputs().Roots {
+		add(root)
+	}
+	return slices.Sorted(maps.Keys(set))
+}
+
+// ProbeHostnames are the names later stages may probe over HTTP: resolved,
+// in-scope, not excluded, not wildcard-only, plus one representative for each
+// wildcard zone. InScopeHostnames is not wildcard-aware; web stages must use this.
+func (v View) ProbeHostnames() []string { return v.inv.ProbeHostnames(v.sc) }
+
+// ProviderHosts are the in-scope names on shared provider infrastructure, with
+// Resolves=false for chains that dangle. Spec 5's takeover checks read it.
+func (v View) ProviderHosts() []inventory.ProviderHost { return v.inv.ProviderHosts(v.sc) }
+
+// Seeds are the hostnames the generator stage derives names from (D14): never
+// names only the generator itself observed.
+func (v View) Seeds(generator string) []string { return v.inv.Seeds(v.sc, generator) }

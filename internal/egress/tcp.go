@@ -46,12 +46,12 @@ func (t *targetTCP) Connect(ctx context.Context, addr netip.Addr, port int) (TCP
 	if !p.portAllowed(port, false) {
 		return Refused{"port " + strconv.Itoa(port) + " not in the configured list"}, nil
 	}
-	if ok, why := p.Scope.ExcludedAddr(addr); ok {
-		p.reportExcluded(addr.String(), why)
+	addr = addr.Unmap()
+	if ok, why, excluded := p.Scope.PortEligible(addr, p.isShared(addr), !p.ownerUnknown(addr)); !ok {
+		if excluded {
+			p.reportExcluded(addr.String(), why)
+		}
 		return Refused{why}, nil
-	}
-	if !p.Scope.InScopeIP(addr) && !p.hostAddrs()[addr] {
-		return Refused{"address " + addr.String() + " is not in scope"}, nil
 	}
 	if err := t.e.hostLimiter(addr).Wait(ctx); err != nil {
 		return nil, err

@@ -177,6 +177,7 @@ func TestValidation(t *testing.T) {
 		{"rate dns zero", "rate:\n  dns: 0\n", nil, nil, "rate.dns", "0"},
 		{"unknown key", "concurency: 3\n", nil, nil, "concurency", "concurency"},
 		{"unreadable wordlist", "", nil, []string{"--wordlist", filepath.Join(dir, "nope.txt")}, "wordlist", "nope.txt"},
+		{"wordlist is a directory", "", nil, []string{"--wordlist", dir}, "wordlist", dir},
 		{"unreadable paths", "", nil, []string{"--sensitive-paths", filepath.Join(dir, "nope.yaml")}, "sensitive_paths", "nope.yaml"},
 		{"relative sensitive path", "", nil, []string{"--sensitive-paths", relPaths}, "sensitive_paths", "admin/.env"},
 		{"crawl depth negative", "", nil, []string{"--crawl-depth", "-2"}, "crawl.max_depth", "-2"},
@@ -250,4 +251,10 @@ func TestRedactor(t *testing.T) {
 	if nilR.Redact("x") != "x" {
 		t.Error("nil redactor must pass through")
 	}
+}
+
+func newFlagSetForHelp() *pflag.FlagSet {
+	fs := pflag.NewFlagSet("t", pflag.ContinueOnError)
+	config.RegisterFlags(fs)
+	return fs
 }
