@@ -831,8 +831,8 @@ func TestPlumbing_FilesAndCounts(t *testing.T) {
 	if hdr != "ip,asn,owner,provider,service,in_scope,port_eligible,hostnames,current,first_seen,last_seen" {
 		t.Errorf("ips.csv header = %q", hdr)
 	}
-	if hdr := strings.SplitN(snapshot["provider-hosts.csv"], "\n", 2)[0]; hdr != "hostname,provider,service,evidence,cname,resolves,current,first_seen,last_seen" {
-		t.Errorf("provider-hosts.csv header = %q", hdr)
+	if snapshot["provider-hosts.csv"] != "" || snapshot["wildcard-excluded.txt"] != "" {
+		t.Errorf("files with no rows were written: %q %q", snapshot["provider-hosts.csv"], snapshot["wildcard-excluded.txt"])
 	}
 	if hdr := strings.SplitN(snapshot["resolutions.csv"], "\n", 2)[0]; hdr != "name,type,value,current,first_seen,last_seen" {
 		t.Errorf("resolutions.csv header = %q", hdr)

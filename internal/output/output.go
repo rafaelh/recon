@@ -110,17 +110,32 @@ func Sweep(dir string) error {
 	return nil
 }
 
+// renderFile writes f, or removes it when it would have no rows (a TXT file
+// lists only current rows), so an empty file is never left in the engagement.
 func renderFile(dir, tmp string, f File, snap Snapshot) error {
 	rows := f.Rows(snap)
+	if f.Format == TXT {
+		var listed []Row
+		for _, r := range rows {
+			if r.Current && len(r.Cells) > 0 {
+				listed = append(listed, r)
+			}
+		}
+		rows = listed
+	}
+	if len(rows) == 0 {
+		if err := os.Remove(filepath.Join(dir, f.Name)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
 	slices.SortStableFunc(rows, func(a, b Row) int { return slices.Compare(a.Cells, b.Cells) })
 	var buf bytes.Buffer
 	switch f.Format {
 	case TXT:
 		for _, r := range rows {
-			if r.Current && len(r.Cells) > 0 {
-				buf.WriteString(stripControl(r.Cells[0]))
-				buf.WriteByte('\n')
-			}
+			buf.WriteString(stripControl(r.Cells[0]))
+			buf.WriteByte('\n')
 		}
 	case CSV:
 		w := csv.NewWriter(&buf)

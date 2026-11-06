@@ -73,17 +73,29 @@ func TestTXTAndCSV(t *testing.T) {
 	}
 }
 
-func TestEmptyFilesStillWritten(t *testing.T) {
+// A file with no rows is not written, and one that had rows is removed once it has none.
+// A TXT file lists current rows only, so one with no current rows counts as empty.
+func TestEmptyFilesNotWritten(t *testing.T) {
 	dir := newDir(t)
+	gone := output.Row{Cells: []string{"gone.example.com"}, Current: false}
 	files := []output.File{
 		{Name: "e.txt", Format: output.TXT, Rows: rows()},
+		{Name: "stale.txt", Format: output.TXT, Rows: rows(gone)},
 		{Name: "e.csv", Format: output.CSV, Columns: []string{"a"}, Rows: rows()},
+	}
+	for _, f := range files {
+		os.WriteFile(filepath.Join(dir, f.Name), []byte("old\n"), 0o644)
 	}
 	if err := output.Render(dir, files, output.Snapshot{}); err != nil {
 		t.Fatal(err)
 	}
-	if read(t, dir, "e.txt") != "" || read(t, dir, "e.csv") != "a,current,first_seen,last_seen\n" {
-		t.Errorf("empty outputs: %q %q", read(t, dir, "e.txt"), read(t, dir, "e.csv"))
+	for _, f := range files {
+		if _, err := os.Stat(filepath.Join(dir, f.Name)); !os.IsNotExist(err) {
+			t.Errorf("%s: want no file, got err %v", f.Name, err)
+		}
+	}
+	if err := output.Render(dir, files, output.Snapshot{}); err != nil {
+		t.Errorf("rendering again with nothing to remove: %v", err)
 	}
 }
 

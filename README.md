@@ -172,7 +172,8 @@ Everything is in `<output-dir>/<engagement>/`:
 | `risk-ports.csv` | Open ports on the risky-port list |
 | `risk-certificates.csv` | Expired or soon-to-expire certificates |
 
-Files are sorted. Every CSV ends with `current`, `first_seen` and `last_seen` columns, and records
+A file is only written when it has rows, so a missing `risk-*.csv` means no findings of that kind
+(a file that later has no rows is removed). Files are sorted. Every CSV ends with `current`, `first_seen` and `last_seen` columns, and records
 that were not found by a later run are kept and marked not current. The `.recon/` directory holds
 the state database and the run lock. Don't edit it. Finding severities are listed by
 `recon --help`.

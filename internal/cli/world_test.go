@@ -284,6 +284,9 @@ func (w *world) lines(eng, name string) []string {
 func (w *world) table(eng, name string) []map[string]string {
 	w.t.Helper()
 	recs := csvRows(w.t, w.file(eng, name))
+	if len(recs) == 0 {
+		return nil
+	}
 	var out []map[string]string
 	for _, r := range recs[1:] {
 		m := map[string]string{}

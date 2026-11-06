@@ -126,6 +126,9 @@ func (h *harness) eng(name string) string { return filepath.Join(h.out, name) }
 func (h *harness) readOut(name, file string) string {
 	h.t.Helper()
 	b, err := os.ReadFile(filepath.Join(h.out, name, file))
+	if os.IsNotExist(err) {
+		return "" // a file with no rows is not written
+	}
 	if err != nil {
 		h.t.Fatal(err)
 	}

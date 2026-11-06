@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -215,8 +217,8 @@ func TestRiskD8_ReferenceFollowsPageScope(t *testing.T) {
 	}
 }
 
-// Plumbing: every new file is written, even with no findings; a spreadsheet formula in a
-// cell is neutralised; rows are sorted.
+// Plumbing: a file with no rows is not written; a spreadsheet formula in a cell is
+// neutralised; rows are sorted.
 func TestRiskPlumbing_FilesWrittenSortedAndSafe(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	x.names("a.example.com", "b.example.com")
@@ -226,13 +228,13 @@ func TestRiskPlumbing_FilesWrittenSortedAndSafe(t *testing.T) {
 	x.plain("203.0.113.6", 80, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("=SECRET")) })
 	file := x.pathsFile("- path: /z\n  signature: '=SECRET'\n- path: /a\n  signature: '=SECRET'\n")
 	x.mustRun("--crawl-pages", "0", "--sensitive-paths", file)
-	for _, f := range []string{"email-posture.csv", "storage-unattributed.csv", "risk-takeover.csv", "risk-storage.csv", "risk-sensitive-paths.csv", "risk-email.csv", "risk-ports.csv", "risk-certificates.csv"} {
-		if x.file(eng, f) == "" {
-			t.Errorf("%s is empty or missing", f)
+	for _, f := range []string{"storage-unattributed.csv", "risk-takeover.csv", "risk-storage.csv", "risk-ports.csv", "risk-certificates.csv"} {
+		if _, err := os.Stat(filepath.Join(x.h.eng(eng), f)); !os.IsNotExist(err) {
+			t.Errorf("%s has no rows but was written (err %v)", f, err)
 		}
 	}
-	if !strings.HasPrefix(x.file(eng, "risk-ports.csv"), "severity,ip,port,banner,hostnames,current,first_seen,last_seen\n") {
-		t.Errorf("risk-ports.csv = %q", x.file(eng, "risk-ports.csv"))
+	if !strings.HasPrefix(x.file(eng, "risk-sensitive-paths.csv"), "severity,url,path,status,size,signature,current,first_seen,last_seen\n") {
+		t.Errorf("risk-sensitive-paths.csv = %q", x.file(eng, "risk-sensitive-paths.csv"))
 	}
 	rows := x.rows("risk-sensitive-paths.csv")
 	if len(rows) != 4 {
