@@ -33,10 +33,10 @@ import (
 // --- certificates ---
 
 type leafSpec struct {
-	cn       string
-	dns, ips []string
-	notAfter time.Time
-	isCA     bool
+	cn                  string
+	dns, ips            []string
+	notBefore, notAfter time.Time // default: 2020-01-01 to farFuture
+	isCA                bool
 }
 
 var (
@@ -86,13 +86,16 @@ func newCA(t *testing.T, cn string) *testCA {
 
 func (ls leafSpec) template(t *testing.T) *x509.Certificate {
 	t.Helper()
-	na := ls.notAfter
+	nb, na := ls.notBefore, ls.notAfter
+	if nb.IsZero() {
+		nb = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
 	if na.IsZero() {
 		na = farFuture
 	}
 	tpl := &x509.Certificate{
 		SerialNumber: serial(t), Subject: pkix.Name{CommonName: ls.cn},
-		NotBefore: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), NotAfter: na,
+		NotBefore: nb, NotAfter: na,
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		DNSNames: ls.dns,
 	}

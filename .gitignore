@@ -4,3 +4,6 @@
 # Build output (make build, make dist)
 /recon
 /dist/
+
+# Output dir
+output/

@@ -87,6 +87,9 @@ type Options struct {
 	// connect, which sends nothing.
 	RouteLookup func(netip.Addr) error
 
+	// Now is the clock certificates are checked against. Default: time.Now.
+	Now func() time.Time
+
 	Keys     map[string]config.Secret
 	Redactor *config.Redactor // default: built from Keys
 }
@@ -132,6 +135,9 @@ func New(o Options) *Egress {
 	def(&o.ConnectTimeout, 5*time.Second)
 	def(&o.BannerWait, 3*time.Second)
 	def(&o.HTTPTimeout, 15*time.Second)
+	if o.Now == nil {
+		o.Now = time.Now
+	}
 	defr := func(v *float64, d float64) {
 		if *v <= 0 {
 			*v = d

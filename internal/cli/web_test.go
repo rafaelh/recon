@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -322,7 +323,10 @@ func TestWebB3_AllAttributes(t *testing.T) {
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
 	ca := newCA(t, "Test Root CA")
-	cert := ca.issue(t, leafSpec{cn: "a.example.com", dns: []string{"a.example.com"}, ips: []string{"192.0.2.1"}})
+	// Valid for under 825 days: macOS rejects a longer-lived server certificate
+	// as "not standards compliant" before it checks the issuer.
+	cert := ca.issue(t, leafSpec{cn: "a.example.com", dns: []string{"a.example.com"}, ips: []string{"192.0.2.1"},
+		notBefore: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), notAfter: time.Date(2027, 6, 1, 12, 0, 0, 0, time.UTC)})
 	x.secure("203.0.113.5", 443, cert, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Server", "nginx/1.25.3")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -335,7 +339,7 @@ func TestWebB3_AllAttributes(t *testing.T) {
 	want := map[string]string{
 		"host": "a.example.com", "port": "443", "scheme": "https", "status": "200", "title": "Welcome",
 		"server": "nginx/1.25.3", "redirect": "", "final_url": "https://a.example.com/",
-		"tls_sans": "a.example.com;192.0.2.1", "tls_expiry": "2037-06-01", "tls_self_signed": "false", "current": "true",
+		"tls_sans": "a.example.com;192.0.2.1", "tls_expiry": "2027-06-01", "tls_self_signed": "false", "current": "true",
 		"first_seen": "2026-11-01", "last_seen": "2026-11-01",
 	}
 	for k, v := range want {

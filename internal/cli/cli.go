@@ -323,7 +323,11 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 		defer stop()
 	}
 
-	eg := egress.New(d.Egress.WithSettings(settings, red))
+	eopts := d.Egress.WithSettings(settings, red)
+	if eopts.Now == nil {
+		eopts.Now = d.Clock
+	}
+	eg := egress.New(eopts)
 	runner := run.New(run.Config{
 		Engagement: eng, Settings: settings, Stages: d.Stages, Egress: eg, Emitter: em,
 		Files: d.Files, Kinds: d.Kinds, Clock: d.Clock,
