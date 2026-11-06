@@ -258,3 +258,29 @@ func newFlagSetForHelp() *pflag.FlagSet {
 	config.RegisterFlags(fs)
 	return fs
 }
+
+// A leading ~ in a path setting is the home directory, not a directory named "~".
+func TestHomeExpansion(t *testing.T) {
+	clearEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cfg := writeFile(t, "output_dir: ~/engagements\n")
+	s, err := load(t, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, "engagements"); s.OutputDir != want {
+		t.Errorf("output_dir = %q, want %q", s.OutputDir, want)
+	}
+	for _, c := range []struct{ in, want string }{
+		{"~", home}, {"./~/x", "./~/x"}, {"~other/x", "~other/x"},
+	} {
+		s, err := load(t, "", "--output-dir="+c.in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.OutputDir != c.want {
+			t.Errorf("--output-dir=%s: got %q, want %q", c.in, s.OutputDir, c.want)
+		}
+	}
+}

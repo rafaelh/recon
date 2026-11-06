@@ -33,6 +33,7 @@ type harness struct {
 	stdoutTTY bool
 	eopts     egress.Options
 	now       time.Time
+	version   string
 
 	stdout, stderr bytes.Buffer
 
@@ -101,6 +102,7 @@ func (h *harness) deps() cli.Deps {
 		StdinIsTTY:  func() bool { return h.stdinTTY },
 		StdoutIsTTY: func() bool { return h.stdoutTTY },
 		Clock:       func() time.Time { return h.now },
+		Version:     h.version,
 	}
 }
 

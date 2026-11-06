@@ -336,11 +336,11 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 			s.Permutations.Enabled = false
 		}
 	}
-	s.OutputDir = raw.OutputDir
+	s.OutputDir = expandHome(raw.OutputDir)
 	if s.OutputDir == "" {
 		bad("output_dir", "", "must not be empty")
 	}
-	s.Wordlist, s.SensitivePaths = raw.Wordlist, raw.SensitivePaths
+	s.Wordlist, s.SensitivePaths = expandHome(raw.Wordlist), expandHome(raw.SensitivePaths)
 	if s.Wordlist != "" {
 		if f, err := os.Open(s.Wordlist); err != nil {
 			bad("wordlist", s.Wordlist, "cannot read file: "+errText(err))
@@ -368,6 +368,21 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		return Settings{}, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return s, nil
+}
+
+// expandHome replaces a leading "~" or "~/" with the user's home directory.
+// Paths from the config file or environment are not shell-expanded, so
+// without this "output_dir: ~/engagements" would create a directory named "~".
+// "~user" forms are left as is.
+func expandHome(p string) string {
+	if p != "~" && !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, p[1:])
 }
 
 func errText(err error) string {

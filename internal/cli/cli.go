@@ -11,7 +11,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,13 +54,15 @@ type Deps struct {
 	StdinIsTTY    func() bool
 	StdoutIsTTY   func() bool
 	Clock         func() time.Time
-	HandleSignals bool // SIGINT, SIGTERM and SIGHUP cancel the run; a second one exits at once
+	HandleSignals bool   // SIGINT, SIGTERM and SIGHUP cancel the run; a second one exits at once
+	Version       string // shown by --version; empty means "devel"
 }
 
 // DefaultDeps returns the production dependencies.
 func DefaultDeps() Deps {
 	return Deps{
-		Stages: defaultStages(), Files: output.Default(), Kinds: kinds.Default(),
+		Version: versionString(debug.ReadBuildInfo()),
+		Stages:  defaultStages(), Files: output.Default(), Kinds: kinds.Default(),
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
 		StdinIsTTY:  func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		StdoutIsTTY: func() bool { return term.IsTerminal(int(os.Stdout.Fd())) },
@@ -97,6 +101,9 @@ func Execute(ctx context.Context, args []string, d Deps) int {
 	if d.Kinds == nil {
 		d.Kinds = kinds.Default()
 	}
+	if d.Version == "" {
+		d.Version = develVersion // cobra only adds --version when Version is set
+	}
 	if d.Files == nil {
 		d.Files = output.Default()
 	}
@@ -118,22 +125,43 @@ func Execute(ctx context.Context, args []string, d Deps) int {
 		code = runCommand(ctx, c, positional, &o, d)
 	})
 	cmd.SetArgs(args)
-	jsonMode := false
-	for _, a := range args {
-		if a == "--json" || a == "--json=true" {
-			jsonMode = true
+	// Help and --version are written after the flags are parsed, so o.json is
+	// already pflag's own reading of --json (any ParseBool spelling). JSON mode
+	// keeps stdout to JSON events only.
+	cmd.SetOut(writerFunc(func(p []byte) (int, error) {
+		if o.json {
+			return d.Stderr.Write(p)
 		}
-	}
-	if jsonMode {
-		cmd.SetOut(d.Stderr) // JSON mode keeps stdout to JSON events only
-	} else {
-		cmd.SetOut(d.Stdout)
-	}
+		return d.Stdout.Write(p)
+	}))
 	cmd.SetErr(d.Stderr)
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		return fail(newEmitter(d, jsonMode), run.ExitInvalid, err)
+		// Parsing may have failed before --json was reached, so the args are
+		// checked as well.
+		return fail(newEmitter(d, o.json || argsWantJSON(args)), run.ExitInvalid, err)
 	}
 	return code
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// argsWantJSON reports whether args set --json to true, accepting every
+// spelling pflag does. The last occurrence wins; "--" ends the flags.
+func argsWantJSON(args []string) bool {
+	on := false
+	for _, a := range args {
+		if a == "--" {
+			break
+		}
+		if a == "--json" {
+			on = true
+		} else if v, ok := strings.CutPrefix(a, "--json="); ok {
+			on, _ = strconv.ParseBool(v)
+		}
+	}
+	return on
 }
 
 // fail reports a fatal error and the run's end, and returns code.
@@ -167,6 +195,7 @@ func newCommand(o *options, d Deps, runFn func(*cobra.Command, []string)) *cobra
 			"the public could make. Results go to the console and to TXT/CSV files in an engagement directory.\n" +
 			"Re-run with the same engagement (recon -e <name>) to resume.",
 		Args:          cobra.ArbitraryArgs,
+		Version:       d.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(c *cobra.Command, args []string) error {
@@ -190,6 +219,7 @@ func newCommand(o *options, d Deps, runFn func(*cobra.Command, []string)) *cobra
 	f.BoolVar(&o.json, "json", false, "emit one JSON event per line on stdout, with no styling or prompts")
 	f.BoolVar(&o.verbose, "verbose", false, "show warnings, including failed checks")
 	f.StringVar(&o.configPath, "config", "", "config file (default $XDG_CONFIG_HOME/recon/config.yaml, else ~/.config/recon/config.yaml)")
+	f.Bool("version", false, "print the version and exit") // long-only: -v would be confused with --verbose
 	config.RegisterFlags(f)
 	f.SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
 		if name == "authorized" {
@@ -198,6 +228,7 @@ func newCommand(o *options, d Deps, runFn func(*cobra.Command, []string)) *cobra
 		return pflag.NormalizedName(name)
 	})
 
+	cmd.SetVersionTemplate("recon {{.Version}}\n")
 	cmd.SetHelpFunc(func(c *cobra.Command, _ []string) {
 		fmt.Fprintf(c.OutOrStdout(), "%s\n\n%s\n%s", c.Long, c.UsageString(), helpFooter(d.Stages))
 	})
