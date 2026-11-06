@@ -1,0 +1,286 @@
+// Package findings derives the severity-ranked list of obvious exposures from
+// the evidence the stages stored (Spec 5). Derivation is pure: stages store only
+// evidence, and findings are computed on read from it, the Scope, the
+// Inventory, the settings and today's date, so a finding that is no longer true
+// (a port excluded later, a certificate renewed, the clock moving on) is simply
+// not derived any more and none can go stale (Spec 1 D16).
+package findings
+
+import (
+	"cmp"
+	"fmt"
+	"net/netip"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/rafaelh/recon/internal/cloudstorage"
+	"github.com/rafaelh/recon/internal/config"
+	"github.com/rafaelh/recon/internal/inventory"
+	"github.com/rafaelh/recon/internal/output"
+	"github.com/rafaelh/recon/internal/scope"
+	"github.com/rafaelh/recon/internal/store"
+)
+
+// Input is everything Derive reads. Records are the current records by kind;
+// Roots and Orgs are the engagement's stored scope inputs.
+type Input struct {
+	Scope       *scope.Scope
+	Inv         *inventory.Inventory
+	Settings    config.Settings
+	Today       string // YYYY-MM-DD
+	Records     map[string][]store.Record
+	Roots, Orgs []string
+}
+
+// Finding is one derived exposure. Attrs holds every attribute of its stored
+// record: category, type, severity, target and detail, plus the columns of the
+// category's file.
+type Finding struct {
+	Category, Type, Severity, Target, Detail string
+	Attrs                                    map[string]any
+}
+
+// Key is the finding's record key: one per hostname for takeovers, otherwise
+// category, type and target.
+func (f Finding) Key() string {
+	if f.Category == Takeover {
+		return f.Category + "|" + f.Target
+	}
+	return f.Category + "|" + f.Type + "|" + f.Target
+}
+
+func newFinding(category, typ, severity, target, detail string, attrs map[string]any) Finding {
+	a := map[string]any{"category": category, "type": typ, "severity": severity, "target": target, "detail": detail}
+	for k, v := range attrs {
+		a[k] = v
+	}
+	return Finding{Category: category, Type: typ, Severity: severity, Target: target, Detail: detail, Attrs: a}
+}
+
+// Kinds are the record kinds Derive and Attribution read; Input.Records needs them.
+var Kinds = []string{"resolution", "unresolved", "storage_ref", "storage", "storage_account", "storage_object",
+	"takeover_http", "sensitive_hit", "email_posture", "open_port", "web_service"}
+
+// Derive computes every finding, sorted by key.
+func Derive(in Input) []Finding { return newDeriver(in).findings() }
+
+// DeriveAll computes the findings and the storage Attribution together, so the
+// references, guesses and public states they share are computed once.
+func DeriveAll(in Input) ([]Finding, map[string]output.StorageAttr) {
+	d := newDeriver(in)
+	return d.findings(), d.attribution()
+}
+
+func (d *deriver) findings() []Finding {
+	var out []Finding
+	out = append(out, d.takeovers()...)
+	out = append(out, d.storage()...)
+	out = append(out, d.sensitivePaths()...)
+	out = append(out, d.email()...)
+	out = append(out, d.ports()...)
+	out = append(out, d.certificates()...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Key() < out[j].Key() })
+	uniq := out[:0]
+	for i, f := range out {
+		if i == 0 || f.Key() != out[i-1].Key() {
+			uniq = append(uniq, f)
+		}
+	}
+	return uniq
+}
+
+type deriver struct {
+	in   Input
+	web  *output.WebVisibility
+	refs []cloudstorage.Reference // see references
+	svcs map[string]store.Record  // see services
+
+	guesses map[string][]string // see guessed
+	public  map[string][]bool   // see publicStates
+}
+
+func newDeriver(in Input) *deriver {
+	return &deriver{in: in, web: output.NewWebVisibility(in.Scope)}
+}
+
+// current is the current records of a kind.
+func (d *deriver) current(kind string) []store.Record {
+	var out []store.Record
+	for _, r := range d.in.Records[kind] {
+		if r.Current {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// services indexes the current, visible web services by key.
+func (d *deriver) services() map[string]store.Record {
+	if d.svcs != nil {
+		return d.svcs
+	}
+	d.svcs = map[string]store.Record{}
+	for _, r := range d.current("web_service") {
+		if d.web.Visible("host", r) {
+			d.svcs[r.Key] = r
+		}
+	}
+	return d.svcs
+}
+
+func num(r store.Record, k string) int {
+	switch v := r.Attrs[k].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	}
+	return 0
+}
+
+func flag(r store.Record, k string) bool { b, _ := r.Attrs[k].(bool); return b }
+
+// strs reads a list attribute (a JSON array) or a ";"-joined string.
+func strs(r store.Record, k string) []string {
+	switch v := r.Attrs[k].(type) {
+	case []any:
+		var out []string
+		for _, x := range v {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case []string:
+		return v
+	case string:
+		if v != "" {
+			return strings.Split(v, ";")
+		}
+	}
+	return nil
+}
+
+func (d *deriver) sensitivePaths() []Finding {
+	svcs := d.services()
+	severity := map[string]string{} // path|hash -> the entry's severity
+	for _, e := range d.in.Settings.SensitivePathEntries {
+		if k := e.Path + "|" + e.Hash(); severity[k] == "" {
+			severity[k] = e.Severity
+		}
+	}
+	var out []Finding
+	for _, r := range d.current("sensitive_hit") {
+		if _, ok := svcs[r.Str("service")]; !ok {
+			continue
+		}
+		path := r.Str("path")
+		sev := cmp.Or(severity[path+"|"+r.Str("hash")], Medium)
+		url := r.Str("url")
+		out = append(out, newFinding(SensitivePaths, path, sev, url,
+			fmt.Sprintf("%s answered %d with %q", url, num(r, "status"), r.Str("signature")),
+			map[string]any{"url": url, "path": path, "status": r.Attrs["status"], "size": r.Attrs["size"], "signature": r.Str("signature")}))
+	}
+	return out
+}
+
+func (d *deriver) email() []Finding {
+	var out []Finding
+	for _, r := range d.current("email_posture") {
+		root := r.Key
+		if d.in.Scope.ClassifyHost(root).Class != scope.InScope {
+			continue
+		}
+		add := func(typ, detail string) {
+			out = append(out, newFinding(Email, typ, Severity(Email, typ), root, detail, map[string]any{"root": root}))
+		}
+		spf := r.Str("spf")
+		invalid := r.Str("spf_error") != "" || num(r, "spf_records") > 1
+		switch {
+		case invalid:
+			add("spf-invalid", "SPF is invalid: "+r.Str("spf_error"))
+		case spf == "":
+			add("spf-missing", "no SPF record")
+		default:
+			if n := num(r, "spf_lookups"); n > 10 {
+				add("spf-lookups", fmt.Sprintf("SPF needs %d DNS lookups (the limit is 10)", n))
+			}
+		}
+		// The record's own "all" is reported even when an include made it invalid:
+		// a +all says so whatever the rest of the record does.
+		switch r.Str("spf_all") {
+		case "+all":
+			add("spf-all-plus", "SPF allows anyone to send: "+spf)
+		case "?all":
+			add("spf-all-neutral", "SPF ends in ?all: "+spf)
+		}
+		if r.Str("dmarc") == "" {
+			add("dmarc-missing", "no DMARC record")
+		} else if r.Str("dmarc_policy") == "none" {
+			add("dmarc-none", "the applicable DMARC policy is none: "+r.Str("dmarc"))
+		}
+		if r.Str("mx") == "" && !strings.EqualFold(strings.Join(strings.Fields(spf), " "), "v=spf1 -all") {
+			add("no-mx-spf", "no MX record, and the domain does not say it sends no mail (v=spf1 -all)")
+		}
+	}
+	return out
+}
+
+func (d *deriver) ports() []Finding {
+	risky := map[int]bool{}
+	for _, p := range d.in.Settings.RiskyPorts {
+		risky[p] = true
+	}
+	var hostnames map[netip.Addr][]string
+	var out []Finding
+	for _, r := range d.current("open_port") {
+		ap, err := netip.ParseAddrPort(r.Key)
+		if err != nil || !risky[int(ap.Port())] || !output.PortVisible(d.in.Scope, d.in.Inv, r) {
+			continue
+		}
+		if hostnames == nil {
+			hostnames = d.in.Inv.HostnamesByIP(d.in.Scope)
+		}
+		addr := netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
+		out = append(out, newFinding(Ports, "risky-port", Severity(Ports, "risky-port"), addr.String(),
+			fmt.Sprintf("port %d is open on %s", ap.Port(), addr.Addr()),
+			map[string]any{"ip": addr.Addr().String(), "port": int(ap.Port()), "banner": r.Str("banner"),
+				"hostnames": strings.Join(hostnames[addr.Addr()], ";")}))
+	}
+	return out
+}
+
+func (d *deriver) certificates() []Finding {
+	today, err := time.Parse(time.DateOnly, d.in.Today)
+	if err != nil {
+		return nil
+	}
+	horizon := today.AddDate(0, 0, d.in.Settings.CertExpiryDays).Format(time.DateOnly)
+	var out []Finding
+	for _, r := range d.current("web_service") {
+		if !d.web.Visible("host", r) {
+			continue
+		}
+		var types []string
+		expiry := r.Str("tls_expiry")
+		switch {
+		case expiry == "":
+		case expiry < d.in.Today:
+			types = append(types, "expired")
+		case expiry < horizon:
+			types = append(types, "expiring")
+		}
+		if flag(r, "tls_self_signed") {
+			types = append(types, "self-signed")
+		}
+		if len(types) == 0 {
+			continue
+		}
+		typ := strings.Join(types, ";") // "expired", "expiring" sort before "self-signed"
+		out = append(out, newFinding(Certificates, typ, Severity(Certificates, typ), r.Key,
+			fmt.Sprintf("%s certificate (%s), expires %s", typ, r.Str("tls_subject"), expiry),
+			map[string]any{"url": r.Key, "tls_subject": r.Str("tls_subject"), "tls_issuer": r.Str("tls_issuer"), "tls_expiry": expiry}))
+	}
+	return out
+}

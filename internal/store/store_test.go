@@ -167,6 +167,40 @@ func TestRedoSweepsOrphans(t *testing.T) {
 	}
 }
 
+// Retire forgets the checks a stage no longer yields, with their observations
+// and failures, and leaves the other stages and the still-valid checks alone.
+func TestRetireUnlistedChecks(t *testing.T) {
+	c := newClock()
+	s, _ := open(t, c, nil)
+	s.Complete("st", "svc|fp=old", []store.Obs{{Kind: "x", Key: "a"}, {Kind: "x", Key: "shared"}})
+	s.Complete("st", "svc|fp=new", []store.Obs{{Kind: "x", Key: "b"}})
+	s.Complete("other", "svc|fp=old", []store.Obs{{Kind: "x", Key: "shared"}})
+	s.Fail("st", "gone|fp=old", "boom")
+	mustFlush(t, s)
+	before := s.KindVersion("x")
+	if err := s.Retire("st", map[string]struct{}{"svc|fp=new": {}}); err != nil {
+		t.Fatal(err)
+	}
+	if rec(t, s, "x", "a").Current || !rec(t, s, "x", "b").Current {
+		t.Error("the retired check's observation must stop being current; the valid one stays")
+	}
+	if !rec(t, s, "x", "shared").Current {
+		t.Error("another stage's observation of the same record keeps it current")
+	}
+	if done, _ := s.Completed("st"); len(done) != 1 {
+		t.Errorf("completed = %v, want only the valid check", done)
+	}
+	if done, _ := s.Completed("other"); len(done) != 1 {
+		t.Errorf("another stage's checks were retired: %v", done)
+	}
+	if f, _ := s.Failures("st"); len(f) != 0 {
+		t.Errorf("failures of an unlisted check = %v", f)
+	}
+	if s.KindVersion("x") == before {
+		t.Error("retiring must bump the version of the kinds it changed")
+	}
+}
+
 func TestRedoFailedCheckKeepsObservations(t *testing.T) {
 	c := newClock()
 	s, _ := open(t, c, nil)

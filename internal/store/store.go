@@ -678,32 +678,9 @@ func (s *Store) FinishRedo(stage string, valid map[string]struct{}) error {
 		return err
 	}
 	defer tx.Rollback()
-	rows, err := tx.Query("SELECT kind,key,check_key FROM observations WHERE stage=?", stage)
+	kinds, err := sweepObservations(tx, stage, valid)
 	if err != nil {
 		return err
-	}
-	type orphan struct{ kind, key, check string }
-	var orphans []orphan
-	for rows.Next() {
-		var o orphan
-		if err := rows.Scan(&o.kind, &o.key, &o.check); err != nil {
-			rows.Close()
-			return err
-		}
-		if _, ok := valid[o.check]; !ok {
-			orphans = append(orphans, o)
-		}
-	}
-	rows.Close()
-	kinds := map[string]bool{}
-	for _, o := range orphans {
-		if _, err := tx.Exec("DELETE FROM observations WHERE kind=? AND key=? AND stage=? AND check_key=?", o.kind, o.key, stage, o.check); err != nil {
-			return err
-		}
-		if err := refreshCurrent(tx, o.kind, o.key); err != nil {
-			return err
-		}
-		kinds[o.kind] = true
 	}
 	if _, err := tx.Exec("DELETE FROM meta WHERE key=?", "redo:"+stage); err != nil {
 		return err
@@ -713,4 +690,91 @@ func (s *Store) FinishRedo(stage string, valid map[string]struct{}) error {
 	}
 	s.bump(kinds)
 	return nil
+}
+
+// Retire forgets the completed checks of a stage that are not in valid (the
+// CheckKey form of every check the stage yields now), with their observations
+// and failures. Evidence from a superseded check, one whose key carries a hash
+// of an entry that has since changed, so stops being current, and a check
+// yielded again later is run again. valid must be the stage's complete set of checks.
+func (s *Store) Retire(stage string, valid map[string]struct{}) error {
+	if err := s.Flush(); err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	kinds, err := sweepObservations(tx, stage, valid)
+	if err != nil {
+		return err
+	}
+	for _, table := range []string{"checks", "failures"} {
+		rows, err := tx.Query("SELECT key FROM "+table+" WHERE stage=?", stage)
+		if err != nil {
+			return err
+		}
+		var gone []string
+		for rows.Next() {
+			var k string
+			if err := rows.Scan(&k); err != nil {
+				rows.Close()
+				return err
+			}
+			if _, ok := valid[k]; !ok {
+				gone = append(gone, k)
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, k := range gone {
+			if _, err := tx.Exec("DELETE FROM "+table+" WHERE stage=? AND key=?", stage, k); err != nil {
+				return err
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.bump(kinds)
+	return nil
+}
+
+// sweepObservations deletes the stage's observations whose check is not in
+// valid, refreshes the records they belonged to and returns their kinds.
+func sweepObservations(tx *sql.Tx, stage string, valid map[string]struct{}) (map[string]bool, error) {
+	rows, err := tx.Query("SELECT kind,key,check_key FROM observations WHERE stage=?", stage)
+	if err != nil {
+		return nil, err
+	}
+	type orphan struct{ kind, key, check string }
+	var orphans []orphan
+	for rows.Next() {
+		var o orphan
+		if err := rows.Scan(&o.kind, &o.key, &o.check); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if _, ok := valid[o.check]; !ok {
+			orphans = append(orphans, o)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	kinds := map[string]bool{}
+	for _, o := range orphans {
+		if _, err := tx.Exec("DELETE FROM observations WHERE kind=? AND key=? AND stage=? AND check_key=?", o.kind, o.key, stage, o.check); err != nil {
+			return nil, err
+		}
+		if err := refreshCurrent(tx, o.kind, o.key); err != nil {
+			return nil, err
+		}
+		kinds[o.kind] = true
+	}
+	return kinds, nil
 }

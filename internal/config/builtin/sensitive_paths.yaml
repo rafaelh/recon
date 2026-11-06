@@ -1,1 +1,62 @@
-[]
+# Built-in sensitive paths (Spec 5, B5). Each is requested once per live web service.
+# Every entry needs a signature (an RE2 over the first 1 MiB of the body) and/or magic
+# (a hex body prefix) so a catch-all site that answers 200 to everything is not flagged.
+# status defaults to 200 and severity to medium.
+- path: /.git/config
+  signature: '\[core\]'
+  severity: high
+- path: /.git/HEAD
+  signature: '^ref: refs/'
+  severity: high
+- path: /.env
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: /.aws/credentials
+  signature: 'aws_access_key_id'
+  severity: high
+- path: /.htpasswd
+  signature: '(?m)^[^:\s]+:(\$|\{SHA\})'
+  severity: high
+- path: /wp-config.php.bak
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: /.svn/entries
+  signature: '(?s)^\d+\s+(dir|file)'
+- path: /.hg/hgrc
+  signature: '\[(paths|ui)\]'
+- path: /.DS_Store
+  magic: '0000000142756431'
+  severity: low
+- path: /server-status
+  signature: 'Apache Server Status'
+- path: /server-info
+  signature: 'Apache Server Information'
+- path: /phpinfo.php
+  signature: 'PHP Version|phpinfo\(\)'
+- path: /info.php
+  signature: 'PHP Version|phpinfo\(\)'
+- path: /actuator/env
+  signature: '"propertySources"|"activeProfiles"'
+  severity: high
+- path: /actuator/heapdump
+  magic: '4a4156412050524f46494c45'
+  severity: high
+- path: /.npmrc
+  signature: '_authToken|_password'
+  severity: high
+- path: /.docker/config.json
+  signature: '"auths"'
+  severity: high
+- path: /id_rsa
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: /backup.zip
+  magic: '504b0304'
+- path: /backup.tar.gz
+  magic: '1f8b08'
+- path: /backup.sql
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+- path: /dump.sql
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+- path: /WEB-INF/web.xml
+  signature: '<web-app'

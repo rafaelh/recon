@@ -72,6 +72,14 @@ func Default() *Registry {
 		{Name: "http_port"},
 		{Name: "open_port", Singular: "open port", Category: "open ports", Printed: true, PortKey: true},
 		{Name: "finding", Singular: "finding", Category: "findings", Printed: true},
+		// Spec 5 evidence: stages store these, the findings package derives findings from them.
+		{Name: "takeover_http"},
+		{Name: "storage"},
+		{Name: "storage_account"},
+		{Name: "storage_object"},
+		{Name: "storage_ref"},
+		{Name: "sensitive_hit"},
+		{Name: "email_posture"},
 		{Name: "url", Singular: "url", Category: "urls", Counted: true, HostAttr: "host"},
 	} {
 		r.Register(k)

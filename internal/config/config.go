@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"maps"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"go.yaml.in/yaml/v3"
 
 	"github.com/rafaelh/recon/internal/input"
 )
@@ -45,15 +43,20 @@ type Permutations struct {
 	MaxPerSeed int
 }
 
+// Storage holds the cloud-storage settings.
+type Storage struct {
+	// MaxNames caps the bucket names guessed per root and per organisation.
+	MaxNames int
+}
+
 // Settings are the validated settings for a run.
 type Settings struct {
-	Keys           map[string]Secret
-	Ports          []int
-	RiskyPorts     []int
-	SensitivePaths string // file path; empty means the built-in list
-	// SensitivePathList is the parsed list from SensitivePaths (or the built-in list).
-	SensitivePathList []string
-	Wordlist          string // file path; empty means the built-in list
+	Keys                 map[string]Secret
+	Ports                []int
+	RiskyPorts           []int
+	SensitivePaths       string // file path; empty means the built-in list
+	SensitivePathEntries []SensitivePath
+	Wordlist             string // file path; empty means the built-in list
 	// WordlistWords is the parsed list from Wordlist (or the built-in list) and
 	// WordlistHash identifies its content, so a changed list creates new checks.
 	WordlistWords []string
@@ -66,8 +69,11 @@ type Settings struct {
 	Rate            Rate
 	Crawl           Crawl
 	Archive         Archive
-	OutputDir       string
-	NetblockLimit   int // IPv4 addresses
+	Storage         Storage
+	// CertExpiryDays is how many days ahead a certificate expiry is reported.
+	CertExpiryDays int
+	OutputDir      string
+	NetblockLimit  int // IPv4 addresses
 }
 
 // Defaults returns the default settings.
@@ -81,6 +87,8 @@ func Defaults() Settings {
 		Rate:            Rate{PerHost: 5, PerSource: 1, DNS: 50},
 		Crawl:           Crawl{MaxDepth: 2, MaxPages: 100},
 		Archive:         Archive{MaxURLs: 20000},
+		Storage:         Storage{MaxNames: 50},
+		CertExpiryDays:  30,
 		OutputDir:       ".",
 		NetblockLimit:   4096,
 		Permutations:    Permutations{Enabled: true, MaxPerSeed: 200},
@@ -112,39 +120,25 @@ func BuiltinSensitivePathsLabel() string {
 	return fmt.Sprintf("built-in (%d entries)", len(builtinSensitivePaths()))
 }
 
-func builtinSensitivePaths() []string {
-	b, _ := builtin.ReadFile("builtin/sensitive_paths.yaml")
-	list, _ := parseSensitivePaths(b)
-	return list
+// dkimSelectors are the DKIM selectors looked up for every root.
+var dkimSelectors = []string{"google", "selector1", "selector2", "k1", "k2", "k3", "default", "dkim", "mail", "s1", "s2", "smtp", "mandrill", "mxvault", "everlytickey1", "everlytickey2", "zendesk1", "zendesk2", "cm", "sig1", "scph1", "mte1"}
+
+// DKIMSelectors are the selectors the email stage looks up.
+func DKIMSelectors() []string { return slices.Clone(dkimSelectors) }
+
+// DKIMSelectorHash identifies the selector list, so a changed list creates new email checks.
+func DKIMSelectorHash() string {
+	sum := sha256.Sum256([]byte(strings.Join(dkimSelectors, ",")))
+	return hex.EncodeToString(sum[:4])
 }
 
-// parseSensitivePaths reads a YAML list whose entries are a path or {path: ...}.
-// Each path is appended to a service's origin, so it must be an absolute path.
-func parseSensitivePaths(b []byte) ([]string, error) {
-	var raw []any
-	if err := yaml.Unmarshal(b, &raw); err != nil {
-		return nil, fmt.Errorf("not a valid YAML list: %w", err)
+func builtinSensitivePaths() []SensitivePath {
+	b, _ := builtin.ReadFile("builtin/sensitive_paths.yaml")
+	list, err := parseSensitivePaths(b)
+	if err != nil {
+		panic("config: built-in sensitive_paths.yaml: " + err.Error())
 	}
-	var out []string
-	for _, e := range raw {
-		var p string
-		switch v := e.(type) {
-		case string:
-			p = v
-		case map[string]any:
-			var ok bool
-			if p, ok = v["path"].(string); !ok {
-				continue
-			}
-		default:
-			continue
-		}
-		if _, err := url.ParseRequestURI(p); err != nil || !strings.HasPrefix(p, "/") {
-			return nil, fmt.Errorf("entry %q is not a path starting with /", p)
-		}
-		out = append(out, p)
-	}
-	return out, nil
+	return list
 }
 
 // DefaultConfigPath is $XDG_CONFIG_HOME/recon/config.yaml, or ~/.config/recon/config.yaml.
@@ -165,6 +159,7 @@ var settingTable = []setting{
 	{"rate-per-source", "rate.per_source"}, {"rate-dns", "rate.dns"}, {"crawl-depth", "crawl.max_depth"},
 	{"crawl-pages", "crawl.max_pages"}, {"output-dir", "output_dir"}, {"netblock-limit", "netblock_limit"},
 	{"permutations-max", "permutations.max_per_seed"}, {"archive-max-urls", "archive.max_urls"},
+	{"storage-max-names", "storage.max_names"}, {"cert-expiry-days", "cert_expiry_days"},
 }
 
 // RegisterFlags adds one flag per setting to fs. There is deliberately no flag for API keys.
@@ -184,6 +179,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.Int("crawl-depth", d.Crawl.MaxDepth, "maximum crawl depth")
 	fs.Int("crawl-pages", d.Crawl.MaxPages, "maximum pages crawled per web service (0 disables the crawl)")
 	fs.Int("archive-max-urls", d.Archive.MaxURLs, "maximum archived URLs recorded per root from Wayback and Common Crawl")
+	fs.Int("storage-max-names", d.Storage.MaxNames, "cloud-storage bucket names guessed per root and per organisation (checked on AWS, Azure and GCP)")
+	fs.Int("cert-expiry-days", d.CertExpiryDays, "report certificates that expire within this many days")
 	fs.String("output-dir", d.OutputDir, "directory in which engagement directories are created")
 	fs.Bool("no-permutations", false, "do not resolve permutations of discovered subdomain labels (default: on, including with --passive)")
 	fs.Int("permutations-max", d.Permutations.MaxPerSeed, "maximum permutations generated per discovered subdomain label")
@@ -210,9 +207,13 @@ type rawSettings struct {
 	Archive struct {
 		MaxURLs string `mapstructure:"max_urls"`
 	} `mapstructure:"archive"`
-	OutputDir     string `mapstructure:"output_dir"`
-	NetblockLimit string `mapstructure:"netblock_limit"`
-	Permutations  struct {
+	Storage struct {
+		MaxNames string `mapstructure:"max_names"`
+	} `mapstructure:"storage"`
+	CertExpiryDays string `mapstructure:"cert_expiry_days"`
+	OutputDir      string `mapstructure:"output_dir"`
+	NetblockLimit  string `mapstructure:"netblock_limit"`
+	Permutations   struct {
 		Enabled    string `mapstructure:"enabled"`
 		MaxPerSeed string `mapstructure:"max_per_seed"`
 	} `mapstructure:"permutations"`
@@ -234,6 +235,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		"rate.per_host":    d.Rate.PerHost, "rate.per_source": d.Rate.PerSource, "rate.dns": d.Rate.DNS,
 		"crawl.max_depth": d.Crawl.MaxDepth, "crawl.max_pages": d.Crawl.MaxPages, "archive.max_urls": d.Archive.MaxURLs,
 		"output_dir": d.OutputDir, "netblock_limit": d.NetblockLimit,
+		"storage.max_names": d.Storage.MaxNames, "cert_expiry_days": d.CertExpiryDays,
 		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed,
 	}
 	for k, val := range defaults {
@@ -321,6 +323,8 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	posInt("crawl.max_pages", raw.Crawl.MaxPages, 0, &s.Crawl.MaxPages)
 	posInt("archive.max_urls", raw.Archive.MaxURLs, 1, &s.Archive.MaxURLs)
 	posInt("netblock_limit", raw.NetblockLimit, 1, &s.NetblockLimit)
+	posInt("storage.max_names", raw.Storage.MaxNames, 1, &s.Storage.MaxNames)
+	posInt("cert_expiry_days", raw.CertExpiryDays, 0, &s.CertExpiryDays)
 	posInt("permutations.max_per_seed", raw.Permutations.MaxPerSeed, 1, &s.Permutations.MaxPerSeed)
 	if enabled, err := strconv.ParseBool(strings.TrimSpace(raw.Permutations.Enabled)); err != nil {
 		bad("permutations.enabled", raw.Permutations.Enabled, "not true or false")
@@ -351,12 +355,12 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	}
 	sum := sha256.Sum256([]byte(strings.Join(s.WordlistWords, "\n")))
 	s.WordlistHash = hex.EncodeToString(sum[:6])
-	s.SensitivePathList = builtinSensitivePaths()
+	s.SensitivePathEntries = builtinSensitivePaths()
 	if s.SensitivePaths != "" {
 		b, err := os.ReadFile(s.SensitivePaths)
 		if err != nil {
 			bad("sensitive_paths", s.SensitivePaths, "cannot read file: "+errText(err))
-		} else if s.SensitivePathList, err = parseSensitivePaths(b); err != nil {
+		} else if s.SensitivePathEntries, err = parseSensitivePaths(b); err != nil {
 			bad("sensitive_paths", s.SensitivePaths, err.Error())
 		}
 	}

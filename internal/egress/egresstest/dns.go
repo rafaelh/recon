@@ -26,7 +26,13 @@ type DNS struct {
 	wild     map[string]wildcard
 	ptr      map[string][]string
 	txt      map[string][]string
+	mx       map[string][]mxRecord
 	queries  map[string]int
+}
+
+type mxRecord struct {
+	pref uint16
+	host string
 }
 
 type wildcard struct {
@@ -40,7 +46,7 @@ func NewDNS(t testing.TB) *DNS {
 	d := &DNS{
 		addrs: map[string][]netip.Addr{}, cnames: map[string]string{}, rcodes: map[string]int{},
 		sufRcode: map[string]int{}, drop: map[string]bool{}, wild: map[string]wildcard{},
-		ptr: map[string][]string{}, txt: map[string][]string{}, queries: map[string]int{},
+		ptr: map[string][]string{}, txt: map[string][]string{}, mx: map[string][]mxRecord{}, queries: map[string]int{},
 	}
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
@@ -142,7 +148,14 @@ func (d *DNS) TXT(name, text string) {
 	d.txt[norm(name)] = append(d.txt[norm(name)], text)
 }
 
-// Count is how many queries of the type ("A", "AAAA", "PTR", "TXT") were made for name.
+// MX makes name answer MX queries with a mail exchanger. host "." is a null MX.
+func (d *DNS) MX(name string, pref int, host string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.mx[norm(name)] = append(d.mx[norm(name)], mxRecord{uint16(pref), host})
+}
+
+// Count is how many queries of the type ("A", "AAAA", "PTR", "TXT", "MX") were made for name.
 func (d *DNS) Count(name, qtype string) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -179,7 +192,8 @@ func (d *DNS) known(name string) bool {
 	_, c := d.cnames[name]
 	_, p := d.ptr[name]
 	_, x := d.txt[name]
-	return a || c || p || x
+	_, m := d.mx[name]
+	return a || c || p || x || m
 }
 
 func (d *DNS) serve(w mdns.ResponseWriter, r *mdns.Msg) {
@@ -266,6 +280,14 @@ func (d *DNS) answer(m *mdns.Msg, name string, qtype uint16, hdr func(uint16) md
 	case mdns.TypeTXT:
 		for _, t := range d.txt[cur] {
 			m.Answer = append(m.Answer, &mdns.TXT{Hdr: h, Txt: []string{t}})
+		}
+	case mdns.TypeMX:
+		for _, x := range d.mx[cur] {
+			host := x.host
+			if host != "." {
+				host = mdns.Fqdn(host)
+			}
+			m.Answer = append(m.Answer, &mdns.MX{Hdr: h, Preference: x.pref, Mx: host})
 		}
 	}
 }

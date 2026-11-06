@@ -18,6 +18,7 @@ const (
 	TypeCNAME = dns.TypeCNAME
 	TypePTR   = dns.TypePTR
 	TypeTXT   = dns.TypeTXT
+	TypeMX    = dns.TypeMX
 )
 
 // DNS response codes returned in DNSResult.RCode.
@@ -128,6 +129,12 @@ func rdata(rr dns.RR) string {
 		return input.NormaliseHost(v.Ptr)
 	case *dns.TXT:
 		return strings.Join(v.Txt, "")
+	case *dns.MX:
+		host := "."
+		if v.Mx != "." {
+			host = input.NormaliseHost(v.Mx)
+		}
+		return fmt.Sprintf("%d %s", v.Preference, host)
 	}
 	parts := strings.SplitN(rr.String(), "\t", 5)
 	if len(parts) == 5 {

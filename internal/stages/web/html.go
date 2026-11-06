@@ -68,7 +68,13 @@ func (p page) title() string {
 type links struct {
 	follow, record []string
 	base           string
+	// refs is every URL-bearing attribute of an a, area, link, script, img,
+	// iframe, source or form element, with its element, for storage references (Spec 5 D8).
+	refs []linkRef
 }
+
+// linkRef is a URL found in an element of a page.
+type linkRef struct{ tag, url string }
 
 func (p page) links() links {
 	var l links
@@ -80,6 +86,11 @@ func (p page) links() links {
 					*dst = append(*dst, v)
 				}
 			}
+			ref := func(key string) {
+				if v := attr(n, key); v != "" {
+					l.refs = append(l.refs, linkRef{tag: n.Data, url: v})
+				}
+			}
 			switch n.Data {
 			case "base":
 				if l.base == "" {
@@ -87,14 +98,21 @@ func (p page) links() links {
 				}
 			case "a", "area":
 				add(&l.follow, "href")
+				ref("href")
 			case "iframe":
 				add(&l.follow, "src")
+				ref("src")
 			case "link":
 				add(&l.record, "href")
+				ref("href")
 			case "script":
 				add(&l.record, "src")
+				ref("src")
 			case "form":
 				add(&l.record, "action")
+				ref("action")
+			case "img", "source":
+				ref("src")
 			}
 		}
 		for c := n.FirstChild; c != nil; c = c.NextSibling {

@@ -24,6 +24,29 @@ import (
 var sourcePatterns = []string{
 	"crt.sh", "web.archive.org", "index.commoncrawl.org", "www.virustotal.com", "api.securitytrails.com",
 	"api.shodan.io", "reverse-whois.whoisxmlapi.com", "stat.ripe.net", "ip-ranges.amazonaws.com", "www.gstatic.com",
+	// Spec 5's storage stage; their default answer is "no such bucket".
+	"s3.amazonaws.com", "s3.*.amazonaws.com", "storage.googleapis.com", "*.blob.core.windows.net",
+}
+
+// riskStages are Spec 5's stages. Worlds leave them out unless a test asks for
+// them: sensitive-paths alone sends a score of requests to every web service.
+var riskStages = []string{"email", "storage", "takeover", "sensitive-paths"}
+
+const noSuchBucketXML = `<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchBucket</Code><Message>The specified bucket does not exist</Message></Error>`
+const containerNotFoundXML = `<?xml version="1.0" encoding="utf-8"?><Error><Code>ContainerNotFound</Code><Message>The specified container does not exist.</Message></Error>`
+
+func missingStorage(pattern string) http.HandlerFunc {
+	body := noSuchBucketXML
+	if strings.Contains(pattern, "blob.core.windows.net") {
+		body = containerNotFoundXML
+	}
+	return func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/xml")
+		rw.WriteHeader(404)
+		if r.Method != http.MethodHead {
+			rw.Write([]byte(body))
+		}
+	}
 }
 
 type loggedReq struct {
@@ -50,7 +73,10 @@ type world struct {
 	probe      *testkit.Stage
 }
 
-func newWorld(t *testing.T) *world {
+func newWorld(t *testing.T) *world { return newWorldWith(t) }
+
+// newWorldWith is newWorld with the named Spec 5 stages kept in the stage list.
+func newWorldWith(t *testing.T, keep ...string) *world {
 	t.Helper()
 	w := &world{t: t, src: map[string]*source{}}
 	w.probe = &testkit.Stage{StageName: "probe", Kind: run.ThirdParty, ChecksFn: func(v run.View) []run.Check {
@@ -66,7 +92,9 @@ func newWorld(t *testing.T) *world {
 	// The real ports stage sweeps every eligible address on every listed port, and
 	// only the Spec 4 tests map those connects to local listeners; the others
 	// leave it out so nothing they run can reach the network.
-	stages := slices.DeleteFunc(cli.DefaultDeps().Stages, func(s run.Stage) bool { return s.Name() == "ports" })
+	stages := slices.DeleteFunc(cli.DefaultDeps().Stages, func(s run.Stage) bool {
+		return s.Name() == "ports" || slices.Contains(riskStages, s.Name()) && !slices.Contains(keep, s.Name())
+	})
 	w.h = newHarness(t, append(stages, w.probe)...)
 	w.dns = egresstest.NewDNS(t)
 	// The input root is resolved too, like any in-scope name; give it an address.
@@ -76,6 +104,9 @@ func newWorld(t *testing.T) *world {
 	w.h.eopts.SourceBaseURLs = map[string]string{}
 	for _, p := range sourcePatterns {
 		s := &source{h: func(rw http.ResponseWriter, r *http.Request) { http.NotFound(rw, r) }}
+		if strings.Contains(p, "amazonaws.com") && !strings.HasPrefix(p, "ip-ranges") || strings.Contains(p, "googleapis.com") || strings.Contains(p, "blob.core.windows.net") {
+			s.h = missingStorage(p)
+		}
 		srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
 			s.mu.Lock()
@@ -90,6 +121,40 @@ func newWorld(t *testing.T) *world {
 		w.h.eopts.SourceBaseURLs[p] = srv.URL
 	}
 	return w
+}
+
+// serve starts a fake HTTP server for an exact source host (a storage region or
+// an Azure account) and returns its request log.
+func (w *world) serve(host string, h http.HandlerFunc) *source {
+	s := &source{h: h}
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.reqs = append(s.reqs, loggedReq{Method: r.Method, URI: r.URL.RequestURI(), Header: r.Header.Clone()})
+		h := s.h
+		s.mu.Unlock()
+		h(rw, r)
+	}))
+	w.t.Cleanup(srv.Close)
+	w.src[host] = s
+	w.h.eopts.SourceBaseURLs[host] = srv.URL
+	return s
+}
+
+func (s *source) requestLog() []loggedReq {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]loggedReq(nil), s.reqs...)
+}
+
+// count is the number of requests with the method and request path (no query).
+func (s *source) count(method, path string) int {
+	n := 0
+	for _, r := range s.requestLog() {
+		if r.Method == method && strings.SplitN(r.URI, "?", 2)[0] == path {
+			n++
+		}
+	}
+	return n
 }
 
 // handle sets the handler of a source.

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/rafaelh/recon/internal/cloudstorage"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/run"
@@ -220,6 +221,12 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		obs.add(run.Observation{Kind: "url", Key: target, Attrs: hopAttrs})
 		if d, ok := otherHost(host, in.host); ok {
 			obs.add(run.Observation{Kind: "hostname", Key: d})
+		}
+		// A redirect to a storage URL is a reference, and a browser follows it (Spec 5 D8).
+		if ref, ok := cloudstorage.ParseRef(target); ok {
+			if page, ok := NormaliseURL(last.URL()); ok {
+				obs.add(storageObservation(storageRef{ref: ref, url: target, page: page, via: "asset"}))
+			}
 		}
 		if visited[target] {
 			break

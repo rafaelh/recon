@@ -2,30 +2,40 @@
 #
 # cname: a CNAME target that ends with `suffix` (on a label boundary) is hosted by that provider.
 # asn:   an address whose origin AS is listed belongs to the provider. `class` is
-#        cdn and shared-hosting (always shared) or hyperscaler (shared unless a
-#        provider range proves the address is a dedicated virtual machine).
+#        cdn and shared-hosting (always shared), hyperscaler (shared unless a
+#        provider range proves the address is a dedicated virtual machine) or
+#        saas (a third-party platform serving other companies' content).
+#
+# Spec 5 adds to cname entries:
+#   class: saas      the host is served by a third-party SaaS platform, never requested for sensitive paths
+#   nxdomain: true   a chain that dangles into the suffix can be claimed by anyone (a takeover)
+#   body: <RE2>      matches the page an unclaimed resource serves; a takeover when a probe sees it
+# and a `ranges:` list of static CIDRs (SaaS reached by apex A records).
+# The fingerprints, ASNs and ranges below are a hand-curated starter set; they change only with the binary.
+# The Squarespace and Wix ASNs and the Squarespace ranges were taken from the providers' published
+# documentation and have not been re-confirmed against live data.
 cname:
   - {suffix: cloudfront.net, provider: aws, service: CloudFront}
   - {suffix: elb.amazonaws.com, provider: aws, service: ELB}
-  - {suffix: s3.amazonaws.com, provider: aws, service: S3}
+  - {suffix: s3.amazonaws.com, provider: aws, service: S3, body: 'NoSuchBucket'}
   - {suffix: s3-website.amazonaws.com, provider: aws, service: S3}
   - {suffix: execute-api.amazonaws.com, provider: aws, service: API Gateway}
-  - {suffix: elasticbeanstalk.com, provider: aws, service: Elastic Beanstalk}
+  - {suffix: elasticbeanstalk.com, provider: aws, service: Elastic Beanstalk, nxdomain: true}
   - {suffix: awsglobalaccelerator.com, provider: aws, service: Global Accelerator}
-  - {suffix: azurewebsites.net, provider: azure, service: App Service}
-  - {suffix: cloudapp.azure.com, provider: azure, service: Cloud Services}
-  - {suffix: cloudapp.net, provider: azure, service: Cloud Services}
-  - {suffix: blob.core.windows.net, provider: azure, service: Blob Storage}
+  - {suffix: azurewebsites.net, provider: azure, service: App Service, nxdomain: true}
+  - {suffix: cloudapp.azure.com, provider: azure, service: Cloud Services, nxdomain: true}
+  - {suffix: cloudapp.net, provider: azure, service: Cloud Services, nxdomain: true}
+  - {suffix: blob.core.windows.net, provider: azure, service: Blob Storage, nxdomain: true}
   - {suffix: azureedge.net, provider: azure, service: CDN}
   - {suffix: azurefd.net, provider: azure, service: Front Door}
-  - {suffix: trafficmanager.net, provider: azure, service: Traffic Manager}
+  - {suffix: trafficmanager.net, provider: azure, service: Traffic Manager, nxdomain: true}
   - {suffix: appspot.com, provider: gcp, service: App Engine}
   - {suffix: run.app, provider: gcp, service: Cloud Run}
   - {suffix: storage.googleapis.com, provider: gcp, service: Cloud Storage}
   - {suffix: ghs.googlehosted.com, provider: gcp, service: Google Sites}
-  - {suffix: herokuapp.com, provider: heroku, service: Heroku}
-  - {suffix: herokudns.com, provider: heroku, service: Heroku}
-  - {suffix: github.io, provider: github, service: Pages}
+  - {suffix: herokuapp.com, provider: heroku, service: Heroku, body: 'No such app'}
+  - {suffix: herokudns.com, provider: heroku, service: Heroku, body: 'No such app'}
+  - {suffix: github.io, provider: github, service: Pages, class: saas, body: 'There isn.t a GitHub Pages site here'}
   - {suffix: netlify.app, provider: netlify, service: Netlify}
   - {suffix: netlify.com, provider: netlify, service: Netlify}
   - {suffix: vercel.app, provider: vercel, service: Vercel}
@@ -37,15 +47,15 @@ cname:
   - {suffix: akamaiedge.net, provider: akamai, service: CDN}
   - {suffix: edgekey.net, provider: akamai, service: CDN}
   - {suffix: edgesuite.net, provider: akamai, service: CDN}
-  - {suffix: myshopify.com, provider: shopify, service: Shopify}
-  - {suffix: zendesk.com, provider: zendesk, service: Zendesk}
-  - {suffix: readme.io, provider: readme, service: ReadMe}
+  - {suffix: myshopify.com, provider: shopify, service: Shopify, class: saas, body: 'Sorry, this shop is currently unavailable'}
+  - {suffix: zendesk.com, provider: zendesk, service: Zendesk, class: saas, body: 'Help Center Closed'}
+  - {suffix: readme.io, provider: readme, service: ReadMe, class: saas, body: 'Project doesnt exist'}
   - {suffix: wpengine.com, provider: wpengine, service: WP Engine}
-  - {suffix: squarespace.com, provider: squarespace, service: Squarespace}
-  - {suffix: wixdns.net, provider: wix, service: Wix}
-  - {suffix: statuspage.io, provider: atlassian, service: Statuspage}
-  - {suffix: unbouncepages.com, provider: unbounce, service: Unbounce}
-  - {suffix: ghost.io, provider: ghost, service: Ghost}
+  - {suffix: squarespace.com, provider: squarespace, service: Squarespace, class: saas}
+  - {suffix: wixdns.net, provider: wix, service: Wix, class: saas}
+  - {suffix: statuspage.io, provider: atlassian, service: Statuspage, class: saas, body: 'You are being <a href=.https://www.statuspage.io.>redirected'}
+  - {suffix: unbouncepages.com, provider: unbounce, service: Unbounce, class: saas, body: 'The requested URL was not found on this server'}
+  - {suffix: ghost.io, provider: ghost, service: Ghost, class: saas, body: 'Failed to resolve DNS path for this host'}
 asn:
   - {asn: 13335, provider: cloudflare, class: cdn}
   - {asn: 209242, provider: cloudflare, class: cdn}
@@ -66,9 +76,15 @@ asn:
   - {asn: 19551, provider: incapsula, class: cdn}
   - {asn: 30148, provider: sucuri, class: cdn}
   - {asn: 394536, provider: vercel, class: cdn}
-  - {asn: 62679, provider: shopify, class: shared-hosting}
+  - {asn: 62679, provider: shopify, class: saas}
   - {asn: 36351, provider: softlayer, class: shared-hosting}
   - {asn: 46606, provider: unified-layer, class: shared-hosting}
   - {asn: 26496, provider: godaddy, class: shared-hosting}
   - {asn: 398101, provider: godaddy, class: shared-hosting}
   - {asn: 14061, provider: digitalocean, class: shared-hosting}
+  - {asn: 53831, provider: squarespace, class: saas}
+  - {asn: 58182, provider: wix, class: saas}
+ranges:
+  - {cidr: 185.199.108.0/22, provider: github, service: Pages, class: saas}
+  - {cidr: 198.185.159.144/28, provider: squarespace, service: Squarespace, class: saas}
+  - {cidr: 198.49.23.144/28, provider: squarespace, service: Squarespace, class: saas}

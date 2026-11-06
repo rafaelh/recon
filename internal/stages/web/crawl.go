@@ -7,9 +7,9 @@ import (
 	"maps"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 
+	"github.com/rafaelh/recon/internal/cloudstorage"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/scope"
@@ -53,18 +53,11 @@ func (*Crawl) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 	return func(yield func(run.Check, error) bool) {
 		set := v.Settings().Crawl
 		for _, rec := range v.Records("web_service") { // in key order
-			u, err := url.Parse(rec.Key)
-			if err != nil || !v.Scope().WebHostInScope(u.Hostname()) {
+			svc, ok := egress.ParseService(rec.Key)
+			if !ok || !v.Scope().WebHostInScope(svc.Host) {
 				continue
 			}
-			port := 80
-			if u.Scheme == "https" {
-				port = 443
-			}
-			if p := u.Port(); p != "" {
-				port, _ = strconv.Atoi(p)
-			}
-			in := crawlInput{sc: v.Scope(), host: u.Hostname(), scheme: u.Scheme, port: port, depth: set.MaxDepth, pages: set.MaxPages, origin: rec.Key}
+			in := crawlInput{sc: v.Scope(), host: svc.Host, scheme: svc.Scheme, port: svc.Port, depth: set.MaxDepth, pages: set.MaxPages, origin: rec.Key}
 			in.start, _ = NormaliseURL(rec.Key + "/")
 			key := fmt.Sprintf("%s|depth=%d|pages=%d", rec.Key, set.MaxDepth, set.MaxPages)
 			if !yield(run.Check{Key: key, Input: in}, nil) {
@@ -96,13 +89,23 @@ type crawler struct {
 	hosts    map[string]bool
 	queue    []queued
 	anchor   egress.Response // a same-origin response, the base egress.Link resolves from
+
+	storage     map[string]*storageRef // "page|url" -> reference, for the cloud-storage checks
+	storageKeys []string               // in first-seen order
+}
+
+// storageRef is a storage URL a page links to or loads (Spec 5 D8).
+type storageRef struct {
+	ref       cloudstorage.Ref
+	url, page string
+	via       string // "link" for an <a> or <area>, else "asset"
 }
 
 // Run crawls one service. Only an error on the root page fails the check; any
 // other page that cannot be fetched is skipped.
 func (*Crawl) Run(ctx context.Context, chk run.Check, e egress.Clients) ([]run.Observation, error) {
 	in := chk.Input.(crawlInput)
-	c := &crawler{ctx: ctx, in: in, e: e, visited: map[string]bool{in.start: true}, recorded: map[string]int{}, hosts: map[string]bool{}}
+	c := &crawler{ctx: ctx, in: in, e: e, visited: map[string]bool{in.start: true}, recorded: map[string]int{}, hosts: map[string]bool{}, storage: map[string]*storageRef{}}
 	c.record(in.start)
 	root, scan, err := c.fetchPage(egress.Root(in.host, in.scheme, in.port), in.start)
 	if err != nil {
@@ -219,6 +222,40 @@ func (c *crawler) scan(resp egress.Response, depth int) {
 	for _, h := range l.record {
 		handle(h, false)
 	}
+	pageURL, _ := NormaliseURL(resp.URL())
+	for _, r := range l.refs {
+		c.storageRef(base, r, pageURL)
+	}
+}
+
+// storageRef records a link or asset that names a cloud-storage bucket, wherever
+// it points: the host being off-scope does not make it uninteresting. No request is made.
+func (c *crawler) storageRef(base *url.URL, r linkRef, page string) {
+	t, err := base.Parse(r.url)
+	if err != nil || page == "" {
+		return
+	}
+	abs, ok := NormaliseURL(t.String())
+	if !ok {
+		return
+	}
+	ref, ok := cloudstorage.ParseRef(abs)
+	if !ok {
+		return
+	}
+	via := "asset"
+	if r.tag == "a" || r.tag == "area" {
+		via = "link"
+	}
+	key := page + "|" + abs
+	if prev, seen := c.storage[key]; seen {
+		if via == "asset" {
+			prev.via = via // a browser loading it matters more than a link to it
+		}
+		return
+	}
+	c.storage[key] = &storageRef{ref: ref, url: abs, page: page, via: via}
+	c.storageKeys = append(c.storageKeys, key)
 }
 
 // record notes a URL whose host is in scope (up to the cap) and, if the host is
@@ -258,6 +295,9 @@ func (c *crawler) observations() []run.Observation {
 	for _, h := range slices.Sorted(maps.Keys(c.hosts)) {
 		out = append(out, run.Observation{Kind: "hostname", Key: h})
 	}
+	for _, k := range c.storageKeys {
+		out = append(out, storageObservation(*c.storage[k]))
+	}
 	return out
 }
 
@@ -282,4 +322,13 @@ func originOf(abs string) string {
 		return ""
 	}
 	return u.Scheme + "://" + egress.HostPort(u.Scheme, strings.ToLower(u.Hostname()), u.Port())
+}
+
+// storageObservation is the storage_ref observation of a reference, keyed by
+// the page and the URL it references.
+func storageObservation(r storageRef) run.Observation {
+	return run.Observation{Kind: "storage_ref", Key: r.page + "|" + r.url, Attrs: map[string]any{
+		"provider": r.ref.Provider, "name": r.ref.Name, "container": r.ref.Container, "object": r.ref.Object,
+		"url": r.url, "page": r.page, "page_host": HostOfURL(r.page), "via": r.via,
+	}}
 }

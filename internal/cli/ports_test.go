@@ -205,15 +205,16 @@ const hello = "HELLO\r\n"
 
 // --- registration ---
 
-// D1: the stage runs after crawl, so a long sweep does not delay probing of hostnames.
+// D1: the stage runs after crawl (and, since Spec 5 D4, after the Target stages
+// that follow it), so a long sweep does not delay probing of hostnames.
 func TestPortsD1_RegisteredAfterCrawl(t *testing.T) {
 	var names []string
 	for _, s := range defaultStageList() {
 		names = append(names, s.Name())
 	}
 	n := len(names)
-	if n < 2 || names[n-2] != "crawl" || names[n-1] != "ports" {
-		t.Errorf("stage order ends %v, want crawl then ports", names[max(0, n-3):])
+	if n < 2 || names[n-1] != "ports" || slices.Index(names, "crawl") > n-2 || slices.Index(names, "crawl") < 0 {
+		t.Errorf("stage order ends %v, want ports last, after crawl", names[max(0, n-4):])
 	}
 	for _, s := range defaultStageList() {
 		if s.Name() == "ports" && s.Contact() != run.Target {

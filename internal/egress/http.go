@@ -28,6 +28,9 @@ const (
 	userAgent     = "recon/1"
 )
 
+// MaxTargetBody is the cap on Response.Body: a body of exactly this length may have been cut.
+const MaxTargetBody = maxTargetBody
+
 // Reasons carried by NoService.
 const (
 	NoServiceRefused   = "refused"
@@ -128,6 +131,25 @@ func ipLiteral(host string) (netip.Addr, bool) {
 type Service struct {
 	Host, Scheme string
 	Port         int
+}
+
+// ParseService splits a web_service key (scheme://host[:port], an http or https
+// origin) into a Service, with the scheme's default port if none is given.
+func ParseService(origin string) (Service, bool) {
+	u, err := url.Parse(origin)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return Service{}, false
+	}
+	port := 80
+	if u.Scheme == "https" {
+		port = 443
+	}
+	if p := u.Port(); p != "" {
+		if port, err = strconv.Atoi(p); err != nil {
+			return Service{}, false
+		}
+	}
+	return Service{Host: strings.ToLower(u.Hostname()), Scheme: u.Scheme, Port: port}, true
 }
 
 // Request is a typed target request. It can only be built with Root, RootAt,

@@ -23,6 +23,7 @@ import (
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/engagement"
+	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/output"
@@ -33,6 +34,7 @@ import (
 	"github.com/rafaelh/recon/internal/stages/orgpivot"
 	"github.com/rafaelh/recon/internal/stages/ports"
 	"github.com/rafaelh/recon/internal/stages/providerranges"
+	"github.com/rafaelh/recon/internal/stages/risk"
 	"github.com/rafaelh/recon/internal/stages/shodan"
 	"github.com/rafaelh/recon/internal/stages/subdomains"
 	"github.com/rafaelh/recon/internal/stages/web"
@@ -68,7 +70,9 @@ func DefaultDeps() Deps {
 // then the stages derived from what the sources found. Passes repeat, so
 // late discoveries are picked up. The port sweep is last so that probing
 // hostnames on 80 and 443 does not wait for a sweep that can take hours; the
-// pass after it probes the ports it found (Spec 4 D1).
+// pass after it probes the ports it found (Spec 4 D1). Spec 5's email stage
+// follows the DNS stages; storage follows the crawl so references found in the
+// same pass are checked, and the Target stages run before the port sweep (Spec 5 D4).
 func defaultStages() []run.Stage {
 	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails
 	stages := []run.Stage{asn.New(), orgpivot.NewOrgASN(), orgpivot.NewCTOrg(), orgpivot.NewWhoisXML()}
@@ -76,7 +80,8 @@ func defaultStages() []run.Stage {
 	return append(stages,
 		shodan.New(), providerranges.New(),
 		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner(),
-		web.NewProbe(), web.NewCrawl(), ports.New())
+		risk.NewEmail(), web.NewProbe(), web.NewCrawl(),
+		risk.NewStorage(), risk.NewTakeover(), risk.NewSensitivePaths(), ports.New())
 }
 
 type options struct {
@@ -214,6 +219,8 @@ Configuration:
   RECON_RATE_PER_HOST. API keys are never flags: set keys.<source> in the config file or
   RECON_KEYS_<SOURCE> in the environment.
 
+Findings and their default severities (fixed in code, not configurable; the summary lists high and medium):
+` + findings.HelpTable() + `
 Stages accepted by --redo: ` + strings.Join(stageNames(stages), ", ") + "\n"
 }
 

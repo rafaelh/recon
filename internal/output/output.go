@@ -50,6 +50,20 @@ type Snapshot struct {
 	// Web decides WebVisible for Scope; Render makes one if it is nil. A caller
 	// that counts the same records passes its own, so each host is decided once.
 	Web *WebVisibility
+	// Storage maps a storage record key to whether a current reference attributes
+	// it and which scope inputs would have guessed its name (Spec 5 D9), as the
+	// findings package derives it.
+	Storage map[string]StorageAttr
+}
+
+// StorageAttr is the attribution of a storage record: whether a reference
+// attributes it, the inputs that would have guessed it, its public state ("yes",
+// "no" or "unknown") and, for an unattributed one, the severity it is listed with.
+type StorageAttr struct {
+	Attributed    bool
+	GeneratedFrom []string
+	Public        string
+	Severity      string
 }
 
 // File is a registry entry. CSV files get the columns Columns followed by
@@ -168,7 +182,8 @@ func csvSafe(s string) string {
 }
 
 // Default returns the registered files: Spec 1's scope, candidates and excluded,
-// then Spec 2's DNS files (D27), Spec 3's web files and Spec 4's open-ports.csv.
+// then Spec 2's DNS files (D27), Spec 3's web files, Spec 4's open-ports.csv and
+// Spec 5's email, storage and risk files.
 func Default() []File {
 	return []File{
 		{Name: "scope.csv", Format: CSV, Columns: []string{"type", "value", "source"}, Rows: scopeRows},
@@ -183,6 +198,14 @@ func Default() []File {
 		{Name: "web-services.csv", Format: CSV, Columns: webServiceColumns, Rows: webServiceRows},
 		{Name: "urls.csv", Format: CSV, Columns: []string{"url", "host", "status", "found_by"}, Rows: urlRows},
 		{Name: "open-ports.csv", Format: CSV, Columns: []string{"ip", "port", "banner", "hostnames"}, Rows: openPortRows},
+		{Name: "email-posture.csv", Format: CSV, Columns: emailPostureColumns, Rows: emailPostureRows},
+		{Name: "storage-unattributed.csv", Format: CSV, Columns: storageUnattributedColumns, Rows: storageUnattributedRows},
+		riskFile("risk-takeover.csv", "takeover", []string{"severity", "target", "type", "service", "cname", "detail"}),
+		riskFile("risk-storage.csv", "storage", []string{"severity", "provider", "name", "url", "exists", "public", "listable", "object_count", "first_keys", "referenced_by"}),
+		riskFile("risk-sensitive-paths.csv", "sensitive-paths", []string{"severity", "url", "path", "status", "size", "signature"}),
+		riskFile("risk-email.csv", "email", []string{"severity", "root", "type", "detail"}),
+		riskFile("risk-ports.csv", "ports", []string{"severity", "ip", "port", "banner", "hostnames"}),
+		riskFile("risk-certificates.csv", "certificates", []string{"severity", "url", "type", "tls_subject", "tls_issuer", "tls_expiry"}),
 	}
 }
 

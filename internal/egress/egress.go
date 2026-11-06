@@ -73,8 +73,9 @@ func (p *Policy) targetRefusal() (Refused, bool) {
 // Options configure an Egress. The test hooks (ResolverAddrs, SourceBaseURLs,
 // DialMap) redirect traffic without changing any policy logic.
 type Options struct {
-	ResolverAddrs  []string          // default: 1.1.1.1, 8.8.8.8, 9.9.9.9 on port 53
-	SourceBaseURLs map[string]string // source pattern -> base URL
+	ResolverAddrs []string // default: 1.1.1.1, 8.8.8.8, 9.9.9.9 on port 53
+	// SourceBaseURLs maps a source pattern, or an exact host (checked first), to a base URL.
+	SourceBaseURLs map[string]string
 	DialMap        map[string]string // "ip:port" -> "host:port" actually dialled
 
 	DNSTimeout, ConnectTimeout, BannerWait, HTTPTimeout time.Duration
@@ -190,9 +191,17 @@ func (e *Egress) sourceLimiter(pattern string) *rate.Limiter {
 // Clients returns the clients for a stage. Target clients are only given to
 // stages that contact target-owned systems.
 func (e *Egress) Clients(stage string, target bool, sources []string) Clients {
+	return e.ClientsWith(stage, target, sources, nil)
+}
+
+// ClientsWith is Clients for a stage with candidate-exempt sources: hosts
+// matching one of the exempt patterns skip the refusal of candidate hostnames
+// (they are provider endpoints that a redirect may have recorded as candidates).
+// An in-scope or excluded host is still refused.
+func (e *Egress) ClientsWith(stage string, target bool, sources, exempt []string) Clients {
 	c := Clients{
 		DNS:        &resolver{e: e},
-		ThirdParty: &thirdParty{e: e, stage: stage, sources: sources},
+		ThirdParty: &thirdParty{e: e, stage: stage, sources: sources, exempt: exempt},
 	}
 	if target {
 		c.HTTP = &targetHTTP{e: e}

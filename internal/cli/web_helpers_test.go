@@ -306,9 +306,12 @@ func insertBefore(stages []run.Stage, name string, s run.Stage) []run.Stage {
 	return append(slices.Clone(stages), s)
 }
 
-func newWeb(t *testing.T) *web {
+func newWeb(t *testing.T) *web { return newWebWith(t) }
+
+// newWebWith is newWeb with the named Spec 5 stages in the stage list.
+func newWebWith(t *testing.T, keep ...string) *web {
 	t.Helper()
-	w := newWorld(t)
+	w := newWorldWith(t, keep...)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

@@ -4,8 +4,12 @@
 package provider
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
+	"fmt"
 	"net/netip"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -81,19 +85,51 @@ func (x *Ranges) covering(a netip.Addr) []*Range {
 }
 
 // Result is what is known about an address. Evidence is "range" or "asn".
+// Class is "saas" for an address served by a third-party SaaS platform and
+// empty otherwise.
 type Result struct {
 	Known, Shared     bool
 	Provider, Service string
 	Evidence          string
+	Class             string
+}
+
+// ClassSaaS marks an entry or address served by a third-party SaaS platform.
+const ClassSaaS = "saas"
+
+// Entry is a matched CNAME entry of providers.yaml. NXDomain says a chain that
+// dangles into it can be claimed; Body, an RE2 regex, matches the page an
+// unclaimed resource serves.
+type Entry struct {
+	Match
+	Suffix, Class string
+	NXDomain      bool
+	Body          string
+	re            *regexp.Regexp
+}
+
+// BodyMatches reports whether body is what the entry's unclaimed resource serves.
+func (e Entry) BodyMatches(body []byte) bool { return e.re != nil && e.re.Match(body) }
+
+// Hash is a short stable identifier of everything about the entry that changes
+// what a check for it does, so an edited fingerprint is re-checked and others are not.
+func (e Entry) Hash() string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%v|%s", e.Suffix, e.Provider, e.Service, e.Class, e.NXDomain, e.Body)))
+	return hex.EncodeToString(sum[:4])
+}
+
+// addrRange is a static address range of a provider (a SaaS reached by apex A records).
+type addrRange struct {
+	prefix netip.Prefix
+	Match
+	class string
 }
 
 // DB is the parsed providers.yaml.
 type DB struct {
-	cnames []struct {
-		suffix string
-		Match
-	}
-	asns map[int]struct{ provider, class string }
+	cnames []Entry
+	asns   map[int]struct{ provider, class string }
+	ranges []addrRange
 }
 
 var (
@@ -116,10 +152,16 @@ func Default() *DB {
 // Parse reads a providers.yaml document.
 func Parse(b []byte) (*DB, error) {
 	var raw struct {
-		CNAME []struct{ Suffix, Provider, Service string }
-		ASN   []struct {
+		CNAME []struct {
+			Suffix, Provider, Service, Class, Body string
+			NXDomain                               bool `yaml:"nxdomain"`
+		}
+		ASN []struct {
 			ASN             int
 			Provider, Class string
+		}
+		Ranges []struct {
+			CIDR, Provider, Service, Class string
 		}
 	}
 	if err := yaml.Unmarshal(b, &raw); err != nil {
@@ -127,28 +169,55 @@ func Parse(b []byte) (*DB, error) {
 	}
 	db := &DB{asns: map[int]struct{ provider, class string }{}}
 	for _, c := range raw.CNAME {
-		db.cnames = append(db.cnames, struct {
-			suffix string
-			Match
-		}{strings.ToLower(c.Suffix), Match{c.Provider, c.Service}})
+		e := Entry{Match: Match{c.Provider, c.Service}, Suffix: strings.ToLower(c.Suffix), Class: c.Class, NXDomain: c.NXDomain, Body: c.Body}
+		if c.Body != "" {
+			re, err := regexp.Compile(c.Body)
+			if err != nil {
+				return nil, fmt.Errorf("cname %s: body %q: %w", c.Suffix, c.Body, err)
+			}
+			e.re = re
+		}
+		db.cnames = append(db.cnames, e)
 	}
 	// Longest suffix first, so a specific service wins over its provider's generic domain.
-	sort.SliceStable(db.cnames, func(i, j int) bool { return len(db.cnames[i].suffix) > len(db.cnames[j].suffix) })
+	sort.SliceStable(db.cnames, func(i, j int) bool { return len(db.cnames[i].Suffix) > len(db.cnames[j].Suffix) })
 	for _, a := range raw.ASN {
 		db.asns[a.ASN] = struct{ provider, class string }{a.Provider, a.Class}
+	}
+	for _, r := range raw.Ranges {
+		p, err := netip.ParsePrefix(r.CIDR)
+		if err != nil {
+			return nil, fmt.Errorf("range %q: %w", r.CIDR, err)
+		}
+		db.ranges = append(db.ranges, addrRange{prefix: p.Masked(), Match: Match{r.Provider, r.Service}, class: r.Class})
 	}
 	return db, nil
 }
 
 // CNAME returns the provider hosting a CNAME target, matching on label boundaries.
 func (db *DB) CNAME(target string) (Match, bool) {
+	e, ok := db.CNAMEEntry(target)
+	return e.Match, ok
+}
+
+// CNAMEEntry is CNAME with the whole matched entry.
+func (db *DB) CNAMEEntry(target string) (Entry, bool) {
 	t := strings.ToLower(strings.TrimSuffix(target, "."))
 	for _, c := range db.cnames {
-		if t == c.suffix || strings.HasSuffix(t, "."+c.suffix) {
-			return c.Match, true
+		if t == c.Suffix || strings.HasSuffix(t, "."+c.Suffix) {
+			return c, true
 		}
 	}
-	return Match{}, false
+	return Entry{}, false
+}
+
+func (db *DB) staticRange(a netip.Addr) (addrRange, bool) {
+	for _, r := range db.ranges {
+		if r.prefix.Contains(a) {
+			return r, true
+		}
+	}
+	return addrRange{}, false
 }
 
 // Classify says what is known about an address from the provider ranges and
@@ -182,9 +251,20 @@ func (db *DB) Classify(a netip.Addr, owner Owner, ranges *Ranges) Result {
 	case amazon:
 		return Result{Known: true, Shared: true, Provider: "aws", Evidence: "range"}
 	}
+	if r, ok := db.staticRange(a); ok {
+		res := Result{Known: true, Shared: true, Provider: r.Provider, Service: r.Service, Evidence: "range"}
+		if r.class == ClassSaaS {
+			res.Class = ClassSaaS
+		}
+		return res
+	}
 	if owner.Known {
 		if p, ok := db.asns[owner.ASN]; ok {
-			return Result{Known: true, Shared: true, Provider: p.provider, Evidence: "asn"}
+			res := Result{Known: true, Shared: true, Provider: p.provider, Evidence: "asn"}
+			if p.class == ClassSaaS {
+				res.Class = ClassSaaS
+			}
+			return res
 		}
 		return Result{Known: true}
 	}

@@ -58,6 +58,9 @@ type ProviderHost struct {
 	Evidence                    string // cname, range or asn
 	CNAME                       string // the matching chain target, for cname evidence
 	Resolves                    bool
+	// Entry is the matched providers.yaml entry of cname evidence (its
+	// fingerprint says whether the host can be claimed); zero for range and asn evidence.
+	Entry provider.Entry
 }
 
 // IPRow is one address in ips.csv.
@@ -124,7 +127,7 @@ func New(d Data, db *provider.DB) *Inventory {
 // chainProviders calls yield for each CNAME target on name's chain (up to 8
 // hops, following the first target) whose suffix matches a known provider,
 // until yield returns false.
-func (i *Inventory) chainProviders(name string, yield func(target string, m provider.Match) bool) {
+func (i *Inventory) chainProviders(name string, yield func(target string, e provider.Entry) bool) {
 	cur := name
 	for hop := 0; hop < 8; hop++ {
 		targets := i.cn[cur]
@@ -132,7 +135,7 @@ func (i *Inventory) chainProviders(name string, yield func(target string, m prov
 			return
 		}
 		for _, t := range targets {
-			if m, ok := i.db.CNAME(t); ok && !yield(t, m) {
+			if e, ok := i.db.CNAMEEntry(t); ok && !yield(t, e) {
 				return
 			}
 		}
@@ -142,8 +145,8 @@ func (i *Inventory) chainProviders(name string, yield func(target string, m prov
 
 // chainProvider returns the first provider whose suffix matches a CNAME target on name's chain.
 func (i *Inventory) chainProvider(name string) (m provider.Match, ok bool) {
-	i.chainProviders(name, func(_ string, pm provider.Match) bool {
-		m, ok = pm, true
+	i.chainProviders(name, func(_ string, e provider.Entry) bool {
+		m, ok = e.Match, true
 		return false
 	})
 	return m, ok
@@ -299,8 +302,8 @@ func (i *Inventory) ProviderHosts(sc *scope.Scope) []ProviderHost {
 				out = append(out, p)
 			}
 		}
-		i.chainProviders(n, func(t string, m provider.Match) bool {
-			add(ProviderHost{Hostname: n, Provider: m.Provider, Service: m.Service, Evidence: "cname", CNAME: t, Resolves: resolves})
+		i.chainProviders(n, func(t string, e provider.Entry) bool {
+			add(ProviderHost{Hostname: n, Provider: e.Provider, Service: e.Service, Evidence: "cname", CNAME: t, Resolves: resolves, Entry: e})
 			return true
 		})
 		for _, a := range i.addr[n] {
@@ -310,6 +313,31 @@ func (i *Inventory) ProviderHosts(sc *scope.Scope) []ProviderHost {
 		}
 	}
 	return out
+}
+
+// SaaSServed reports whether a host is served by a third-party SaaS platform:
+// a CNAME on its chain, the ASN of one of its addresses or an address range is
+// SaaS. host may be a name or an IP literal (such a service is judged by its
+// address alone).
+func (i *Inventory) SaaSServed(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	if a, err := netip.ParseAddr(host); err == nil && a.Zone() == "" {
+		return i.result(a).Class == provider.ClassSaaS
+	}
+	saas := false
+	i.chainProviders(host, func(_ string, e provider.Entry) bool {
+		saas = saas || e.Class == provider.ClassSaaS
+		return !saas
+	})
+	if saas {
+		return true
+	}
+	for _, a := range i.addr[host] {
+		if i.result(a).Class == provider.ClassSaaS {
+			return true
+		}
+	}
+	return false
 }
 
 // HostnamesByIP maps every known address to the sorted names, not excluded,

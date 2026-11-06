@@ -24,7 +24,7 @@ const (
 
 // ThirdPartyRequest is a request to a third-party source.
 type ThirdPartyRequest struct {
-	Method      string // GET or POST
+	Method      string // GET, HEAD or POST
 	URL         string // https URL whose host matches the calling stage's Sources()
 	Body        []byte
 	ContentType string
@@ -57,18 +57,39 @@ type thirdParty struct {
 	e       *Egress
 	stage   string
 	sources []string
+	// exempt are the source patterns whose hosts skip the candidate refusal.
+	exempt []string
 }
 
+// matchSource reports whether host is the source pattern: an exact host, "*.x"
+// (any name under x), or a pattern with one "*" label in the middle
+// ("s3.*.amazonaws.com"), which matches exactly one label of [a-z0-9-]+.
 func matchSource(pattern, host string) bool {
-	if rest, ok := strings.CutPrefix(pattern, "*."); ok {
+	if rest, ok := strings.CutPrefix(pattern, "*."); ok && !strings.Contains(rest, "*") {
 		return strings.HasSuffix(host, "."+rest)
 	}
-	return host == pattern
+	if !strings.Contains(pattern, "*") {
+		return host == pattern
+	}
+	pl, hl := strings.Split(pattern, "."), strings.Split(host, ".")
+	if len(pl) != len(hl) {
+		return false
+	}
+	for i, p := range pl {
+		if p == "*" {
+			if hl[i] == "" || strings.Trim(hl[i], "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+				return false
+			}
+		} else if p != hl[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *thirdParty) Do(ctx context.Context, r ThirdPartyRequest) (ThirdPartyResponse, error) {
 	e := t.e
-	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodHead {
 		return ThirdPartyResponse{}, fmt.Errorf("method %q is not permitted for third-party requests", r.Method)
 	}
 	u, err := url.Parse(r.URL)
@@ -95,11 +116,15 @@ func (t *thirdParty) Do(ctx context.Context, r ThirdPartyRequest) (ThirdPartyRes
 				return ThirdPartyResponse{}, fmt.Errorf("host %s is %s; third-party clients never contact it", host, c.Class)
 			}
 		}
-		if p.Candidates[host] {
+		if p.Candidates[host] && !t.candidateExempt(host) {
 			return ThirdPartyResponse{}, fmt.Errorf("host %s is a candidate; it is never contacted", host)
 		}
 	}
-	if base, ok := e.opts.SourceBaseURLs[pattern]; ok {
+	base, ok := e.opts.SourceBaseURLs[host]
+	if !ok {
+		base, ok = e.opts.SourceBaseURLs[pattern]
+	}
+	if ok {
 		b, err := url.Parse(base)
 		if err != nil {
 			return ThirdPartyResponse{}, err
@@ -164,6 +189,17 @@ func (t *thirdParty) Do(ctx context.Context, r ThirdPartyRequest) (ThirdPartyRes
 		data = data[:maxThirdPartyBody]
 	}
 	return ThirdPartyResponse{Status: resp.StatusCode, Header: map[string][]string(resp.Header.Clone()), Body: data, Truncated: truncated}, nil
+}
+
+// candidateExempt reports whether host matches a pattern the stage declared as
+// a provider endpoint rather than a target system.
+func (t *thirdParty) candidateExempt(host string) bool {
+	for _, p := range t.exempt {
+		if matchSource(p, host) {
+			return true
+		}
+	}
+	return false
 }
 
 // scrub removes key values from an error, including the URL net/http embeds.

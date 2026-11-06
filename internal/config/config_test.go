@@ -157,7 +157,7 @@ func TestValidation(t *testing.T) {
 	clearEnv(t)
 	dir := t.TempDir()
 	relPaths := filepath.Join(dir, "rel.yaml")
-	if err := os.WriteFile(relPaths, []byte("- /ok\n- path: admin/.env\n"), 0o600); err != nil {
+	if err := os.WriteFile(relPaths, []byte("- path: /ok\n  signature: x\n- path: admin/.env\n  signature: x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cases := []struct {

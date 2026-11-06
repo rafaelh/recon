@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/engagement"
 	"github.com/rafaelh/recon/internal/fault"
+	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/kinds"
@@ -86,6 +88,16 @@ type Runner struct {
 	aborted map[string]bool
 
 	guarded sync.Map // value+"\x00"+reason already sent to the guard pseudo-stage
+
+	derivedSig  string                        // what the findings were last derived from (see deriveFindings)
+	attribution map[string]output.StorageAttr // the storage attribution of that derivation
+	evidence    map[string]evidenceCache      // the records Derive read, by kind
+}
+
+// evidenceCache holds the records of a kind as of store KindVersion ver.
+type evidenceCache struct {
+	ver  uint64
+	recs []store.Record
 }
 
 type stageStats struct{ attempted, failed int }
@@ -183,6 +195,11 @@ func (r *Runner) passes(ctx context.Context) (int, error) {
 				if err := r.buildScope(); err != nil {
 					return exitFor(err), err
 				}
+				// Spec 5 D1: findings follow every stage that did work, so a finding's
+				// found line is printed as soon as its evidence is stored.
+				if err := r.deriveFindings(); err != nil {
+					return ExitFatal, err
+				}
 			}
 		}
 		rendered, err := r.render()
@@ -268,9 +285,13 @@ func (r *Runner) buildScope() error {
 			cands[n] = true
 		}
 	}
+	var sensitivePaths []string // egress addresses an entry by its index
+	for _, e := range r.cfg.Settings.SensitivePathEntries {
+		sensitivePaths = append(sensitivePaths, e.Path)
+	}
 	r.cfg.Egress.SetPolicy(&egress.Policy{
 		Scope: sc, Ack: eng.Acked(), Passive: r.cfg.Passive,
-		Ports: r.cfg.Settings.Ports, SensitivePaths: r.cfg.Settings.SensitivePathList,
+		Ports: r.cfg.Settings.Ports, SensitivePaths: sensitivePaths,
 		Resolutions: res, Candidates: cands,
 		Shared:       inv.Shared,
 		OwnerUnknown: func(a netip.Addr) bool { return !inv.OwnerKnown(a, sc) },
@@ -392,7 +413,11 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 	pend, _ := r.st.PendingRedo()
 	redoPending := slices.Contains(pend, name)
 	failedSet := r.failedSet(name)
-	clients := r.cfg.Egress.Clients(name, s.Contact() == Target, s.Sources())
+	var exempt []string
+	if ce, ok := s.(CandidateExempt); ok {
+		exempt = ce.CandidateExemptSources()
+	}
+	clients := r.cfg.Egress.ClientsWith(name, s.Contact() == Target, s.Sources(), exempt)
 	view := View{r: r, sc: r.sc.Load(), inv: r.inv.Load(), cache: &recordCache{m: map[string][]store.Record{}}}
 
 	workers := r.cfg.Settings.Concurrency
@@ -525,6 +550,22 @@ produce:
 		}
 		if err := r.st.FinishRedo(name, all); err != nil {
 			return n, err
+		}
+	}
+	// Only completed checks have observations, so there is nothing to retire
+	// unless one of them was not yielded this pass.
+	if _, ok := s.(Retiring); ok && !enumFailed {
+		unlisted := false
+		for k := range done {
+			if _, ok := all[k]; !ok {
+				unlisted = true
+				break
+			}
+		}
+		if unlisted {
+			if err := r.st.Retire(name, all); err != nil {
+				return n, err
+			}
 		}
 	}
 	return n, nil
@@ -685,19 +726,17 @@ func (r *Runner) render() (output.Snapshot, error) {
 	if err := r.st.Flush(); err != nil {
 		return output.Snapshot{}, err
 	}
+	// Findings are derived before the files are written on every path that renders,
+	// including an interrupt, so the files and the totals never lag the evidence.
+	if err := r.deriveFindings(); err != nil {
+		return output.Snapshot{}, err
+	}
 	eng := r.cfg.Engagement
 	inputs, err := r.st.Inputs()
 	if err != nil {
 		return output.Snapshot{}, err
 	}
 	snap := output.Snapshot{Today: r.today(), Inputs: inputs, Records: map[string][]store.Record{}, Scope: r.sc.Load(), Inv: r.inv.Load()}
-	if snap.Scope == nil {
-		snap.Scope = scope.New(scope.Config{})
-	}
-	if snap.Inv == nil {
-		snap.Inv = inventory.New(inventory.Data{}, provider.Default())
-	}
-	snap.Web = output.NewWebVisibility(snap.Scope)
 	for _, k := range r.cfg.Kinds.All() {
 		recs, err := r.st.Records(k.Name, r.order)
 		if err != nil {
@@ -705,10 +744,87 @@ func (r *Runner) render() (output.Snapshot, error) {
 		}
 		snap.Records[k.Name] = recs
 	}
+	snap.Storage = r.attribution // computed with the findings, from the same evidence
+	if snap.Scope == nil {
+		snap.Scope = scope.New(scope.Config{})
+	}
+	if snap.Inv == nil {
+		snap.Inv = inventory.New(inventory.Data{}, provider.Default())
+	}
+	snap.Web = output.NewWebVisibility(snap.Scope)
 	if snap.ASNNetblocks, err = r.asnNetblocks(r.inputs); err != nil {
 		return output.Snapshot{}, err
 	}
 	return snap, output.Render(eng.Dir(), r.cfg.Files, snap)
+}
+
+// findingsInput is what findings are derived from, with records read from
+// recs (by kind), or nil if the scope has not been built yet.
+func (r *Runner) findingsInput(recs map[string][]store.Record) *findings.Input {
+	sc, inv := r.sc.Load(), r.inv.Load()
+	if sc == nil || inv == nil {
+		return nil
+	}
+	return &findings.Input{Scope: sc, Inv: inv, Settings: r.cfg.Settings, Today: r.today(),
+		Records: recs, Roots: r.inputs.Roots, Orgs: r.inputs.Orgs}
+}
+
+// deriveFindings derives the findings from the evidence and stores them as
+// the "finding" records of the pseudo-stage "findings", its single check key
+// "derived", like guard does. A finding no longer derived loses its only
+// observation, so it becomes not current and keeps its first_seen; a new one
+// is printed once by the store's OnNew callback.
+func (r *Runner) deriveFindings() error {
+	// Nothing Derive reads has changed since the last derivation (a derivation
+	// bumps only "finding"), so the findings are already current.
+	sig := r.derivationSignature()
+	if r.sc.Load() == nil || sig == r.derivedSig {
+		return nil
+	}
+	// Only the kinds that changed since the last derivation are read again. The
+	// version is read first, so a commit racing the read is re-read next time.
+	if r.evidence == nil {
+		r.evidence = map[string]evidenceCache{}
+	}
+	recs := map[string][]store.Record{}
+	for _, kind := range findings.Kinds {
+		ver := r.st.KindVersion(kind)
+		c, ok := r.evidence[kind]
+		if !ok || c.ver != ver {
+			list, err := r.st.Records(kind, r.order)
+			if err != nil {
+				return err
+			}
+			c = evidenceCache{ver: ver, recs: list}
+			r.evidence[kind] = c
+		}
+		recs[kind] = c.recs
+	}
+	fs, attribution := findings.DeriveAll(*r.findingsInput(recs))
+	obs := make([]store.Obs, len(fs))
+	for i, f := range fs {
+		obs[i] = store.Obs{Kind: "finding", Key: f.Key(), Attrs: f.Attrs}
+	}
+	r.st.Complete("findings", "derived", obs)
+	if err := r.st.Flush(); err != nil {
+		return err
+	}
+	r.derivedSig, r.attribution = sig, attribution
+	return nil
+}
+
+// derivationSignature changes whenever a record of any kind but "finding", the
+// date or the engagement's inputs change. The Scope and Inventory are built
+// from nothing else, and the settings are fixed for the Runner's life.
+func (r *Runner) derivationSignature() string {
+	var b strings.Builder
+	for _, k := range r.cfg.Kinds.All() {
+		if k.Name != "finding" {
+			fmt.Fprintf(&b, "%s=%d;", k.Name, r.st.KindVersion(k.Name))
+		}
+	}
+	fmt.Fprintf(&b, "%s;%v", r.today(), r.inputs)
+	return b.String()
 }
 
 // currentRecords returns the current records of a kind.

@@ -159,7 +159,7 @@ func TestDefaultRegistry(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(names, ",") != "scope.csv,candidates.csv,excluded.csv,subdomains.txt,resolutions.csv,unresolved.txt,wildcard-excluded.txt,ips.csv,provider-hosts.csv,web-services.csv,urls.csv,open-ports.csv" {
+	if strings.Join(names, ",") != "scope.csv,candidates.csv,excluded.csv,subdomains.txt,resolutions.csv,unresolved.txt,wildcard-excluded.txt,ips.csv,provider-hosts.csv,web-services.csv,urls.csv,open-ports.csv,email-posture.csv,storage-unattributed.csv,risk-takeover.csv,risk-storage.csv,risk-sensitive-paths.csv,risk-email.csv,risk-ports.csv,risk-certificates.csv" {
 		t.Errorf("default files = %v", names)
 	}
 }

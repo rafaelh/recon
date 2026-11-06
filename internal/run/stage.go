@@ -10,8 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rafaelh/recon/internal/cloudstorage"
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/scope"
@@ -82,6 +84,23 @@ type Stage interface {
 // workers from Settings.Concurrency (the ports stage, whose checks are slow).
 type WorkerCounter interface {
 	Workers(config.Settings) int
+}
+
+// CandidateExempt is implemented by a stage whose third-party sources include
+// provider endpoints that a redirect may have recorded as candidate hostnames
+// (Azure storage accounts). Hosts matching these source patterns skip only the
+// refusal of candidates; an in-scope or excluded host is still refused.
+type CandidateExempt interface {
+	CandidateExemptSources() []string
+}
+
+// Retiring is implemented by a stage whose check keys carry a hash of the
+// entry a check applies (a fingerprint, a sensitive-path signature, the DKIM
+// selector list). After every pass that enumerated cleanly, the runner retires
+// its completed checks that it no longer yields (Store.Retire): evidence from a
+// superseded check stops being current instead of outliving the edit.
+type Retiring interface {
+	RetiresUnlistedChecks()
 }
 
 // recordCache holds the records a View has read, for one stage pass (D28).
@@ -173,6 +192,18 @@ func (v View) ProbeHostnames() []string { return v.inv.ProbeHostnames(v.sc) }
 // ProviderHosts are the in-scope names on shared provider infrastructure, with
 // Resolves=false for chains that dangle. Spec 5's takeover checks read it.
 func (v View) ProviderHosts() []inventory.ProviderHost { return v.inv.ProviderHosts(v.sc) }
+
+// SaaSServed reports whether a host (a name or an IP literal) is served by a
+// third-party SaaS platform, by CNAME chain, address ASN or address range.
+func (v View) SaaSServed(host string) bool { return v.inv.SaaSServed(host) }
+
+// StorageRefs are the buckets and containers in-scope names and pages point at,
+// sorted. A bucket with a reference is attributed.
+func (v View) StorageRefs() []cloudstorage.Reference {
+	return findings.References(findings.Input{Scope: v.sc, Inv: v.inv, Records: map[string][]store.Record{
+		"resolution": v.Records("resolution"), "storage_ref": v.Records("storage_ref"),
+	}})
+}
 
 // Seeds are the hostnames the generator stage derives names from (D14): never
 // names only the generator itself observed.
