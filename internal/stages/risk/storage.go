@@ -13,6 +13,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/cloudstorage"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -95,7 +96,7 @@ func (*Storage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 
 		// Containers of Azure accounts known to exist: the fixed list, and every one a reference names.
 		var accounts []string
-		for _, rec := range v.Records("storage_account") {
+		for _, rec := range v.Records(kinds.StorageAccount) {
 			if ok, _ := rec.Attrs["exists"].(bool); ok {
 				accounts = append(accounts, rec.Key)
 			}
@@ -117,7 +118,7 @@ func (*Storage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 		// One HEAD for the first listed key and for every referenced object of a bucket that exists.
 		existing := map[string]storageInput{} // object inputs without the object
 		objs := map[string]storageInput{}
-		for _, rec := range v.Records("storage") {
+		for _, rec := range v.Records(kinds.Storage) {
 			if ok, _ := rec.Attrs["exists"].(bool); !ok {
 				continue
 			}

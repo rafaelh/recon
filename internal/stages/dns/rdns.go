@@ -9,6 +9,7 @@ import (
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -30,7 +31,7 @@ func (*RDNS) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error]
 			}
 		}
 		var found []string
-		for _, rec := range v.Records("ip") {
+		for _, rec := range v.Records(kinds.IP) {
 			if a, err := netip.ParseAddr(rec.Key); err == nil && !a.Unmap().Is4() && sc.InScopeIP(a) {
 				found = append(found, a.String())
 			}
@@ -63,10 +64,9 @@ func (*RDNS) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obse
 		}
 		seen[host] = true
 		obs = append(obs,
-			run.Observation{Kind: "hostname", Key: host},
-			run.Observation{Kind: "ip", Key: addr.String()},
-			run.Observation{Kind: "ip_hostname", Key: addr.String() + "|" + host,
-				Attrs: map[string]any{"ip": addr.String(), "hostname": host, "source": "rdns"}})
+			kinds.Hostname.Obs(host, kinds.HostnameAttrs{}),
+			kinds.IP.Obs(addr.String()),
+			kinds.IPHostname.Obs(addr.String()+"|"+host, kinds.IPHostnameAttrs{IP: addr.String(), Hostname: host, Source: "rdns"}))
 	}
 	return obs, nil
 }

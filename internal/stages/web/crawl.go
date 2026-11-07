@@ -11,6 +11,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/cloudstorage"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/scope"
 )
@@ -52,7 +53,7 @@ type crawlInput struct {
 func (*Crawl) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		set := v.Settings().Crawl
-		for _, rec := range v.Records("web_service") { // in key order
+		for _, rec := range v.Records(kinds.WebService) { // in key order
 			svc, ok := egress.ParseService(rec.Key)
 			if !ok || !v.Scope().WebHostInScope(svc.Host) {
 				continue
@@ -293,7 +294,7 @@ func (c *crawler) observations() []run.Observation {
 		out = append(out, run.Observation{Kind: "url", Key: u.url, Attrs: attrs})
 	}
 	for _, h := range slices.Sorted(maps.Keys(c.hosts)) {
-		out = append(out, run.Observation{Kind: "hostname", Key: h})
+		out = append(out, kinds.Hostname.Obs(h, kinds.HostnameAttrs{}))
 	}
 	for _, k := range c.storageKeys {
 		out = append(out, storageObservation(*c.storage[k]))

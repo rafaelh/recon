@@ -7,6 +7,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/inventory"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -46,7 +47,7 @@ func (*Takeover) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, er
 		if len(byHost) == 0 {
 			return
 		}
-		for _, rec := range v.Records("web_service") {
+		for _, rec := range v.Records(kinds.WebService) {
 			svc, ok := egress.ParseService(rec.Key)
 			if !ok || !v.Scope().WebHostInScope(svc.Host) {
 				continue

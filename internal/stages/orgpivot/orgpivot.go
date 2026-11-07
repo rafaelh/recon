@@ -15,6 +15,7 @@ import (
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
 )
@@ -57,7 +58,7 @@ func rootObs(names []string) []run.Observation {
 			continue
 		}
 		seen[root] = true
-		obs = append(obs, run.Observation{Kind: "root", Key: root})
+		obs = append(obs, kinds.Root.Obs(root))
 	}
 	return obs
 }
@@ -213,7 +214,7 @@ func (*OrgASN) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Ob
 		}
 		for _, p := range ap.Data.Prefixes {
 			if p.Prefix = strings.TrimSpace(p.Prefix); p.Prefix != "" {
-				obs = append(obs, run.Observation{Kind: "netblock", Key: p.Prefix, Attrs: map[string]any{"asn": asn, "org": c.Key}})
+				obs = append(obs, kinds.Netblock.Obs(p.Prefix, kinds.NetblockAttrs{ASN: asn, Org: c.Key}))
 			}
 		}
 	}

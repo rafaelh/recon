@@ -13,6 +13,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -76,7 +77,7 @@ func eligible(ctx context.Context, v run.View) []netip.Addr {
 		}
 	}
 	var found []netip.Addr
-	for _, rec := range v.Records("ip") {
+	for _, rec := range v.Records(kinds.IP) {
 		a, err := netip.ParseAddr(rec.Key)
 		if err != nil {
 			continue

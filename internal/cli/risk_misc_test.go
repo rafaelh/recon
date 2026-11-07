@@ -15,6 +15,7 @@ import (
 	"github.com/rafaelh/recon/internal/cli"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/findings"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/testkit"
 )
@@ -366,7 +367,7 @@ func TestRiskD1_DerivedAfterEachStage(t *testing.T) {
 	later := &testkit.Stage{StageName: "later", Kind: run.ThirdParty,
 		ChecksFn: func(v run.View) []run.Check {
 			if seen.Load() < 0 {
-				seen.Store(int32(len(v.Records("finding"))))
+				seen.Store(int32(len(v.Records(kinds.Finding))))
 			}
 			return nil
 		}}

@@ -13,6 +13,7 @@ import (
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/scope"
 )
@@ -49,8 +50,8 @@ func (*Wildcard) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, er
 		for _, r := range v.Inputs().Roots {
 			zones[input.NormaliseHost(r)] = true
 		}
-		for _, rec := range v.Records("resolution") {
-			name := input.NormaliseHost(rec.Str("name"))
+		for _, rec := range v.Records(kinds.Resolution) {
+			name := input.NormaliseHost(kinds.Resolution.Attrs(rec).Name)
 			if v.Scope().ClassifyHost(name).Class != scope.InScope {
 				continue
 			}
@@ -104,5 +105,5 @@ func (w *Wildcard) Run(ctx context.Context, c run.Check, e egress.Clients) ([]ru
 	if !answered {
 		return nil, servfail
 	}
-	return []run.Observation{{Kind: "wildcard", Key: zone, Attrs: map[string]any{"addrs": sortedStrings(addrs), "cname": cname}}}, nil
+	return []run.Observation{kinds.Wildcard.Obs(zone, kinds.WildcardAttrs{Addrs: sortedStrings(addrs), CNAME: cname})}, nil
 }

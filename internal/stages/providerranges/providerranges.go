@@ -11,6 +11,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
 )
@@ -42,8 +43,7 @@ func rangeObs(provider, prefix, service, region string) (run.Observation, bool) 
 		return run.Observation{}, false
 	}
 	key := provider + "|" + p.String() + "|" + service
-	return run.Observation{Kind: "provider_range", Key: key, Attrs: map[string]any{
-		"provider": provider, "prefix": p.String(), "service": service, "region": region}}, true
+	return kinds.ProviderRange.Obs(key, kinds.ProviderRangeAttrs{Provider: provider, Prefix: p.String(), Service: service, Region: region}), true
 }
 
 // Run downloads and parses one provider's ranges. A body that is cut off is an error.

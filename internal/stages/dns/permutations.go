@@ -8,6 +8,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -84,7 +85,7 @@ func (p *Permutations) Run(ctx context.Context, c run.Check, e egress.Clients) (
 		if len(res.CNAMEs) == 0 && (res.RCode == egress.RCodeNXDomain || res.RCode == egress.RCodeServFail) {
 			continue
 		}
-		obs = append(obs, run.Observation{Kind: "hostname", Key: n})
+		obs = append(obs, kinds.Hostname.Obs(n, kinds.HostnameAttrs{}))
 	}
 	return obs, nil
 }

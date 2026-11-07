@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -69,7 +70,7 @@ func (*Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 	var obs []run.Observation
 	for _, p := range body.Data.Prefixes {
 		if p.Prefix = strings.TrimSpace(p.Prefix); p.Prefix != "" {
-			obs = append(obs, run.Observation{Kind: "netblock", Key: p.Prefix, Attrs: map[string]any{"asn": asn}})
+			obs = append(obs, kinds.Netblock.Obs(p.Prefix, kinds.NetblockAttrs{ASN: asn}))
 		}
 	}
 	return obs, nil

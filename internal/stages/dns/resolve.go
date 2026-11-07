@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -46,8 +47,8 @@ func (*Resolve) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.O
 		for _, l := range res.CNAMEs {
 			if !links[l] {
 				links[l] = true
-				obs = append(obs, run.Observation{Kind: "resolution", Key: l.Name + "|CNAME|" + l.Target,
-					Attrs: map[string]any{"name": l.Name, "type": "CNAME", "value": l.Target}})
+				obs = append(obs, kinds.Resolution.Obs(l.Name+"|CNAME|"+l.Target,
+					kinds.ResolutionAttrs{Name: l.Name, Type: "CNAME", Value: l.Target}))
 			}
 		}
 	}
@@ -63,13 +64,12 @@ func (*Resolve) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.O
 				typ = "A"
 			}
 			obs = append(obs,
-				run.Observation{Kind: "resolution", Key: name + "|" + typ + "|" + addr.String(),
-					Attrs: map[string]any{"name": name, "type": typ, "value": addr.String()}},
-				run.Observation{Kind: "ip", Key: addr.String()})
+				kinds.Resolution.Obs(name+"|"+typ+"|"+addr.String(), kinds.ResolutionAttrs{Name: name, Type: typ, Value: addr.String()}),
+				kinds.IP.Obs(addr.String()))
 		}
 	}
 	if len(seen) == 0 {
-		obs = append(obs, run.Observation{Kind: "unresolved", Key: name, Attrs: map[string]any{"rcode": rcodeName(a, aaaa)}})
+		obs = append(obs, kinds.Unresolved.Obs(name, kinds.UnresolvedAttrs{RCode: rcodeName(a, aaaa)}))
 	}
 	return obs, nil
 }

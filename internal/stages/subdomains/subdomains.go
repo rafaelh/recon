@@ -18,6 +18,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
 	"github.com/rafaelh/recon/internal/stages/web"
@@ -30,7 +31,7 @@ const maxPages = 30
 // urls are the archive URLs of a source that has them (Spec 3 D16).
 type result struct {
 	names []string
-	attrs map[string]any
+	attrs kinds.HostnameAttrs
 	urls  []string
 }
 
@@ -103,7 +104,7 @@ func (s *Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.O
 			continue
 		}
 		seen[n] = true
-		obs = append(obs, run.Observation{Kind: "hostname", Key: n, Attrs: res.attrs})
+		obs = append(obs, kinds.Hostname.Obs(n, res.attrs))
 	}
 	sort.Slice(obs, func(i, j int) bool { return obs[i].Key < obs[j].Key })
 	for _, u := range pickURLs(res.urls, root, in.maxURLs) {
@@ -292,7 +293,7 @@ func commoncrawl(ctx context.Context, root string, c egress.Clients) (result, er
 			}
 		}
 	}
-	return result{names: names, urls: urls, attrs: map[string]any{"index": id}}, nil
+	return result{names: names, urls: urls, attrs: kinds.HostnameAttrs{Index: id}}, nil
 }
 
 // --- VirusTotal ---

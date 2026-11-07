@@ -9,9 +9,11 @@ import (
 
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/egress/egresstest"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/stages/dns"
+	"github.com/rafaelh/recon/internal/store"
 )
 
 func clients(t *testing.T, d *egresstest.DNS) egress.Clients {
@@ -49,7 +51,7 @@ func TestDefaultWildcardLabelsAreRandom16(t *testing.T) {
 			t.Errorf("probe name %q is not a random 16-char label", n)
 		}
 	}
-	if addrs, _ := obs[0].Attrs["addrs"].([]string); len(addrs) != 1 || addrs[0] != "203.0.113.1" {
+	if addrs := kinds.Wildcard.Attrs(store.Record{Attrs: obs[0].Attrs}).Addrs; len(addrs) != 1 || addrs[0] != "203.0.113.1" {
 		t.Errorf("attrs = %v", obs[0].Attrs)
 	}
 }

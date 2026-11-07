@@ -30,7 +30,7 @@ type Input struct {
 	Inv         *inventory.Inventory
 	Settings    config.Settings
 	Today       string // YYYY-MM-DD
-	Records     func(kind string) []store.Record
+	Records     func(kinds.Named) []store.Record
 	Roots, Orgs []string
 }
 
@@ -93,9 +93,9 @@ func newDeriver(in Input) *deriver {
 }
 
 // current is the current records of a kind.
-func (d *deriver) current(kind string) []store.Record {
+func (d *deriver) current(k kinds.Named) []store.Record {
 	var out []store.Record
-	for _, r := range d.in.Records(kind) {
+	for _, r := range d.in.Records(k) {
 		if r.Current {
 			out = append(out, r)
 		}
@@ -109,7 +109,7 @@ func (d *deriver) services() map[string]store.Record {
 		return d.svcs
 	}
 	d.svcs = map[string]store.Record{}
-	for _, r := range d.current("web_service") {
+	for _, r := range d.current(kinds.WebService) {
 		if d.vis.Shown("web_service", r) {
 			d.svcs[r.Key] = r
 		}
@@ -159,7 +159,7 @@ func (d *deriver) sensitivePaths() []Finding {
 		}
 	}
 	var out []Finding
-	for _, r := range d.current("sensitive_hit") {
+	for _, r := range d.current(kinds.SensitiveHit) {
 		if _, ok := svcs[r.Str("service")]; !ok {
 			continue
 		}
@@ -175,7 +175,7 @@ func (d *deriver) sensitivePaths() []Finding {
 
 func (d *deriver) email() []Finding {
 	var out []Finding
-	for _, r := range d.current("email_posture") {
+	for _, r := range d.current(kinds.EmailPosture) {
 		root := r.Key
 		if d.in.Scope.ClassifyHost(root).Class != scope.InScope {
 			continue
@@ -222,7 +222,7 @@ func (d *deriver) ports() []Finding {
 	}
 	var hostnames map[netip.Addr][]string
 	var out []Finding
-	for _, r := range d.current("open_port") {
+	for _, r := range d.current(kinds.OpenPort) {
 		ap, err := netip.ParseAddrPort(r.Key)
 		if err != nil || !risky[int(ap.Port())] || !d.vis.Shown("open_port", r) {
 			continue
@@ -246,7 +246,7 @@ func (d *deriver) certificates() []Finding {
 	}
 	horizon := today.AddDate(0, 0, d.in.Settings.CertExpiryDays).Format(time.DateOnly)
 	var out []Finding
-	for _, r := range d.current("web_service") {
+	for _, r := range d.current(kinds.WebService) {
 		if !d.vis.Shown("web_service", r) {
 			continue
 		}

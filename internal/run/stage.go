@@ -16,6 +16,7 @@ import (
 	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/inventory"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
 )
@@ -39,13 +40,11 @@ type Check struct {
 	Input any
 }
 
-// Observation is a fact a check found. Discovered entities are observations of
-// kind hostname, root or netblock; scope classifies them (in scope, candidate
-// or excluded), so stages never implement candidate or exclusion handling.
-type Observation struct {
-	Kind, Key string
-	Attrs     map[string]any
-}
+// Observation is a fact a check found, made with a kind's handle (for example
+// kinds.Resolution.Obs). Discovered entities are observations of kind
+// hostname, root or netblock; scope classifies them (in scope, candidate or
+// excluded), so stages never implement candidate or exclusion handling.
+type Observation = store.Obs
 
 // ErrAbortStage, wrapped in a check's error, fails that check and every
 // remaining check of the stage for this run without sending them.
@@ -133,8 +132,9 @@ func (v View) Settings() config.Settings { return v.r.cfg.Settings }
 // Inputs are the engagement's stored scope inputs and exclusions.
 func (v View) Inputs() input.Parsed { return v.r.inputs }
 
-// Records returns the current records of a kind.
-func (v View) Records(kind string) []store.Record {
+// Records returns the current records of a kind; decode them with its handle.
+func (v View) Records(k kinds.Named) []store.Record {
+	kind := k.Name()
 	if v.cache != nil {
 		v.cache.mu.Lock()
 		defer v.cache.mu.Unlock()
@@ -142,7 +142,7 @@ func (v View) Records(kind string) []store.Record {
 			return recs
 		}
 	}
-	out, err := v.r.currentRecords(kind)
+	out, err := v.r.currentRecords(k)
 	if err != nil {
 		v.r.warn("reading %s records: %v", kind, err)
 		return nil
@@ -157,7 +157,7 @@ func (v View) Records(kind string) []store.Record {
 // not wildcard-aware: use ProbeHostnames for anything that contacts a name.
 func (v View) InScopeHostnames() []string {
 	var out []string
-	for _, rec := range v.Records("hostname") {
+	for _, rec := range v.Records(kinds.Hostname) {
 		if v.sc.ClassifyHost(rec.Key).Class == scope.InScope {
 			out = append(out, rec.Key)
 		}
@@ -175,7 +175,7 @@ func (v View) ResolvableHostnames() []string {
 			set[input.NormaliseHost(h)] = true
 		}
 	}
-	for _, rec := range v.Records("hostname") {
+	for _, rec := range v.Records(kinds.Hostname) {
 		add(rec.Key)
 	}
 	for _, root := range v.Inputs().Roots {
@@ -218,7 +218,7 @@ type OpenPort struct {
 // A record whose key is not an address and port is skipped.
 func (v View) OpenPorts() []OpenPort {
 	var out []OpenPort
-	for _, rec := range v.Records("open_port") {
+	for _, rec := range v.Records(kinds.OpenPort) {
 		if ap, err := netip.ParseAddrPort(rec.Key); err == nil {
 			out = append(out, OpenPort{Addr: netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()), Banner: rec.Str("banner")})
 		}

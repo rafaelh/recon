@@ -13,6 +13,7 @@ import (
 	"github.com/rafaelh/recon/internal/cloudstorage"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -94,7 +95,7 @@ func (*Probe) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 		}
 		// A representative already answered on that port, on whichever address.
 		reps := map[string]bool{}
-		ports := v.Records("http_port")
+		ports := v.Records(kinds.HTTPPort)
 		for _, rec := range ports {
 			if ap, err := netip.ParseAddrPort(rec.Key); err == nil {
 				reps[fmt.Sprintf("%s:%d", rec.Str("host"), ap.Port())] = true
@@ -220,7 +221,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		hopAttrs := map[string]any{"url": target, "host": host}
 		obs.add(run.Observation{Kind: "url", Key: target, Attrs: hopAttrs})
 		if d, ok := otherHost(host, in.host); ok {
-			obs.add(run.Observation{Kind: "hostname", Key: d})
+			obs.add(kinds.Hostname.Obs(d, kinds.HostnameAttrs{}))
 		}
 		// A redirect to a storage URL is a reference, and a browser follows it (Spec 5 D8).
 		if ref, ok := cloudstorage.ParseRef(target); ok {
@@ -278,7 +279,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		attrs["tls_self_signed"] = selfSigned(leaf)
 		for _, name := range leaf.DNSNames {
 			if d, ok := sanHost(name); ok && d != strings.ToLower(in.host) {
-				obs.add(run.Observation{Kind: "hostname", Key: d})
+				obs.add(kinds.Hostname.Obs(d, kinds.HostnameAttrs{}))
 			}
 		}
 	}

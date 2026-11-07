@@ -266,7 +266,7 @@ func (r *Runner) buildScope() error {
 	r.vis.Store(kinds.NewVisibility(sc, inv))
 
 	cands := map[string]bool{}
-	roots, err := r.currentRecords("root")
+	roots, err := r.currentRecords(kinds.Root)
 	if err != nil {
 		return err
 	}
@@ -315,13 +315,13 @@ func (r *Runner) guard(value, reason string) {
 	if _, seen := r.guarded.LoadOrStore(value+"\x00"+reason, struct{}{}); seen {
 		return
 	}
-	r.st.Complete("guard", value, []store.Obs{{Kind: "excluded", Key: value, Attrs: map[string]any{"reason": reason}}})
+	r.st.Complete("guard", value, []store.Obs{kinds.ExcludedKind.Obs(value, kinds.ExcludedAttrs{Reason: reason})})
 }
 
 // asnNetblocks maps each current netblock observed by the asn stage under a
 // check for an input ASN to that ASN. It never depends on a mutable attribute.
 func (r *Runner) asnNetblocks(in input.Parsed) (map[string]string, error) {
-	rows, err := r.st.Observations("netblock", "asn")
+	rows, err := r.st.Observations(kinds.Netblock.Name(), "asn")
 	if err != nil {
 		return nil, err
 	}
@@ -457,7 +457,7 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 					r.failCheck(name, c.Key, err.Error())
 					continue
 				}
-				r.st.Complete(name, c.Key, toStoreObs(obs))
+				r.st.Complete(name, c.Key, obs)
 			}
 		}()
 	}
@@ -578,14 +578,6 @@ func (r *Runner) failCheck(stage, key, msg string) {
 	r.warn("%s check %s failed: %s", stage, key, msg)
 }
 
-func toStoreObs(obs []Observation) []store.Obs {
-	out := make([]store.Obs, len(obs))
-	for i, o := range obs {
-		out[i] = store.Obs{Kind: o.Kind, Key: o.Key, Attrs: o.Attrs}
-	}
-	return out
-}
-
 // emitCounts emits the category counts that changed. They are counted from the
 // snapshot render wrote the files from, with its Visibility, so the totals match
 // the files' rows (Spec 3 D17).
@@ -609,7 +601,7 @@ func (r *Runner) emitSummary() {
 		}
 	}
 	r.mu.Unlock()
-	recs, _ := r.st.Records("finding", r.order)
+	recs, _ := r.st.Records(kinds.Finding.Name(), r.order)
 	listed := []map[string]any{}
 	for _, f := range findings.Headline(recs) {
 		listed = append(listed, map[string]any{"category": f.Category, "severity": f.Severity, "target": f.Target, "detail": f.Detail})
@@ -624,7 +616,7 @@ func (r *Runner) onNewRecord(kind, key string, attrs map[string]any) {
 	}
 	k, _ := kinds.Get(kind)
 	f := map[string]any{"category": k.Singular, "value": key}
-	if kind == "finding" {
+	if kind == kinds.Finding.Name() {
 		fd := findings.FromRecord(store.Record{Key: key, Attrs: attrs})
 		f["category"], f["value"] = k.Singular+" "+fd.Category, fd.Target
 		if fd.Severity != "" {
@@ -688,8 +680,8 @@ func (r *Runner) deriveFindings() error {
 	}
 	var readErr error
 	in := findings.Input{Scope: sc, Inv: inv, Settings: r.cfg.Settings, Today: r.today(),
-		Records: func(kind string) []store.Record {
-			recs, err := r.evidenceRecords(kind)
+		Records: func(k kinds.Named) []store.Record {
+			recs, err := r.evidenceRecords(k.Name())
 			if err != nil && readErr == nil {
 				readErr = err
 			}
@@ -702,7 +694,7 @@ func (r *Runner) deriveFindings() error {
 	}
 	obs := make([]store.Obs, len(fs))
 	for i, f := range fs {
-		obs[i] = store.Obs{Kind: "finding", Key: f.Key(), Attrs: f.Attrs}
+		obs[i] = kinds.Finding.Obs(f.Key(), f.Attrs)
 	}
 	r.st.Complete("findings", "derived", obs)
 	if err := r.st.Flush(); err != nil {
@@ -737,7 +729,7 @@ func (r *Runner) evidenceRecords(kind string) ([]store.Record, error) {
 func (r *Runner) derivationSignature() string {
 	var b strings.Builder
 	for _, k := range kinds.All() {
-		if k.Name != "finding" {
+		if k.Name != kinds.Finding.Name() {
 			fmt.Fprintf(&b, "%s=%d;", k.Name, r.st.KindVersion(k.Name))
 		}
 	}
@@ -746,8 +738,8 @@ func (r *Runner) derivationSignature() string {
 }
 
 // currentRecords returns the current records of a kind.
-func (r *Runner) currentRecords(kind string) ([]store.Record, error) {
-	recs, err := r.st.Records(kind, r.order)
+func (r *Runner) currentRecords(k kinds.Named) ([]store.Record, error) {
+	recs, err := r.st.Records(k.Name(), r.order)
 	if err != nil {
 		return nil, err
 	}
@@ -763,39 +755,37 @@ func (r *Runner) currentRecords(kind string) ([]store.Record, error) {
 // inventoryData reads the current records the inventory is computed from.
 func (r *Runner) inventoryData() (inventory.Data, error) {
 	var d inventory.Data
-	hosts, err := r.currentRecords("hostname")
+	hosts, err := r.currentRecords(kinds.Hostname)
 	if err != nil {
 		return d, err
 	}
 	for _, rec := range hosts {
 		d.Hosts = append(d.Hosts, inventory.Host{Name: input.NormaliseHost(rec.Key), Stages: rec.Stages})
 	}
-	recs, err := r.currentRecords("resolution")
+	recs, err := r.currentRecords(kinds.Resolution)
 	if err != nil {
 		return d, err
 	}
 	for _, rec := range recs {
-		name := input.NormaliseHost(rec.Str("name"))
-		if name != "" {
-			d.Resolutions = append(d.Resolutions, inventory.Resolution{Name: name, Type: rec.Str("type"), Value: rec.Str("value")})
+		a := kinds.Resolution.Attrs(rec)
+		if name := input.NormaliseHost(a.Name); name != "" {
+			d.Resolutions = append(d.Resolutions, inventory.Resolution{Name: name, Type: a.Type, Value: a.Value})
 		}
 	}
-	if recs, err = r.currentRecords("wildcard"); err != nil {
+	if recs, err = r.currentRecords(kinds.Wildcard); err != nil {
 		return d, err
 	}
 	for _, rec := range recs {
-		w := inventory.Wildcard{Zone: rec.Key, CNAME: rec.Str("cname")}
-		list, _ := rec.Attrs["addrs"].([]any)
-		for _, a := range list {
-			if s, ok := a.(string); ok {
-				if addr, err := netip.ParseAddr(s); err == nil {
-					w.Addrs = append(w.Addrs, addr)
-				}
+		a := kinds.Wildcard.Attrs(rec)
+		w := inventory.Wildcard{Zone: rec.Key, CNAME: a.CNAME}
+		for _, s := range a.Addrs {
+			if addr, err := netip.ParseAddr(s); err == nil {
+				w.Addrs = append(w.Addrs, addr)
 			}
 		}
 		d.Wildcards = append(d.Wildcards, w)
 	}
-	if recs, err = r.currentRecords("ip"); err != nil {
+	if recs, err = r.currentRecords(kinds.IP); err != nil {
 		return d, err
 	}
 	for _, rec := range recs {
@@ -803,25 +793,26 @@ func (r *Runner) inventoryData() (inventory.Data, error) {
 			d.IPs = append(d.IPs, a.Unmap())
 		}
 	}
-	if recs, err = r.currentRecords("ip_owner"); err != nil {
+	if recs, err = r.currentRecords(kinds.IPOwner); err != nil {
 		return d, err
 	}
 	d.Owners = map[netip.Addr]provider.Owner{}
 	for _, rec := range recs {
-		if a, err := netip.ParseAddr(rec.Key); err == nil {
-			asn, _ := rec.Attrs["asn"].(float64)
-			d.Owners[a.Unmap()] = provider.Owner{ASN: int(asn), Holder: rec.Str("holder"), Known: true}
+		if addr, err := netip.ParseAddr(rec.Key); err == nil {
+			a := kinds.IPOwner.Attrs(rec)
+			d.Owners[addr.Unmap()] = provider.Owner{ASN: a.ASN, Holder: a.Holder, Known: true}
 		}
 	}
 	if d.Ranges, err = r.providerRanges(); err != nil {
 		return d, err
 	}
-	if recs, err = r.currentRecords("ip_hostname"); err != nil {
+	if recs, err = r.currentRecords(kinds.IPHostname); err != nil {
 		return d, err
 	}
 	for _, rec := range recs {
-		if a, err := netip.ParseAddr(rec.Str("ip")); err == nil {
-			d.IPHostnames = append(d.IPHostnames, inventory.IPHostname{IP: a.Unmap(), Hostname: input.NormaliseHost(rec.Str("hostname")), Source: rec.Str("source")})
+		a := kinds.IPHostname.Attrs(rec)
+		if addr, err := netip.ParseAddr(a.IP); err == nil {
+			d.IPHostnames = append(d.IPHostnames, inventory.IPHostname{IP: addr.Unmap(), Hostname: input.NormaliseHost(a.Hostname), Source: a.Source})
 		}
 	}
 	return d, nil
@@ -830,18 +821,19 @@ func (r *Runner) inventoryData() (inventory.Data, error) {
 // providerRanges returns the indexed provider_range records, re-reading them
 // only when the store says they have changed since the last call.
 func (r *Runner) providerRanges() (*provider.Ranges, error) {
-	ver := r.st.KindVersion("provider_range")
+	ver := r.st.KindVersion(kinds.ProviderRange.Name())
 	if r.ranges != nil && ver == r.rangesVer {
 		return r.ranges, nil
 	}
-	recs, err := r.currentRecords("provider_range")
+	recs, err := r.currentRecords(kinds.ProviderRange)
 	if err != nil {
 		return nil, err
 	}
 	var rs []provider.Range
 	for _, rec := range recs {
-		if p, err := netip.ParsePrefix(rec.Str("prefix")); err == nil {
-			rs = append(rs, provider.Range{Prefix: p.Masked(), Provider: rec.Str("provider"), Service: rec.Str("service"), Region: rec.Str("region")})
+		a := kinds.ProviderRange.Attrs(rec)
+		if p, err := netip.ParsePrefix(a.Prefix); err == nil {
+			rs = append(rs, provider.Range{Prefix: p.Masked(), Provider: a.Provider, Service: a.Service, Region: a.Region})
 		}
 	}
 	r.ranges, r.rangesVer = provider.NewRanges(rs), ver

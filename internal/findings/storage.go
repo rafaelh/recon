@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rafaelh/recon/internal/cloudstorage"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/scope"
 )
 
@@ -25,19 +26,20 @@ func (d *deriver) references() []cloudstorage.Reference {
 	}
 	out := []cloudstorage.Reference{}
 	wildcardOnly := d.in.Inv.WildcardOnly()
-	for _, r := range d.current("resolution") {
-		if r.Str("type") != "CNAME" {
+	for _, r := range d.current(kinds.Resolution) {
+		a := kinds.Resolution.Attrs(r)
+		if a.Type != "CNAME" {
 			continue
 		}
-		name := r.Str("name")
+		name := a.Name
 		if wildcardOnly[name] || d.in.Scope.ClassifyHost(name).Class != scope.InScope {
 			continue
 		}
-		if ref, ok := cloudstorage.ParseCNAME(name, r.Str("value")); ok {
+		if ref, ok := cloudstorage.ParseCNAME(name, a.Value); ok {
 			out = append(out, cloudstorage.Reference{Ref: ref, Via: "cname", From: name})
 		}
 	}
-	for _, r := range d.current("storage_ref") {
+	for _, r := range d.current(kinds.StorageRef) {
 		if !d.in.Scope.WebHostInScope(r.Str("page_host")) {
 			continue
 		}
@@ -73,7 +75,7 @@ func Attribution(in Input) map[string]StorageAttr { return newDeriver(in).attrib
 func (d *deriver) attribution() map[string]StorageAttr {
 	attributed, guessed, public := attributedSet(d.references()), d.guessed(), d.publicStates()
 	out := map[string]StorageAttr{}
-	for _, r := range d.in.Records("storage") {
+	for _, r := range d.in.Records(kinds.Storage) {
 		k := bucketKey(r.Str("provider"), r.Str("name"))
 		a := StorageAttr{Attributed: attributed[k], GeneratedFrom: guessed[k], Public: cloudstorage.PublicState(public[r.Key])}
 		if typ := storageType(flag(r, "listable"), a.Public, a.Attributed); typ != "" && !a.Attributed {
@@ -129,7 +131,7 @@ func (d *deriver) publicStates() map[string][]bool {
 		return d.public
 	}
 	d.public = map[string][]bool{}
-	for _, r := range d.current("storage_object") {
+	for _, r := range d.current(kinds.StorageObject) {
 		b := r.Str("bucket")
 		d.public[b] = append(d.public[b], flag(r, "public"))
 	}
@@ -164,7 +166,7 @@ func (d *deriver) storage() []Finding {
 		}
 	}
 	var out []Finding
-	for _, r := range d.current("storage") {
+	for _, r := range d.current(kinds.Storage) {
 		if !flag(r, "exists") {
 			continue
 		}

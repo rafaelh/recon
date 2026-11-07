@@ -11,6 +11,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
 )
@@ -69,7 +70,7 @@ func (*Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 		for _, m := range r.Matches {
 			if m.IPStr != "" && !seen["ip|"+m.IPStr] {
 				seen["ip|"+m.IPStr] = true
-				obs = append(obs, run.Observation{Kind: "ip", Key: m.IPStr})
+				obs = append(obs, kinds.IP.Obs(m.IPStr))
 			}
 			for _, h := range m.Hostnames {
 				h = input.NormaliseHost(h)
@@ -78,8 +79,8 @@ func (*Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 				}
 				seen[m.IPStr+"|"+h] = true
 				obs = append(obs,
-					run.Observation{Kind: "hostname", Key: h},
-					run.Observation{Kind: "ip_hostname", Key: m.IPStr + "|" + h, Attrs: map[string]any{"ip": m.IPStr, "hostname": h, "source": "shodan"}})
+					kinds.Hostname.Obs(h, kinds.HostnameAttrs{}),
+					kinds.IPHostname.Obs(m.IPStr+"|"+h, kinds.IPHostnameAttrs{IP: m.IPStr, Hostname: h, Source: "shodan"}))
 			}
 		}
 		got += len(r.Matches)

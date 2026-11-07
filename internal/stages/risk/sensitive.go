@@ -8,6 +8,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -40,7 +41,7 @@ type pathInput struct {
 func (*SensitivePaths) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		var svcs []pathInput
-		for _, rec := range v.Records("web_service") {
+		for _, rec := range v.Records(kinds.WebService) {
 			svc, ok := egress.ParseService(rec.Key)
 			if !ok || !v.Scope().WebHostInScope(svc.Host) || v.SaaSServed(svc.Host) {
 				continue

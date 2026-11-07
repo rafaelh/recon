@@ -12,6 +12,7 @@ import (
 	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/inventory"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/provider"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
@@ -70,7 +71,7 @@ func (f *fixture) input(t *testing.T) findings.Input {
 	})
 	recs := f.recs
 	return findings.Input{Scope: sc, Inv: inv, Settings: f.set, Today: f.today, Roots: []string{"example.com"},
-		Records: func(kind string) []store.Record { return recs[kind] }}
+		Records: func(k kinds.Named) []store.Record { return recs[k.Name()] }}
 }
 
 func (f *fixture) derive(t *testing.T) []findings.Finding { return findings.Derive(f.input(t)) }

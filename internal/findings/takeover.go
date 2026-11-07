@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rafaelh/recon/internal/cloudstorage"
+	"github.com/rafaelh/recon/internal/kinds"
 )
 
 // evidence collects every kind of takeover evidence for one target (a hostname,
@@ -62,8 +63,8 @@ func (d *deriver) takeovers() []Finding {
 // cname entry marked claimable.
 func (d *deriver) dnsTakeovers(ev evidenceSet) {
 	nx := map[string]bool{}
-	for _, r := range d.current("unresolved") {
-		if r.Str("rcode") == "NXDOMAIN" {
+	for _, r := range d.current(kinds.Unresolved) {
+		if kinds.Unresolved.Attrs(r).RCode == "NXDOMAIN" {
 			nx[r.Key] = true
 		}
 	}
@@ -80,7 +81,7 @@ func (d *deriver) dnsTakeovers(ev evidenceSet) {
 // httpTakeovers: a provider-hosted service answering with its unclaimed-resource page.
 func (d *deriver) httpTakeovers(ev evidenceSet) {
 	svcs := d.services()
-	for _, r := range d.current("takeover_http") {
+	for _, r := range d.current(kinds.TakeoverHTTP) {
 		if _, ok := svcs[r.Str("service")]; !ok {
 			continue
 		}
@@ -154,12 +155,12 @@ func refKey(ref cloudstorage.Reference) string {
 // container, or an Azure account (cloudstorage.AccountKey).
 func (d *deriver) missingResources() map[string]bool {
 	out := map[string]bool{}
-	for _, r := range d.current("storage") {
+	for _, r := range d.current(kinds.Storage) {
 		if b, ok := r.Attrs["exists"].(bool); ok && !b {
 			out[r.Key] = true
 		}
 	}
-	for _, r := range d.current("storage_account") {
+	for _, r := range d.current(kinds.StorageAccount) {
 		if b, ok := r.Attrs["exists"].(bool); ok && !b {
 			out[cloudstorage.AccountKey(r.Key)] = true
 		}

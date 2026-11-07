@@ -12,6 +12,7 @@ import (
 
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -30,7 +31,7 @@ func NewIPOwner() *IPOwner { return &IPOwner{base: base{"ipowner"}, holders: map
 func (*IPOwner) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		var ips []string
-		for _, rec := range v.Records("ip") {
+		for _, rec := range v.Records(kinds.IP) {
 			if a, err := netip.ParseAddr(rec.Key); err == nil && !v.Scope().InScopeIP(a) {
 				ips = append(ips, a.Unmap().String())
 			}
@@ -83,7 +84,7 @@ func (o *IPOwner) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run
 	if err != nil {
 		return nil, fmt.Errorf("owner of %s: %w", addr, err)
 	}
-	return []run.Observation{{Kind: "ip_owner", Key: addr.String(), Attrs: map[string]any{"asn": asn, "prefix": prefix, "holder": holder}}}, nil
+	return []run.Observation{kinds.IPOwner.Obs(addr.String(), kinds.IPOwnerAttrs{ASN: asn, Prefix: prefix, Holder: holder})}, nil
 }
 
 func (o *IPOwner) holder(ctx context.Context, asn int, e egress.Clients) (string, error) {

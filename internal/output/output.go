@@ -244,7 +244,7 @@ func attrCell(r store.Record, k string) string {
 func webServiceRows(s Snapshot) []Row {
 	var rows []Row
 	vis := s.vis()
-	for _, r := range s.Records["web_service"] {
+	for _, r := range s.of(kinds.WebService) {
 		if !vis.Shown("web_service", r) {
 			continue
 		}
@@ -260,7 +260,7 @@ func webServiceRows(s Snapshot) []Row {
 func urlRows(s Snapshot) []Row {
 	var rows []Row
 	vis := s.vis()
-	for _, r := range s.Records["url"] {
+	for _, r := range s.of(kinds.URL) {
 		if vis.Shown("url", r) {
 			rows = append(rows, recordRow(r, r.Key, attrCell(r, "host"), attrCell(r, "status"), strings.Join(r.Stages, ",")))
 		}
@@ -271,7 +271,7 @@ func urlRows(s Snapshot) []Row {
 // openPortRows lists the shown open ports. The record's key is authoritative
 // for the address and port.
 func openPortRows(s Snapshot) []Row {
-	recs := s.Records["open_port"]
+	recs := s.of(kinds.OpenPort)
 	if len(recs) == 0 {
 		return nil
 	}
@@ -297,7 +297,7 @@ func scopeRows(s Snapshot) []Row {
 		}
 		rows = append(rows, Row{Cells: []string{in.Kind, in.Value, "input"}, Current: true, FirstSeen: in.AddedAt, LastSeen: s.Today})
 	}
-	for _, r := range s.Records["netblock"] {
+	for _, r := range s.of(kinds.Netblock) {
 		if src, ok := s.ASNNetblocks[r.Key]; ok {
 			rows = append(rows, recordRow(r, "netblock", r.Key, src))
 		}
@@ -305,20 +305,23 @@ func scopeRows(s Snapshot) []Row {
 	return rows
 }
 
+// of is the records of a kind, current or not.
+func (s Snapshot) of(k kinds.Named) []store.Record { return s.Records[k.Name()] }
+
 func recordRow(r store.Record, cells ...string) Row {
 	return Row{Cells: cells, Current: r.Current, FirstSeen: r.FirstSeen, LastSeen: r.LastSeen}
 }
 
 func candidateRows(s Snapshot) []Row {
 	var rows []Row
-	for _, kind := range []string{"root", "hostname"} {
-		for _, r := range s.Records[kind] {
+	for _, kind := range []kinds.Named{kinds.Root, kinds.Hostname} {
+		for _, r := range s.of(kind) {
 			if s.Scope.ClassifyHost(r.Key).Class == scope.Candidate {
-				rows = append(rows, recordRow(r, kind, r.Key, strings.Join(r.Stages, ",")))
+				rows = append(rows, recordRow(r, kind.Name(), r.Key, strings.Join(r.Stages, ",")))
 			}
 		}
 	}
-	for _, r := range s.Records["netblock"] {
+	for _, r := range s.of(kinds.Netblock) {
 		if _, err := netip.ParsePrefix(r.Key); err != nil || s.Scope.HasNetblock(r.Key) {
 			continue
 		}
@@ -330,19 +333,19 @@ func candidateRows(s Snapshot) []Row {
 func excludedRows(s Snapshot) []Row {
 	var rows []Row
 	seen := map[string]bool{}
-	for _, kind := range []string{"root", "hostname"} {
-		for _, r := range s.Records[kind] {
+	for _, kind := range []kinds.Named{kinds.Root, kinds.Hostname} {
+		for _, r := range s.of(kind) {
 			if c := s.Scope.ClassifyHost(r.Key); c.Class == scope.Excluded && !seen[r.Key] {
 				seen[r.Key] = true
 				rows = append(rows, recordRow(r, r.Key, c.Reason))
 			}
 		}
 	}
-	for _, r := range s.Records["excluded"] {
+	for _, r := range s.of(kinds.ExcludedKind) {
 		if seen[r.Key] {
 			continue
 		}
-		rows = append(rows, recordRow(r, r.Key, r.Str("reason")))
+		rows = append(rows, recordRow(r, r.Key, kinds.ExcludedKind.Attrs(r).Reason))
 	}
 	return rows
 }
@@ -353,7 +356,7 @@ func inScopeHostRows(wildcardOnly bool) func(Snapshot) []Row {
 	return func(s Snapshot) []Row {
 		var rows []Row
 		wo := s.Inv.WildcardOnly()
-		for _, r := range s.Records["hostname"] {
+		for _, r := range s.of(kinds.Hostname) {
 			if wo[r.Key] == wildcardOnly && s.Scope.ClassifyHost(r.Key).Class == scope.InScope {
 				rows = append(rows, recordRow(r, r.Key))
 			}
@@ -364,7 +367,7 @@ func inScopeHostRows(wildcardOnly bool) func(Snapshot) []Row {
 
 func unresolvedRows(s Snapshot) []Row {
 	var rows []Row
-	for _, r := range s.Records["unresolved"] {
+	for _, r := range s.of(kinds.Unresolved) {
 		rows = append(rows, recordRow(r, r.Key))
 	}
 	return rows
@@ -372,8 +375,9 @@ func unresolvedRows(s Snapshot) []Row {
 
 func resolutionRows(s Snapshot) []Row {
 	var rows []Row
-	for _, r := range s.Records["resolution"] {
-		rows = append(rows, recordRow(r, r.Str("name"), r.Str("type"), r.Str("value")))
+	for _, r := range s.of(kinds.Resolution) {
+		a := kinds.Resolution.Attrs(r)
+		rows = append(rows, recordRow(r, a.Name, a.Type, a.Value))
 	}
 	return rows
 }
