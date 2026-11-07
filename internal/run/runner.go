@@ -631,7 +631,7 @@ func (r *Runner) emitSummary() {
 		}
 	}
 	r.mu.Unlock()
-	recs, _ := r.st.Records(kinds.Finding.Name(), r.order)
+	recs, _ := r.records(kinds.Finding.Name())
 	listed := []map[string]any{}
 	for _, f := range findings.Headline(recs) {
 		listed = append(listed, map[string]any{"category": f.Category, "severity": f.Severity, "target": f.Target, "detail": f.Detail})

@@ -148,11 +148,7 @@ func (s *Scope) InScopeIP(a netip.Addr) bool {
 // an IP literal is in an in-scope netblock and not excluded; a name is in scope.
 func (s *Scope) WebHostInScope(host string) bool {
 	h := input.NormaliseHost(host)
-	if a, err := netip.ParseAddr(h); err == nil {
-		if a.Zone() != "" {
-			return false
-		}
-		a = a.Unmap()
+	if a, ok := input.IPLiteral(h); ok {
 		excluded, _ := s.ExcludedAddr(a)
 		return s.InScopeIP(a) && !excluded
 	}

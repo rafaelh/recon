@@ -195,8 +195,6 @@ func crtsh(ctx context.Context, root string, c egress.Clients) (result, error) {
 	return result{names: names}, err
 }
 
-// under reports whether name is root or a subdomain of it.
-
 // --- Wayback Machine (CDX) ---
 
 // withScheme gives an archived URL without a scheme ("www.example.com/login")

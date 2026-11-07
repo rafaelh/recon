@@ -173,9 +173,6 @@ func Guess(bases []string, cap int) []string {
 	return all
 }
 
-// Guesses are Guess's names turned into every provider's form, each name in
-// Providers order, skipping the ones a provider cannot use. Name is the bucket
-// (S3, GCS) or the account (Azure).
 // InputGuesses yields the guessed buckets of each root and then each
 // organisation, with the input that generates it.
 func InputGuesses(roots, orgs []string, cap int) iter.Seq2[string, Ref] {
@@ -195,6 +192,9 @@ func InputGuesses(roots, orgs []string, cap int) iter.Seq2[string, Ref] {
 	}
 }
 
+// Guesses are Guess's names turned into every provider's form, each name in
+// Providers order, skipping the ones a provider cannot use. Name is the bucket
+// (S3, GCS) or the account (Azure).
 func Guesses(bases []string, cap int) []Ref {
 	var out []Ref
 	for _, n := range Guess(bases, cap) {

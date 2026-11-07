@@ -182,9 +182,11 @@ type StorageAttrs struct {
 	Region      string   `json:"region,omitempty"`
 }
 
-// StorageAccountAttrs: whether an Azure storage account exists.
+// StorageAccountAttrs: whether an Azure storage account exists. Exists is a
+// pointer so that a record without a usable value reads as unknown, never as
+// a missing (claimable) account.
 type StorageAccountAttrs struct {
-	Exists bool `json:"exists"`
+	Exists *bool `json:"exists"`
 }
 
 // StorageObjectAttrs: whether an object of a bucket can be fetched anonymously.

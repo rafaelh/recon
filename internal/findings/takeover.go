@@ -161,7 +161,7 @@ func (d *deriver) missingResources() map[string]bool {
 		}
 	}
 	for _, r := range d.current(kinds.StorageAccount) {
-		if !kinds.StorageAccount.Attrs(r).Exists {
+		if e := kinds.StorageAccount.Attrs(r).Exists; e != nil && !*e { // known not to exist
 			out[cloudstorage.AccountKey(r.Key)] = true
 		}
 	}

@@ -140,7 +140,8 @@ type Size string
 func SizeOf(n int64) Size { return Size(strconv.FormatInt(n, 10)) }
 
 func (s Size) MarshalJSON() ([]byte, error) {
-	if _, err := strconv.ParseInt(string(s), 10, 64); err == nil {
+	// Only a canonical integer is a valid JSON number ("+5" and "007" parse but are not).
+	if n, err := strconv.ParseInt(string(s), 10, 64); err == nil && strconv.FormatInt(n, 10) == string(s) {
 		return []byte(s), nil
 	}
 	return json.Marshal(string(s))

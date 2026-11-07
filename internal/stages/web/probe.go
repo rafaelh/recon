@@ -222,8 +222,8 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 			break
 		}
 		host := HostOfURL(target)
-		hop := kinds.URLAttrs{URL: target, Host: host}
-		hopAt := obs.add(kinds.URL.Obs(target, hop))
+		hopURL := kinds.URLAttrs{URL: target, Host: host}
+		hopAt := obs.add(kinds.URL.Obs(target, hopURL))
 		if d, ok := otherHost(host, in.host); ok {
 			obs.add(kinds.Hostname.Obs(d, kinds.HostnameAttrs{}))
 		}
@@ -250,8 +250,8 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 			break
 		}
 		if hopAt >= 0 { // D15: a fetched url carries its status
-			hop.Status = next.Status
-			obs.list[hopAt] = kinds.URL.Obs(target, hop)
+			hopURL.Status = next.Status
+			obs.list[hopAt] = kinds.URL.Obs(target, hopURL)
 		}
 		last = next
 	}

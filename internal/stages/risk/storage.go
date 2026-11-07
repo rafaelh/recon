@@ -83,7 +83,7 @@ func (*Storage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 		// Containers of Azure accounts known to exist: the fixed list, and every one a reference names.
 		var accounts []string
 		for _, rec := range v.Records(kinds.StorageAccount) {
-			if kinds.StorageAccount.Attrs(rec).Exists {
+			if e := kinds.StorageAccount.Attrs(rec).Exists; e != nil && *e {
 				accounts = append(accounts, rec.Key)
 			}
 		}
@@ -164,7 +164,7 @@ func account(ctx context.Context, e egress.Clients, in storageInput) ([]run.Obse
 	default:
 		return nil, fmt.Errorf("DNS rcode %d", res.RCode)
 	}
-	return []run.Observation{kinds.StorageAccount.Obs(in.name, kinds.StorageAccountAttrs{Exists: exists})}, nil
+	return []run.Observation{kinds.StorageAccount.Obs(in.name, kinds.StorageAccountAttrs{Exists: &exists})}, nil
 }
 
 // escapePath escapes each segment of an object key.
