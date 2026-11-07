@@ -13,19 +13,6 @@ import (
 
 var clk = func() time.Time { return time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC) }
 
-func TestSanitize(t *testing.T) {
-	in := "ok\x1b[31m red\x1b]0;title\x07 \x00bell\x07 tab\there \u202e bidi"
-	got := report.Sanitize(in)
-	for _, bad := range []string{"\x1b", "\x07", "\x00"} {
-		if strings.Contains(got, bad) {
-			t.Errorf("%q survived in %q", bad, got)
-		}
-	}
-	if !strings.Contains(got, "ok") || !strings.Contains(got, "red") {
-		t.Errorf("visible text lost: %q", got)
-	}
-}
-
 // JSON mode is one object per line, unstyled, with type and RFC 3339 time.
 func TestJSONRenderer(t *testing.T) {
 	var buf bytes.Buffer

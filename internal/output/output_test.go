@@ -105,6 +105,8 @@ func TestCSVSafety(t *testing.T) {
 		output.Row{Cells: []string{"-2", "@sum"}, Current: true},
 		output.Row{Cells: []string{"\tx", "\rx"}, Current: true},
 		output.Row{Cells: []string{"ok\x1b[31mred\x00", "line\nbreak"}, Current: true},
+		output.Row{Cells: []string{"\x00=cmd()", "\x1b[0m+1"}, Current: true},
+		output.Row{Cells: []string{"a\u202eb", "c"}, Current: true},
 	)}}
 	if err := output.Render(dir, files, output.Snapshot{}); err != nil {
 		t.Fatal(err)
@@ -117,14 +119,14 @@ func TestCSVSafety(t *testing.T) {
 	for _, r := range recs[1:] {
 		got[r[0]+"|"+r[1]] = true
 	}
-	for _, w := range []string{"'=cmd()|'+1", "'-2|'@sum", "'x|'x", "ok[31mred|linebreak"} {
+	for _, w := range []string{"'=cmd()|'+1", "'-2|'@sum", " x|x", "okred|linebreak", "ab|c"} {
 		if !got[w] {
 			t.Errorf("missing %q in %v", w, got)
 		}
 	}
 	for _, r := range recs {
 		for _, c := range r {
-			if strings.ContainsAny(c, "\x00\x1b\n") {
+			if strings.ContainsAny(c, "\x00\x1b\n\t\u202e") {
 				t.Errorf("control character survived in %q", c)
 			}
 		}

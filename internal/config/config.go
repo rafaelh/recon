@@ -142,10 +142,18 @@ func builtinSensitivePaths() []SensitivePath {
 }
 
 // DefaultConfigPath is $XDG_CONFIG_HOME/recon/config.yaml, or ~/.config/recon/config.yaml.
+// It is "" when neither XDG_CONFIG_HOME nor the home directory is known, so a
+// missing $HOME never resolves to a config file relative to the working directory.
+// os.UserConfigDir is deliberately not used: on macOS it would move the file to
+// ~/Library/Application Support.
 func DefaultConfigPath() string {
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
-		base = filepath.Join(os.Getenv("HOME"), ".config")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		base = filepath.Join(home, ".config")
 	}
 	return filepath.Join(base, "recon", "config.yaml")
 }
@@ -246,7 +254,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	if !explicit {
 		path = DefaultConfigPath()
 	}
-	if _, err := os.Stat(path); err == nil || explicit {
+	if _, err := os.Stat(path); explicit || (path != "" && err == nil) {
 		v.SetConfigFile(path)
 		v.SetConfigType("yaml")
 		if err := v.ReadInConfig(); err != nil {

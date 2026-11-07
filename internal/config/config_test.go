@@ -223,6 +223,31 @@ func TestDefaultConfigPath(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigPathWithoutHome(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "")
+	if got := config.DefaultConfigPath(); got != "" {
+		t.Errorf("got %q, want empty", got)
+	}
+}
+
+func TestLoadWithoutHomeIgnoresWorkingDirectoryConfig(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "")
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".config", "recon"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".config", "recon", "config.yaml"), []byte("not: [valid"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	if _, err := load(t, ""); err != nil {
+		t.Fatalf("config under the working directory should not be read: %v", err)
+	}
+}
+
 func TestPortsRoundTrip(t *testing.T) {
 	p, err := config.ParsePorts("443, 21-23,80,22")
 	if err != nil {

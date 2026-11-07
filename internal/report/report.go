@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
 	"github.com/rafaelh/recon/internal/config"
+	"github.com/rafaelh/recon/internal/sanitize"
 )
 
 // Event is one thing that happened in a run. Types: run_start, stage, found,
@@ -29,27 +28,6 @@ type Event struct {
 
 // Emitter receives events. Implementations are safe for concurrent use.
 type Emitter interface{ Emit(Event) }
-
-var (
-	ansiCSI = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
-	ansiOSC = regexp.MustCompile(`\x1b\][^\x07\x1b]*(\x07|\x1b\\)?`)
-)
-
-// Sanitize removes terminal escape sequences, control characters and bidi
-// overrides, so target-supplied text cannot inject terminal escapes.
-func Sanitize(s string) string {
-	s = ansiOSC.ReplaceAllString(s, "")
-	s = ansiCSI.ReplaceAllString(s, "")
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\t':
-			return ' '
-		case unicode.IsControl(r), r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069, r == 0x200E, r == 0x200F:
-			return -1
-		}
-		return r
-	}, s)
-}
 
 func timestamp(ev Event, clock func() time.Time) string {
 	if ev.Time != "" {
@@ -140,9 +118,9 @@ func str(f map[string]any, k string) string {
 	case nil:
 		return ""
 	case string:
-		return Sanitize(v)
+		return sanitize.Text(v)
 	default:
-		return Sanitize(fmt.Sprint(v))
+		return sanitize.Text(fmt.Sprint(v))
 	}
 }
 
@@ -211,13 +189,13 @@ func (c *Console) summary(b *strings.Builder, f map[string]any) {
 	b.WriteString(c.st("6", true).Render("Summary"))
 	if totals, ok := f["totals"].(map[string]int); ok {
 		for _, k := range sortedKeys(totals) {
-			fmt.Fprintf(b, "\n  %-16s %d", Sanitize(k), totals[k])
+			fmt.Fprintf(b, "\n  %-16s %d", sanitize.Text(k), totals[k])
 		}
 	}
 	if failed, ok := f["failed"].(map[string]int); ok && len(failed) > 0 {
 		b.WriteString("\n" + c.st("3", true).Render("Failed checks (retried on the next run)"))
 		for _, k := range sortedKeys(failed) {
-			fmt.Fprintf(b, "\n  %-16s %d", Sanitize(k), failed[k])
+			fmt.Fprintf(b, "\n  %-16s %d", sanitize.Text(k), failed[k])
 		}
 	}
 	if fs, ok := f["findings"].([]map[string]any); ok && len(fs) > 0 {

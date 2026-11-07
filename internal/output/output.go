@@ -13,12 +13,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/rafaelh/recon/internal/fault"
 	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/kinds"
+	"github.com/rafaelh/recon/internal/sanitize"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
 )
@@ -124,7 +124,7 @@ func renderFile(dir, tmp string, f File, snap Snapshot) error {
 	switch f.Format {
 	case TXT:
 		for _, r := range rows {
-			buf.WriteString(stripControl(r.Cells[0]))
+			buf.WriteString(sanitize.Text(r.Cells[0]))
 			buf.WriteByte('\n')
 		}
 	case CSV:
@@ -173,21 +173,14 @@ func renderFile(dir, tmp string, f File, snap Snapshot) error {
 	return os.Rename(tmpPath, filepath.Join(dir, f.Name))
 }
 
-func stripControl(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, s)
-}
-
-// csvSafe neutralises spreadsheet formulas, then removes control characters.
+// csvSafe sanitises s, then neutralises spreadsheet formulas. Sanitising
+// first means a leading control character cannot hide a formula prefix.
 func csvSafe(s string) string {
-	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+	s = sanitize.Text(s)
+	if s != "" && strings.ContainsRune("=+-@", rune(s[0])) {
 		s = "'" + s
 	}
-	return stripControl(s)
+	return s
 }
 
 // Default returns the registered files: scope, candidates and excluded, then

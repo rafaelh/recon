@@ -1,7 +1,5 @@
 Would change behaviour:
 
-- Merging stripControl and report.Sanitize: they already strip different characters.
-- Switching DefaultConfigPath to Go's home or config directory lookups: the macOS path would change.
 
 
 Too big for a cleanup pass:
