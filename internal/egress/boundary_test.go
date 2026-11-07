@@ -16,10 +16,10 @@ import (
 	"testing"
 )
 
-// D13/B12: only internal/egress may import raw network packages, and other
+// Only internal/egress may import raw network packages, and other
 // packages may use only signal and file-lock identifiers from
-// golang.org/x/sys/unix. Spec 6 D5: no first-party package, internal/egress
-// included, may import os/exec.
+// golang.org/x/sys/unix. No first-party package, internal/egress included,
+// may import os/exec.
 func TestPassiveBoundaryImports(t *testing.T) {
 	root, err := os.Getwd()
 	if err != nil {

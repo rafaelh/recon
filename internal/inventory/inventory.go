@@ -1,8 +1,8 @@
 // Package inventory derives views from stored records that outputs, the
 // runner's View and the egress Policy all need: which names are wildcard-only,
 // what is shared provider infrastructure, which addresses may be port-checked.
-// Everything is computed on read from plain data, never stored (Spec 1 D16),
-// so a new binary's provider data or a late-discovered name is reflected at once.
+// Everything is computed on read from plain data, never stored, so a new
+// binary's provider data or a late-discovered name is reflected at once.
 package inventory
 
 import (
@@ -229,7 +229,7 @@ func (i *Inventory) result(a netip.Addr) provider.Result {
 		return r
 	}
 	r := i.db.Classify(a, i.d.Owners[a], i.d.Ranges)
-	// A CNAME into a provider is extra evidence (D17): it makes an address shared
+	// A CNAME into a provider is extra evidence: it makes an address shared
 	// even where ranges or ASNs call it dedicated (Heroku on EC2) or do not know it.
 	if m, ok := i.cnameShared[a]; ok && !r.Shared {
 		r = provider.Result{Known: true, Shared: true, Provider: m.Provider, Service: m.Service, Evidence: "cname"}

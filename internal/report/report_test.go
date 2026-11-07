@@ -26,7 +26,7 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
-// B19: JSON mode is one object per line, unstyled, with type and RFC 3339 time.
+// JSON mode is one object per line, unstyled, with type and RFC 3339 time.
 func TestJSONRenderer(t *testing.T) {
 	var buf bytes.Buffer
 	em := report.NewJSON(&buf, clk)
@@ -53,7 +53,7 @@ func TestJSONRenderer(t *testing.T) {
 	}
 }
 
-// B19 + safety: console styling toggles, and target-supplied escapes never reach the terminal.
+// Console styling toggles, and target-supplied escapes never reach the terminal.
 func TestConsoleStyling(t *testing.T) {
 	ev := report.Event{Type: "found", Fields: map[string]any{"category": "finding", "value": "http://x/\x1b[2J evil\x1b]0;pwn\x07", "severity": "high"}}
 	var plain, styled bytes.Buffer
@@ -75,7 +75,7 @@ func TestConsoleStyling(t *testing.T) {
 	}
 }
 
-// B17: stage lines.
+// Stage lines.
 func TestConsoleStageLines(t *testing.T) {
 	var buf bytes.Buffer
 	c := report.NewConsole(&buf, false, clk)
@@ -89,7 +89,7 @@ func TestConsoleStageLines(t *testing.T) {
 	}
 }
 
-// B18: summary shows totals, failed counts, and each high/medium finding.
+// Summary shows totals, failed counts, and each high/medium finding.
 func TestConsoleSummary(t *testing.T) {
 	var buf bytes.Buffer
 	c := report.NewConsole(&buf, false, clk)
@@ -109,7 +109,7 @@ func TestConsoleSummary(t *testing.T) {
 	}
 }
 
-// B24: the redactor wrapper scrubs every string in an event, including nested ones.
+// The redactor wrapper scrubs every string in an event, including nested ones.
 func TestRedactingEmitter(t *testing.T) {
 	var buf bytes.Buffer
 	em := report.WithRedactor(report.NewJSON(&buf, clk), config.NewRedactor("SEKRET"))

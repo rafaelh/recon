@@ -101,7 +101,7 @@ func TestHeadline(t *testing.T) {
 	}
 }
 
-// D13: the risk files list every finding of their category, current or not, with their columns.
+// The risk files list every finding of their category, current or not, with their columns.
 func TestRiskFiles(t *testing.T) {
 	fnd := func(category, typ, target string, current bool, kv ...any) store.Record {
 		attrs := append([]any{"category", category, "type", typ, "severity", "medium", "target", target, "detail", "d"}, kv...)
@@ -159,7 +159,7 @@ func TestRiskFiles(t *testing.T) {
 	}
 }
 
-// D13: a finding no longer derived keeps no attributes; its row is filled from its key.
+// A finding no longer derived keeps no attributes; its row is filled from its key.
 func TestRiskFileRowFromKey(t *testing.T) {
 	l := findings.Listing{Records: map[string][]store.Record{"finding": {
 		srec("finding", "ports|risky-port|203.0.113.9:445", false),
@@ -186,7 +186,7 @@ func TestRiskFileRowFromKey(t *testing.T) {
 	}
 }
 
-// D9/D13: storage-unattributed.csv lists existing names that no current reference attributes.
+// storage-unattributed.csv lists existing names that no current reference attributes.
 func TestStorageUnattributedFile(t *testing.T) {
 	st := func(key string, kv ...any) store.Record { return srec("storage", key, true, kv...) }
 	l := findings.Listing{Records: map[string][]store.Record{

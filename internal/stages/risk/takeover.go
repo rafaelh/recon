@@ -12,7 +12,7 @@ import (
 )
 
 // Takeover is the takeover stage: one GET of "/" for each live web service whose
-// host is on a provider with an unclaimed-resource fingerprint (Spec 5 D7). DNS
+// host is on a provider with an unclaimed-resource fingerprint. DNS
 // evidence needs no request and is derived by the findings package.
 type Takeover struct{}
 

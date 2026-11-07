@@ -310,7 +310,7 @@ func insertBefore(stages []run.Stage, name string, s run.Stage) []run.Stage {
 
 func newWeb(t *testing.T) *web { return newWebWith(t) }
 
-// newWebWith is newWeb with the named Spec 5 stages in the stage list.
+// newWebWith is newWeb with the named risk stages in the stage list.
 func newWebWith(t *testing.T, keep ...string) *web {
 	t.Helper()
 	w := newWorldWith(t, keep...)
@@ -355,7 +355,7 @@ func (x *web) names(names ...string) {
 	x.crtsh(map[string][]string{"example.com": names}, nil)
 }
 
-// open declares an open port (what Spec 4's port stage will emit).
+// open declares an open port (what the port stage emits).
 func (x *web) open(addr, banner string) {
 	ap := mustAddrPort(addr)
 	x.ips[ap.Addr().String()] = true

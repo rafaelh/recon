@@ -12,11 +12,11 @@ import (
 
 // Visibility applies the showing rules for one Scope and Inventory. The rules
 // are evaluated on read, so an exclusion added later hides records found
-// earlier (Spec 1 D16):
+// earlier:
 //
-//   - a web record (a kind with HostAttr) is shown while its host is in scope (Spec 3 D17);
+//   - a web record (a kind with HostAttr) is shown while its host is in scope;
 //   - a port record (PortKey) is shown while its address is port-eligible, so a
-//     reassigned cloud address is not reported as the target's (Spec 4 D9);
+//     reassigned cloud address is not reported as the target's;
 //   - a record keyed by a hostname (HostKey) is shown while that name is in scope;
 //   - an entity record is never hidden: it is classified as in scope, a
 //     candidate or excluded, which decides its summary category;

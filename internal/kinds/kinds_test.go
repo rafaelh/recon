@@ -6,8 +6,9 @@ import (
 	"github.com/rafaelh/recon/internal/kinds"
 )
 
-// D26: the new kinds and which of them are counted.
-func TestSpec2Kinds(t *testing.T) {
+// The discovery kinds (addresses, owners, wildcards, resolutions) and which of
+// them are counted.
+func TestDiscoveryKinds(t *testing.T) {
 	want := map[string]struct {
 		category string
 		counted  bool

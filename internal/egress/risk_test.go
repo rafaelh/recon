@@ -51,7 +51,7 @@ func thirdPartyEgress(t *testing.T, base map[string]string) *egress.Egress {
 	return eg
 }
 
-// D16: ThirdPartyHTTP allows HEAD, and still nothing but GET, HEAD and POST.
+// ThirdPartyHTTP allows HEAD, and still nothing but GET, HEAD and POST.
 func TestThirdPartyAllowsHead(t *testing.T) {
 	rec := newRecorder(t, 200)
 	eg := thirdPartyEgress(t, map[string]string{"storage.googleapis.com": rec.srv.URL})
@@ -70,7 +70,7 @@ func TestThirdPartyAllowsHead(t *testing.T) {
 	}
 }
 
-// D16: a source pattern may have one wildcard label in the middle.
+// A source pattern may have one wildcard label in the middle.
 func TestSourceMiddleWildcard(t *testing.T) {
 	rec := newRecorder(t, 200)
 	eg := thirdPartyEgress(t, map[string]string{"s3.*.amazonaws.com": rec.srv.URL, "s3.amazonaws.com": rec.srv.URL})
@@ -98,7 +98,7 @@ func TestSourceMiddleWildcard(t *testing.T) {
 	}
 }
 
-// D16: exempt sources skip only the candidate refusal.
+// Exempt sources skip only the candidate refusal.
 func TestCandidateExemption(t *testing.T) {
 	rec := newRecorder(t, 200)
 	eg := thirdPartyEgress(t, map[string]string{"*.blob.core.windows.net": rec.srv.URL, "*.example.org": rec.srv.URL})
@@ -126,7 +126,7 @@ func TestCandidateExemption(t *testing.T) {
 	}
 }
 
-// D16: SourceBaseURLs accepts exact hosts, checked before patterns.
+// SourceBaseURLs accepts exact hosts, checked before patterns.
 func TestSourceBaseURLExactHost(t *testing.T) {
 	one, two := newRecorder(t, 200), newRecorder(t, 200)
 	eg := thirdPartyEgress(t, map[string]string{"*.blob.core.windows.net": one.srv.URL, "acct2.blob.core.windows.net": two.srv.URL})
@@ -141,7 +141,7 @@ func TestSourceBaseURLExactHost(t *testing.T) {
 	}
 }
 
-// D12: MX queries and rdata.
+// MX queries and rdata.
 func TestResolverMX(t *testing.T) {
 	srv := fakeDNS(t, func(w mdns.ResponseWriter, r *mdns.Msg) {
 		m := new(mdns.Msg)

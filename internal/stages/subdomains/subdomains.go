@@ -25,11 +25,11 @@ import (
 	"github.com/rafaelh/recon/internal/stages/web"
 )
 
-// maxPages caps archive and API paging inside one check (D24).
+// maxPages caps archive and API paging inside one check.
 const maxPages = 30
 
 // result is what a fetcher found. Attrs are attached to every hostname.
-// urls are the archive URLs of a source that has them (Spec 3 D16).
+// urls are the archive URLs of a source that has them.
 type result struct {
 	names []string
 	attrs kinds.HostnameAttrs

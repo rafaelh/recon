@@ -53,7 +53,7 @@ func rec(t *testing.T, s *store.Store, kind, key string) store.Record {
 	return store.Record{}
 }
 
-// B9: re-observation updates attrs and last_seen, keeps first_seen.
+// Re-observation updates attrs and last_seen, keeps first_seen.
 func TestReobservation(t *testing.T) {
 	c := newClock()
 	s, _ := open(t, c, nil)
@@ -73,7 +73,7 @@ func TestReobservation(t *testing.T) {
 	}
 }
 
-// B9: two stages observing one record keep both stages' attrs; later stages in order win.
+// Two stages observing one record keep both stages' attrs; later stages in order win.
 func TestTwoStagesAttrs(t *testing.T) {
 	c := newClock()
 	s, _ := open(t, c, nil)
@@ -112,7 +112,7 @@ func TestTwoStagesAttrs(t *testing.T) {
 	}
 }
 
-// B6/B8: completed checks vs failures.
+// Completed checks vs failures.
 func TestChecksAndFailures(t *testing.T) {
 	c := newClock()
 	s, _ := open(t, c, nil)
@@ -136,7 +136,7 @@ func TestChecksAndFailures(t *testing.T) {
 
 func hasKey(m map[string]struct{}, k string) bool { _, ok := m[k]; return ok }
 
-// B10: redo semantics.
+// Redo semantics.
 func TestRedoSweepsOrphans(t *testing.T) {
 	c := newClock()
 	s, _ := open(t, c, nil)
@@ -219,7 +219,7 @@ func TestRedoFailedCheckKeepsObservations(t *testing.T) {
 	}
 }
 
-// B7: batching commits and survives reopen; OnNew fires once per new record.
+// Batching commits and survives reopen; OnNew fires once per new record.
 func TestBatchingAndOnNew(t *testing.T) {
 	c := newClock()
 	s, p := open(t, c, nil)
@@ -255,7 +255,7 @@ func TestBatchingAndOnNew(t *testing.T) {
 	}
 }
 
-// B24: redaction at the writer sink.
+// Redaction at the writer sink.
 func TestRedactionInStore(t *testing.T) {
 	c := newClock()
 	r := config.NewRedactor("TOPSECRET")

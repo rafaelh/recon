@@ -1,4 +1,4 @@
-# Built-in sensitive paths (Spec 5, B5). Each is requested once per live web service.
+# Built-in sensitive paths. Each is requested once per live web service.
 # Every entry needs a signature (an RE2 over the first 1 MiB of the body) and/or magic
 # (a hex body prefix) so a catch-all site that answers 200 to everything is not flagged.
 # status defaults to 200 and severity to medium.

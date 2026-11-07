@@ -20,9 +20,9 @@ import (
 	"github.com/rafaelh/recon/internal/testkit"
 )
 
-// B7: a risky open port is medium; an exclusion added later makes it not-current
+// A risky open port is medium; an exclusion added later makes it not-current
 // in risk-ports.csv and removes it from the summary.
-func TestRiskB7_RiskyPorts(t *testing.T) {
+func TestRiskyPorts(t *testing.T) {
 	x := newRisk(t)
 	x.names()
 	x.open("198.51.100.5:3389", "")
@@ -54,8 +54,8 @@ func TestRiskB7_RiskyPorts(t *testing.T) {
 	}
 }
 
-// B7: a custom --risky-ports list replaces the default.
-func TestRiskB7_RiskyPortsConfigurable(t *testing.T) {
+// A custom --risky-ports list replaces the default.
+func TestRiskyPortsConfigurable(t *testing.T) {
 	x := newRisk(t)
 	x.names()
 	x.open("198.51.100.5:3389", "")
@@ -66,8 +66,8 @@ func TestRiskB7_RiskyPortsConfigurable(t *testing.T) {
 	}
 }
 
-// B8: expired, expiring and self-signed certificates; the clock moves the findings with no new requests.
-func TestRiskB8_Certificates(t *testing.T) {
+// Expired, expiring and self-signed certificates; the clock moves the findings with no new requests.
+func TestCertificateFindings(t *testing.T) {
 	x := newRisk(t)
 	x.names("old.example.com", "soon.example.com", "self.example.com", "fine.example.com")
 	ca := newCA(t, "Test CA")
@@ -153,8 +153,8 @@ func TestRiskB8_Certificates(t *testing.T) {
 	}
 }
 
-// D8: the crawl records every storage URL in any link or asset, off-scope hosts included.
-func TestRiskD8_CrawlRecordsStorageRefs(t *testing.T) {
+// The crawl records every storage URL in any link or asset, off-scope hosts included.
+func TestCrawlRecordsStorageRefs(t *testing.T) {
 	x := newWeb(t)
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -199,8 +199,8 @@ func TestRiskD8_CrawlRecordsStorageRefs(t *testing.T) {
 	}
 }
 
-// D8: a reference counts only while its page host is in scope.
-func TestRiskD8_ReferenceFollowsPageScope(t *testing.T) {
+// A reference counts only while its page host is in scope.
+func TestStorageRefFollowsPageScope(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -256,8 +256,8 @@ func TestRiskPlumbing_FilesWrittenSortedAndSafe(t *testing.T) {
 	}
 }
 
-// D4: the registry order and each stage's contact.
-func TestRiskD4_StageRegistry(t *testing.T) {
+// The registry order and each stage's contact.
+func TestRiskStageRegistry(t *testing.T) {
 	var names []string
 	contact := map[string]run.Contact{}
 	for _, s := range cli.DefaultDeps().Stages {
@@ -353,10 +353,10 @@ func TestRiskPlumbing_FoundOncePerEngagementAcrossInterrupt(t *testing.T) {
 	}
 }
 
-// D1: findings are derived after every stage that did work, not only when the
+// Findings are derived after every stage that did work, not only when the
 // pass ends, so a later stage in the same pass (the hours-long port sweep) does
 // not delay them.
-func TestRiskD1_DerivedAfterEachStage(t *testing.T) {
+func TestFindingsDerivedAfterEachStage(t *testing.T) {
 	seed := &testkit.Stage{StageName: "seed", Kind: run.ThirdParty,
 		ChecksFn: func(run.View) []run.Check { return []run.Check{{Key: "c1"}} },
 		RunFn: func(context.Context, run.Check, egress.Clients) ([]run.Observation, error) {

@@ -17,12 +17,12 @@ import (
 	"github.com/rafaelh/recon/internal/run"
 )
 
-// maxHops is how many redirects a probe follows (Spec 3 D11).
+// maxHops is how many redirects a probe follows.
 const maxHops = 10
 
 // Probe is the httpprobe stage: it finds the HTTP and HTTPS services of every
 // probe hostname and of every in-scope IP with an open port, and records each
-// with what an ordinary browser would see (Spec 3 B1 to B5).
+// with what an ordinary browser would see.
 type Probe struct{}
 
 // NewProbe returns the httpprobe stage.
@@ -38,14 +38,14 @@ type probeInput struct {
 	host   string // hostname, or an IP literal
 	port   int
 	scheme string // "" tries https, then http
-	detect bool   // a port-detection check (D4), not a hostname check
+	detect bool   // a port-detection check, not a hostname check
 	addr   netip.AddrPort
 }
 
-// Checks yields h:80 and h:443 for every probe hostname (D2), one detection
+// Checks yields h:80 and h:443 for every probe hostname, one detection
 // check per open port with no banner whose representative has not already
-// been given one on that port (D4), and h:port for the other names on each
-// address that answered HTTP (D5). A key may repeat; the runner keeps the first.
+// been given one on that port, and h:port for the other names on each
+// address that answered HTTP. A key may repeat; the runner keeps the first.
 func (*Probe) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		if _, err := fingerprints(); err != nil {
@@ -76,7 +76,7 @@ func (*Probe) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 			if rep == "" || (isName && (port == 80 || port == 443)) {
 				continue
 			}
-			// A name on several addresses is tested on one of them (D5).
+			// A name on several addresses is tested on one of them.
 			rp := fmt.Sprintf("%s:%d", rep, port)
 			if detecting[rp] {
 				continue
@@ -116,8 +116,8 @@ func (*Probe) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 }
 
 // Run probes one service. A live answer (any status) is recorded; NoService and
-// Refused complete the check with nothing (D7). On an undecided port https is
-// tried first, then http unless the connection was refused (D4).
+// Refused complete the check with nothing. On an undecided port https is
+// tried first, then http unless the connection was refused.
 func (p *Probe) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
 	in := c.Input.(probeInput)
 	schemes := []string{in.scheme}
@@ -208,7 +208,7 @@ func otherHost(host, self string) (string, bool) {
 }
 
 // service builds the web_service record from the first response and the page
-// the redirect chain ends on (D8), following in-scope redirects (D11).
+// the redirect chain ends on, following in-scope redirects.
 func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first egress.Response, e egress.Clients) ([]run.Observation, error) {
 	obs := newObsSet()
 	last := first
@@ -227,7 +227,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		if d, ok := otherHost(host, in.host); ok {
 			obs.add(kinds.Hostname.Obs(d, kinds.HostnameAttrs{}))
 		}
-		// A redirect to a storage URL is a reference, and a browser follows it (Spec 5 D8).
+		// A redirect to a storage URL is a reference, and a browser follows it.
 		if ref, ok := cloudstorage.ParseRef(target); ok {
 			if page, ok := NormaliseURL(last.URL()); ok {
 				obs.add(storageObservation(storageRef{ref: ref, url: target, page: page, via: "asset"}))
@@ -249,7 +249,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		if !ok { // out of scope, excluded, unresolved or not answering: the chain stops here
 			break
 		}
-		if hopAt >= 0 { // D15: a fetched url carries its status
+		if hopAt >= 0 { // a fetched url carries its status
 			hopURL.Status = next.Status
 			obs.list[hopAt] = kinds.URL.Obs(target, hopURL)
 		}
@@ -293,7 +293,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 }
 
 // sanHost turns a certificate DNS name into a hostname: a wildcard contributes
-// its base name; malformed names, IP literals and public suffixes are skipped (D12).
+// its base name; malformed names, IP literals and public suffixes are skipped.
 func sanHost(name string) (string, bool) {
 	name = strings.TrimPrefix(strings.TrimSpace(name), "*.")
 	if strings.ContainsAny(name, "*@/: ") {

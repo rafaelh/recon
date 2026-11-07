@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// B2, D13: permutations default on, cap 200; file, env and flag settings.
+// Permutations default on, cap 200; file, env and flag settings.
 func TestPermutationSettings(t *testing.T) {
 	clearEnv(t)
 	s, err := load(t, "")
@@ -47,7 +47,7 @@ func TestPermutationValidation(t *testing.T) {
 	}
 }
 
-// B2: a custom wordlist replaces the built-in one, and its content changes the hash.
+// A custom wordlist replaces the built-in one, and its content changes the hash.
 func TestWordlistContentAndHash(t *testing.T) {
 	clearEnv(t)
 	dir := t.TempDir()
@@ -73,7 +73,7 @@ func TestWordlistContentAndHash(t *testing.T) {
 }
 
 func TestHelpShowsPermutationFlags(t *testing.T) {
-	// Registered flags carry their defaults in the usage text (Spec 1 B21).
+	// Registered flags carry their defaults in the usage text.
 	fs := newFlagSetForHelp()
 	for _, name := range []string{"no-permutations", "permutations-max"} {
 		if fs.Lookup(name) == nil {

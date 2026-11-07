@@ -18,7 +18,7 @@ import (
 )
 
 // Email reads MX, SPF, DMARC and common DKIM selectors for each in-scope input
-// root (Spec 5 D12). It only asks public DNS, so it runs under --passive.
+// root. It only asks public DNS, so it runs under --passive.
 type Email struct{}
 
 // NewEmail returns the email stage.

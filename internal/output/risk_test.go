@@ -50,7 +50,7 @@ func cellMap(f output.File, r output.Row) map[string]string {
 	return m
 }
 
-// D13: email-posture.csv has one row per in-scope root.
+// email-posture.csv has one row per in-scope root.
 func TestEmailPostureFile(t *testing.T) {
 	snap := snapshot(map[string][]store.Record{"email_posture": {
 		srec("email_posture", "example.com", true, "mx", "mail.example.com", "spf", "v=spf1 -all", "spf_lookups", 3.0,

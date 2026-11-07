@@ -190,9 +190,9 @@ func csvSafe(s string) string {
 	return stripControl(s)
 }
 
-// Default returns the registered files: Spec 1's scope, candidates and excluded,
-// then Spec 2's DNS files (D27), Spec 3's web files, Spec 4's open-ports.csv,
-// Spec 5's email-posture.csv and the findings files.
+// Default returns the registered files: scope, candidates and excluded, then
+// the DNS files, the web files, open-ports.csv, email-posture.csv and the
+// findings files.
 func Default() []File {
 	files := []File{
 		{Name: "scope.csv", Format: CSV, Columns: []string{"type", "value", "source"}, Rows: scopeRows},

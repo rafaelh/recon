@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-// Spec 3: web services and URLs. The tests drive cli.Execute with the real
+// Web services and URLs. The tests drive cli.Execute with the real
 // stage list and fake servers behind egress's DialMap; request counters on every
 // server assert what was and was not contacted.
 
@@ -32,9 +32,9 @@ func (x *web) mustRun(args ...string) {
 
 func (x *web) completedKeys(stage string) []string { return x.h.completed(eng, stage) }
 
-// --- B1: which hostnames and ports are probed ---
+// --- Which hostnames and ports are probed ---
 
-func TestWebB1_HostnamesProbedOn80And443(t *testing.T) {
+func TestProbe_HostnamesProbedOn80And443(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com", "b.example.com", "c.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -67,7 +67,7 @@ func TestWebB1_HostnamesProbedOn80And443(t *testing.T) {
 	}
 }
 
-func TestWebB1_WildcardSharedAndExcluded(t *testing.T) {
+func TestProbe_WildcardSharedAndExcluded(t *testing.T) {
 	x := newWeb(t)
 	x.names("wild1.w.example.com", "wild2.w.example.com", "hk.example.com", "ex.example.com")
 	x.dns.Wildcard("w.example.com", "203.0.113.20")
@@ -96,7 +96,7 @@ func TestWebB1_WildcardSharedAndExcluded(t *testing.T) {
 	x.wantServices("http://hk.example.com", "http://wild1.w.example.com")
 }
 
-func TestWebB1_NonStandardPortDetectedOnce(t *testing.T) {
+func TestProbe_NonStandardPortDetectedOnce(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com", "b.example.com", "c.example.com")
 	for _, n := range []string{"a", "b", "c"} {
@@ -117,7 +117,7 @@ func TestWebB1_NonStandardPortDetectedOnce(t *testing.T) {
 	if !contains(keys, "port|203.0.113.5:8080") {
 		t.Errorf("detection check missing: %v", keys)
 	}
-	// Ports 80 and 443 are D2's, never the detection check's.
+	// Ports 80 and 443 belong to the hostname checks, never the detection check.
 	for _, k := range keys {
 		if strings.HasPrefix(k, "port|") && (strings.HasSuffix(k, ":80") || strings.HasSuffix(k, ":443")) {
 			t.Errorf("detection check %s on a standard port", k)
@@ -126,7 +126,7 @@ func TestWebB1_NonStandardPortDetectedOnce(t *testing.T) {
 	x.wantRecordCount("http_port", 1)
 }
 
-func TestWebB1_DetectionTestsItsOwnAddress(t *testing.T) {
+func TestProbe_DetectionTestsItsOwnAddress(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com", "b.example.com", "c.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -145,14 +145,14 @@ func TestWebB1_DetectionTestsItsOwnAddress(t *testing.T) {
 	if s6.conns.Load() == 0 {
 		t.Error("the detection check of 203.0.113.6:8080 never reached that address")
 	}
-	// a detects .5; b is .5's vhost (D5); c, only on .6, is never probed.
+	// a detects .5; b is .5's vhost; c, only on .6, is never probed.
 	x.wantServices("http://a.example.com:8080", "http://b.example.com:8080")
 	if got := s5.hostHeaders(); !slices.Equal(got, []string{"a.example.com:8080", "b.example.com:8080"}) {
 		t.Errorf("Host headers at .5 = %v", got)
 	}
 }
 
-func TestWebB1_NameOnTwoAddressesIsDetectedOnce(t *testing.T) {
+func TestProbe_NameOnTwoAddressesIsDetectedOnce(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5", "203.0.113.6")
@@ -179,7 +179,7 @@ func (x *web) wantRecordCount(kind string, n int) {
 	}
 }
 
-func TestWebB1_SchemeDetectionAndFallback(t *testing.T) {
+func TestProbe_SchemeDetectionAndFallback(t *testing.T) {
 	for _, mode := range []string{"reset", "hang"} {
 		t.Run("plain server that "+mode+"s a ClientHello", func(t *testing.T) {
 			x := newWeb(t)
@@ -222,7 +222,7 @@ func TestWebB1_SchemeDetectionAndFallback(t *testing.T) {
 	})
 }
 
-func TestWebB1_BannerAndNonHTTPPortsGetNoVhostRequests(t *testing.T) {
+func TestProbe_BannerAndNonHTTPPortsGetNoVhostRequests(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com", "b.example.com", "c.example.com")
 	for _, n := range []string{"a", "b", "c"} {
@@ -252,9 +252,9 @@ func TestWebB1_BannerAndNonHTTPPortsGetNoVhostRequests(t *testing.T) {
 	x.wantRecordCount("http_port", 0)
 }
 
-// --- B2: services by IP ---
+// --- Services by IP ---
 
-func TestWebB2_IPLiteralService(t *testing.T) {
+func TestProbeIP_IPLiteralService(t *testing.T) {
 	x := newWeb(t)
 	v4 := x.plain("198.51.100.7", 8080, page("<title>v4</title>"))
 	v6 := x.plain("2001:db8:1::5", 80, page("<title>v6</title>"))
@@ -288,7 +288,7 @@ func TestWebB2_IPLiteralService(t *testing.T) {
 	}
 }
 
-func TestWebB2_ANameWinsOverTheIP(t *testing.T) {
+func TestProbeIP_ANameWinsOverTheIP(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "198.51.100.7")
@@ -302,7 +302,7 @@ func TestWebB2_ANameWinsOverTheIP(t *testing.T) {
 	}
 }
 
-func TestWebB2_OutOfScopeAndExcludedIPsAreNotProbed(t *testing.T) {
+func TestProbeIP_OutOfScopeAndExcludedIPsAreNotProbed(t *testing.T) {
 	x := newWeb(t)
 	outside := x.plain("192.0.2.9", 8080, page("outside"))
 	excluded := x.plain("198.51.100.200", 8080, page("excluded"))
@@ -316,9 +316,9 @@ func TestWebB2_OutOfScopeAndExcludedIPsAreNotProbed(t *testing.T) {
 	}
 }
 
-// --- B3: what is recorded for a live service ---
+// --- What is recorded for a live service ---
 
-func TestWebB3_AllAttributes(t *testing.T) {
+func TestWebService_AllAttributes(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -364,7 +364,7 @@ func TestWebB3_AllAttributes(t *testing.T) {
 	}
 }
 
-func TestWebB3_ExpiredAndSelfSignedCertificatesAreRecorded(t *testing.T) {
+func TestWebService_ExpiredAndSelfSignedCertificatesAreRecorded(t *testing.T) {
 	x := newWeb(t)
 	x.names("exp.example.com", "self.example.com", "selfca.example.com")
 	ca := newCA(t, "Test Root CA")
@@ -408,7 +408,7 @@ func TestWebB3_ExpiredAndSelfSignedCertificatesAreRecorded(t *testing.T) {
 	}
 }
 
-func TestWebB3_TitleIsTrimmedAndCapped(t *testing.T) {
+func TestWebService_TitleIsTrimmedAndCapped(t *testing.T) {
 	x := newWeb(t)
 	cases := map[string]struct{ ctype, body string }{
 		"t1": {"text/html", "<html><head><title>\n  Hello \t World  </title><title>second</title></head></html>"},
@@ -451,7 +451,7 @@ func TestWebB3_TitleIsTrimmedAndCapped(t *testing.T) {
 	}
 }
 
-func TestWebB3_AnyStatusIsALiveService(t *testing.T) {
+func TestWebService_AnyStatusIsALiveService(t *testing.T) {
 	x := newWeb(t)
 	x.names("gone.example.com", "broken.example.com")
 	x.host("gone.example.com", "203.0.113.5")
@@ -471,7 +471,7 @@ func TestWebB3_AnyStatusIsALiveService(t *testing.T) {
 	}
 }
 
-func TestWebB3_RedoHTTPProbeRefreshesTheService(t *testing.T) {
+func TestWebService_RedoHTTPProbeRefreshesTheService(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")

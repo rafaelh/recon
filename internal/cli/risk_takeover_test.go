@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// B2: a dangling CNAME into a provider marked claimable is a high takeover, from
+// A dangling CNAME into a provider marked claimable is a high takeover, from
 // DNS evidence alone, so it works under --passive with no target request.
-func TestRiskB2_DNSTakeoverPassive(t *testing.T) {
+func TestTakeover_DNSTakeoverPassive(t *testing.T) {
 	x := newRisk(t, "storage", "takeover", "sensitive-paths")
 	x.names("shop.example.com", "ok.example.com")
 	x.dns.CNAME("shop.example.com", "gone.cloudapp.net") // the target does not exist: NXDOMAIN
@@ -40,8 +40,8 @@ func TestRiskB2_DNSTakeoverPassive(t *testing.T) {
 	}
 }
 
-// B2: a resolving provider host whose body matches the fingerprint is a takeover; a different body is not.
-func TestRiskB2_HTTPTakeover(t *testing.T) {
+// A resolving provider host whose body matches the fingerprint is a takeover; a different body is not.
+func TestTakeover_HTTPTakeover(t *testing.T) {
 	x := newRisk(t, "takeover")
 	x.names("app.example.com", "ok.example.com")
 	x.dns.CNAME("app.example.com", "acme.herokuapp.com")
@@ -87,8 +87,8 @@ func TestRiskB2_HTTPTakeover(t *testing.T) {
 	}
 }
 
-// B2/D6: a CNAME to a missing S3 bucket gives exactly one finding listing both kinds of evidence.
-func TestRiskB2_MissingS3BucketOneFinding(t *testing.T) {
+// A CNAME to a missing S3 bucket gives exactly one finding listing both kinds of evidence.
+func TestTakeover_MissingS3BucketOneFinding(t *testing.T) {
 	x := newRisk(t, "storage", "takeover")
 	x.names("static.example.com")
 	x.dns.CNAME("static.example.com", "lost-bucket.s3.amazonaws.com")
@@ -111,8 +111,8 @@ func TestRiskB2_MissingS3BucketOneFinding(t *testing.T) {
 	}
 }
 
-// B2/D6: a dangling Azure account CNAME is one finding: NXDOMAIN and a missing account.
-func TestRiskB2_DanglingAzureAccountOneFinding(t *testing.T) {
+// A dangling Azure account CNAME is one finding: NXDOMAIN and a missing account.
+func TestTakeover_DanglingAzureAccountOneFinding(t *testing.T) {
 	x := newRisk(t, "storage", "takeover")
 	x.names("files.example.com")
 	x.dns.CNAME("files.example.com", "acctone.blob.core.windows.net")
@@ -124,8 +124,8 @@ func TestRiskB2_DanglingAzureAccountOneFinding(t *testing.T) {
 	}
 }
 
-// B2/D2: a missing bucket in <script src> is high; one referenced only by <a href> is low.
-func TestRiskB2_MissingBucketByKindOfReference(t *testing.T) {
+// A missing bucket in <script src> is high; one referenced only by <a href> is low.
+func TestTakeover_MissingBucketByKindOfReference(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -150,7 +150,7 @@ func TestRiskB2_MissingBucketByKindOfReference(t *testing.T) {
 	}
 }
 
-// D1/B2: a finding that is no longer derived becomes not-current and keeps its first_seen.
+// A finding that is no longer derived becomes not-current and keeps its first_seen.
 func TestRiskDerivationKeepsFirstSeen(t *testing.T) {
 	x := newRisk(t, "takeover")
 	x.names("shop.example.com")

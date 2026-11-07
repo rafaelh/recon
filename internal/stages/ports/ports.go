@@ -1,6 +1,6 @@
 // Package ports is the ports stage: it finds which of the configured TCP ports
 // the target's own addresses accept connections on, connecting only as any
-// client would (Spec 4).
+// client would.
 package ports
 
 import (
@@ -37,12 +37,12 @@ func (*Ports) Configured(e run.Env) (bool, string) {
 }
 
 // Workers is --port-concurrency: a silent port costs the whole connect
-// timeout, so the sweep needs far more workers than other stages (Spec 4 D8).
+// timeout, so the sweep needs far more workers than other stages.
 func (*Ports) Workers(s config.Settings) int { return s.PortConcurrency }
 
 // Checks yields one check per eligible address and port, port by port. The
 // transport rate-limits each address, so the order keeps every worker off the
-// same host (D4).
+// same host.
 func (*Ports) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		addrs := eligible(ctx, v)
@@ -60,7 +60,7 @@ func (*Ports) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 	}
 }
 
-// eligible lists the addresses to check, built once per Checks call (D2): every
+// eligible lists the addresses to check, built once per Checks call: every
 // distinct address of the in-scope IPv4 netblocks, then the other found
 // addresses (hostname-resolved, or IPv6 inside an in-scope netblock), keeping
 // those the single eligibility decision allows.
@@ -100,7 +100,7 @@ func eligible(ctx context.Context, v run.View) []netip.Addr {
 // completed checks with nothing found. Refused cannot happen for a check the
 // stage yielded (the policy is built from the same scope and inventory), so it
 // is a failure rather than a result that would permanently skip an address that
-// later becomes eligible (D5).
+// later becomes eligible.
 func (*Ports) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
 	ap := c.Input.(netip.AddrPort)
 	res, err := e.TCP.Connect(ctx, ap.Addr(), int(ap.Port()))
@@ -122,7 +122,7 @@ func (*Ports) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 
 // encodeBanner escapes the banner so it is lossless for binary greetings and
 // invalid UTF-8, and readable for text. strconv.Unquote reverses it when the
-// text is wrapped in double quotes again (D6).
+// text is wrapped in double quotes again.
 func encodeBanner(b []byte) string {
 	q := strconv.Quote(string(b))
 	return q[1 : len(q)-1]

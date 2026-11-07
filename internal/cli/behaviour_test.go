@@ -53,7 +53,7 @@ outer:
 	return false
 }
 
-// B1: every input form is stored; files ignore comments and blanks.
+// Every input form is stored; files ignore comments and blanks.
 func TestInputsStored(t *testing.T) {
 	h := newHarness(t, noop())
 	df := writeFile(t, t.TempDir(), "d.txt", "# comment\n\nfile.example.org\n")
@@ -82,7 +82,7 @@ func TestInputsStored(t *testing.T) {
 	}
 }
 
-// B2: engagement naming.
+// Engagement naming.
 func TestEngagementDirNaming(t *testing.T) {
 	h := newHarness(t, noop())
 	for _, c := range []struct {
@@ -119,7 +119,7 @@ func TestNoInputsAndNoEngagement(t *testing.T) {
 	}
 }
 
-// B2/B5/B10: help.
+// Help.
 func TestHelp(t *testing.T) {
 	st := &testkit.Stage{StageName: "alpha", Kind: run.ThirdParty}
 	h := newHarness(t, st, &testkit.Stage{StageName: "beta", Kind: run.ThirdParty})
@@ -141,7 +141,7 @@ func TestHelp(t *testing.T) {
 	}
 }
 
-// B3: re-runs add inputs; the engagement name alone resumes; promoted candidates move into scope.
+// Re-runs add inputs; the engagement name alone resumes; promoted candidates move into scope.
 func TestRerunAddsAndResumes(t *testing.T) {
 	var gotRoots, gotExcl []string
 	st := &testkit.Stage{StageName: "spy", Kind: run.ThirdParty, ChecksFn: func(v run.View) []run.Check {
@@ -193,7 +193,8 @@ func TestPromotedCandidate(t *testing.T) {
 	}
 }
 
-// B4.
+// A directory that is not an engagement is refused untouched; an empty one, or
+// one whose creation was interrupted, is adopted.
 func TestNonEngagementDirRefused(t *testing.T) {
 	h := newHarness(t, noop())
 	legacy := h.eng("legacy")
@@ -227,7 +228,7 @@ func TestNonEngagementDirRefused(t *testing.T) {
 	}
 }
 
-// B6: re-runs perform only checks without a recorded result.
+// Re-runs perform only checks without a recorded result.
 func TestResumeOnlyNewChecks(t *testing.T) {
 	st := &testkit.Stage{StageName: "ports", Kind: run.ThirdParty, ChecksFn: func(v run.View) []run.Check {
 		var cs []run.Check
@@ -272,7 +273,7 @@ func TestKeyEncodedSettingCreatesNewChecks(t *testing.T) {
 	}
 }
 
-// B8: transient failures.
+// Transient failures.
 func TestTransientFailure(t *testing.T) {
 	flaky := &testkit.Stage{StageName: "flaky", Kind: run.ThirdParty,
 		ChecksFn: func(v run.View) []run.Check {
@@ -354,7 +355,7 @@ func TestErrAbortStage(t *testing.T) {
 	}
 }
 
-// B8/B11: a stage whose check enumeration fails is counted as failed once per
+// A stage whose check enumeration fails is counted as failed once per
 // run, and the run still terminates.
 func TestEnumerationErrorTerminates(t *testing.T) {
 	st := &testkit.Stage{StageName: "enum", Kind: run.ThirdParty,
@@ -373,7 +374,7 @@ func TestEnumerationErrorTerminates(t *testing.T) {
 	}
 }
 
-// B10: redo.
+// Redo.
 func redoStages(behaviour *int) (*testkit.Stage, *testkit.Stage) {
 	s := &testkit.Stage{StageName: "src", Kind: run.ThirdParty,
 		ChecksFn: func(v run.View) []run.Check {
@@ -510,7 +511,7 @@ func TestRedoUnknownStage(t *testing.T) {
 	}
 }
 
-// B11: discovery loop across stages and passes.
+// Discovery loop across stages and passes.
 func TestDiscoveryLoop(t *testing.T) {
 	perHost := func(prefix string) func(v run.View) []run.Check {
 		return func(v run.View) []run.Check {
@@ -569,7 +570,7 @@ func TestDiscoveryLoop(t *testing.T) {
 	}
 }
 
-// B13: passive.
+// Passive mode.
 func TestPassive(t *testing.T) {
 	target := &testkit.Stage{StageName: "probe", Kind: run.Target, ChecksFn: func(v run.View) []run.Check { return testkit.Keys("p", 3) }}
 	third := &testkit.Stage{StageName: "third", Kind: run.ThirdParty, ChecksFn: func(v run.View) []run.Check { return testkit.Keys("t", 2) }}
@@ -589,7 +590,7 @@ func TestPassive(t *testing.T) {
 	}
 }
 
-// B14: acknowledgement.
+// Acknowledgement.
 // ackStage has two fixed checks plus one per root, so adding a root creates new work.
 func ackStage() *testkit.Stage {
 	return &testkit.Stage{StageName: "probe", Kind: run.Target, ChecksFn: func(v run.View) []run.Check {
@@ -691,7 +692,7 @@ func TestAckFlag(t *testing.T) {
 	}
 }
 
-// B15: netblock guard.
+// Netblock guard.
 func asnServer(t *testing.T, h *harness, prefix *string) {
 	srv := newPrefixServer(t, prefix)
 	h.eopts.SourceBaseURLs = map[string]string{"stat.ripe.net": srv}
@@ -741,7 +742,7 @@ func TestNetblockInputGuard(t *testing.T) {
 	}
 }
 
-// B16 at CLI level: excluded.csv.
+// excluded.csv, end to end through the CLI.
 func TestExcludedCSV(t *testing.T) {
 	st := &testkit.Stage{StageName: "disc", Kind: run.ThirdParty,
 		ChecksFn: func(v run.View) []run.Check { return testkit.Keys("c", 1) },
@@ -770,7 +771,7 @@ func TestExcludedCSV(t *testing.T) {
 	}
 }
 
-// B17/B18: states, found lines, counts, summary.
+// States, found lines, counts, summary.
 func TestStageStatesAndFound(t *testing.T) {
 	prev := &testkit.Stage{StageName: "prev", Kind: run.ThirdParty, ChecksFn: func(v run.View) []run.Check { return testkit.Keys("p", 2) }}
 	failing := &testkit.Stage{StageName: "failing", Kind: run.ThirdParty,
@@ -836,7 +837,7 @@ func TestStageStatesAndFound(t *testing.T) {
 		}
 	}
 	// 1.2.3.4 is not port-eligible, so its open port is neither printed nor
-	// counted (Spec 4 D9).
+	// counted.
 	if found["open port|1.2.3.4:80"] {
 		t.Error("an open port on an address that is not port-eligible must not be printed")
 	}
@@ -861,7 +862,7 @@ func TestStageStatesAndFound(t *testing.T) {
 	}
 	totals := sum[0]["totals"].(map[string]any)
 	// 1.2.3.4 is neither in a netblock nor the address of an in-scope name, so
-	// its open port is not the target's and is not counted (Spec 4 D9).
+	// its open port is not the target's and is not counted.
 	if totals["urls"] != float64(2) || totals["hosts"] != float64(1) || totals["open ports"] != float64(0) {
 		t.Errorf("totals = %v", totals)
 	}
@@ -884,7 +885,7 @@ func TestStageStatesAndFound(t *testing.T) {
 	}
 }
 
-// B19.
+// With --json every stdout line is an unstyled JSON event, errors included.
 func TestJSONMode(t *testing.T) {
 	h := newHarness(t, noop())
 	if code := h.exec("a.com", "--json"); code != 0 {
@@ -934,7 +935,7 @@ func TestNonTTYNoANSI(t *testing.T) {
 	}
 }
 
-// B21: concurrency bound.
+// Concurrency bound.
 func TestConcurrencyBound(t *testing.T) {
 	st := &testkit.Stage{StageName: "s", Kind: run.ThirdParty,
 		ChecksFn: func(v run.View) []run.Check { return testkit.Keys("c", 24) },
@@ -951,7 +952,7 @@ func TestConcurrencyBound(t *testing.T) {
 	}
 }
 
-// B22: invalid input is rejected before any activity.
+// Invalid input is rejected before any activity.
 func TestInvalidInputsTouchNothing(t *testing.T) {
 	st := &testkit.Stage{StageName: "s", Kind: run.Target, ChecksFn: func(v run.View) []run.Check { return testkit.Keys("c", 3) }}
 	badCfg := writeFile(t, t.TempDir(), "bad.yaml", "concurency: 3\n")
@@ -992,7 +993,7 @@ func TestInvalidInputsTouchNothing(t *testing.T) {
 	}
 }
 
-// B23: exit codes and lock.
+// Exit codes and lock.
 func TestExitCodes(t *testing.T) {
 	st := &testkit.Stage{StageName: "s", Kind: run.ThirdParty,
 		ChecksFn: func(v run.View) []run.Check { return testkit.Keys("c", 2) },
@@ -1052,7 +1053,7 @@ func TestInterruptedByContext(t *testing.T) {
 	}
 }
 
-// B24: keys never leak.
+// Keys never leak.
 func TestSecretsNeverLeak(t *testing.T) {
 	const envKey, fileKey = "ENVSENTINEL-7f3a91", "FILESENTINEL-c20b44"
 	var gotEnv, gotFile string

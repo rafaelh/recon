@@ -25,7 +25,7 @@ import (
 	"github.com/rafaelh/recon/internal/testkit"
 )
 
-// Spec 4: open ports. The tests drive cli.Execute with the real ports stage
+// Open ports. The tests drive cli.Execute with the real ports stage
 // and a loopback listener behind egress's DialMap for every address and port
 // the sweep may dial, so nothing leaves the machine. Every listener counts the
 // connections it accepted, which is how the tests see what was contacted.
@@ -205,9 +205,8 @@ const hello = "HELLO\r\n"
 
 // --- registration ---
 
-// D1: the stage runs after crawl (and, since Spec 5 D4, after the Target stages
-// that follow it), so a long sweep does not delay probing of hostnames.
-func TestPortsD1_RegisteredAfterCrawl(t *testing.T) {
+// The stage runs after crawl (and after the Target stages that follow it), so a long sweep does not delay probing of hostnames.
+func TestPorts_RegisteredAfterCrawl(t *testing.T) {
 	var names []string
 	for _, s := range defaultStageList() {
 		names = append(names, s.Name())
@@ -223,8 +222,8 @@ func TestPortsD1_RegisteredAfterCrawl(t *testing.T) {
 	}
 }
 
-// D8: both flags are documented, and ports is a stage --redo accepts.
-func TestPortsD8_Help(t *testing.T) {
+// Both flags are documented, and ports is a stage --redo accepts.
+func TestPorts_Help(t *testing.T) {
 	h := newHarness(t, defaultStageList()...)
 	if code := h.exec("--help"); code != 0 {
 		t.Fatalf("exit %d", code)
@@ -240,7 +239,7 @@ func TestPortsD8_Help(t *testing.T) {
 	}
 }
 
-// D8: a stage that implements run.WorkerCounter gets that many workers; others get --concurrency.
+// A stage that implements run.WorkerCounter gets that many workers; others get --concurrency.
 type withWorkers struct {
 	*testkit.Stage
 	n int
@@ -248,7 +247,7 @@ type withWorkers struct {
 
 func (w withWorkers) Workers(config.Settings) int { return w.n }
 
-func TestPortsD8_WorkerCounter(t *testing.T) {
+func TestPorts_WorkerCounter(t *testing.T) {
 	slow := func(context.Context, run.Check, egress.Clients) ([]run.Observation, error) {
 		time.Sleep(60 * time.Millisecond)
 		return nil, nil
@@ -267,10 +266,10 @@ func TestPortsD8_WorkerCounter(t *testing.T) {
 	}
 }
 
-// --- B1: which addresses and ports ---
+// --- Which addresses and ports ---
 
-// B1/D2: the addresses checked are the eligible ones, no more and no fewer.
-func TestPortsB1_AddressSet(t *testing.T) {
+// The addresses checked are the eligible ones, no more and no fewer.
+func TestPorts_AddressSet(t *testing.T) {
 	p := newPorts(t)
 	ports := []int{8080, 9999}
 	p.names("app.example.com", "cdn.example.com", "ex.example.com", "wild1.w.example.com", "v6.example.com")
@@ -302,7 +301,7 @@ func TestPortsB1_AddressSet(t *testing.T) {
 			t.Errorf("canary %d (an excluded, shared or wildcard-only address) was contacted", i)
 		}
 	}
-	// ips.csv and the sweep cannot disagree (Spec 2 D18).
+	// ips.csv and the sweep cannot disagree.
 	checked := map[string]bool{}
 	for _, k := range p.checked() {
 		ap, _ := netip.ParseAddrPort(k)
@@ -315,9 +314,9 @@ func TestPortsB1_AddressSet(t *testing.T) {
 	}
 }
 
-// B1: IPv6 is checked like IPv4, over a real IPv6 socket. ::1 is in the in-scope
+// IPv6 is checked like IPv4, over a real IPv6 socket. ::1 is in the in-scope
 // netblock ::1/128 and is found through the AAAA record of a name.
-func TestPortsB1_IPv6(t *testing.T) {
+func TestPorts_IPv6(t *testing.T) {
 	p := newPorts(t)
 	if ln, err := net.Listen("tcp", "[::1]:0"); err != nil {
 		t.Skipf("no IPv6 loopback: %v", err)
@@ -337,8 +336,8 @@ func TestPortsB1_IPv6(t *testing.T) {
 	}
 }
 
-// B1/D2: an address whose owner is not known is skipped with a warning, then checked once it is.
-func TestPortsB1_UnknownOwnerSkippedThenChecked(t *testing.T) {
+// An address whose owner is not known is skipped with a warning, then checked once it is.
+func TestPorts_UnknownOwnerSkippedThenChecked(t *testing.T) {
 	p := newPorts(t)
 	p.names("u.example.com")
 	p.host("u.example.com", "192.0.2.77")
@@ -374,8 +373,8 @@ func TestPortsB1_UnknownOwnerSkippedThenChecked(t *testing.T) {
 	}
 }
 
-// B1/D4: every listed port is checked, port by port (not host by host).
-func TestPortsB1_PortMajorOrder(t *testing.T) {
+// Every listed port is checked, port by port (not host by host).
+func TestPorts_PortMajorOrder(t *testing.T) {
 	p := newPorts(t)
 	p.names("app.example.com")
 	p.host("app.example.com", "203.0.113.7")
@@ -401,8 +400,8 @@ func TestPortsB1_PortMajorOrder(t *testing.T) {
 	}
 }
 
-// B1/D3: adding a port creates only the new checks.
-func TestPortsB1_AddedPortChecksOnlyTheNewPort(t *testing.T) {
+// Adding a port creates only the new checks.
+func TestPorts_AddedPortChecksOnlyTheNewPort(t *testing.T) {
 	p := newPorts(t)
 	s8080 := p.serve("203.0.113.250", 8080, hello)
 	s9999 := p.serve("203.0.113.250", 9999, hello)
@@ -419,8 +418,8 @@ func TestPortsB1_AddedPortChecksOnlyTheNewPort(t *testing.T) {
 	}
 }
 
-// B1/D8: --port-concurrency bounds the connects in flight; --concurrency still bounds other stages.
-func TestPortsB1_WorkerBounds(t *testing.T) {
+// --port-concurrency bounds the connects in flight; --concurrency still bounds other stages.
+func TestPorts_WorkerBounds(t *testing.T) {
 	p := newPorts(t)
 	p.h.eopts.BannerWait = 500 * time.Millisecond
 	var ports []int
@@ -445,8 +444,8 @@ func TestPortsB1_WorkerBounds(t *testing.T) {
 	}
 }
 
-// B1: not run in passive mode, and not with an empty port list.
-func TestPortsB1_Gates(t *testing.T) {
+// Not run in passive mode, and not with an empty port list.
+func TestPorts_Gates(t *testing.T) {
 	p := newPorts(t)
 	srv := p.serve("203.0.113.250", 8080, hello)
 
@@ -463,9 +462,9 @@ func TestPortsB1_Gates(t *testing.T) {
 	}
 }
 
-// --- B2: banners and completed checks ---
+// --- Banners and completed checks ---
 
-func TestPortsB2_Banners(t *testing.T) {
+func TestPorts_Banners(t *testing.T) {
 	p := newPorts(t)
 	sent := map[int]string{
 		7001: "SSH-2.0-OpenSSH_9.6\r\n",
@@ -514,8 +513,8 @@ func TestPortsB2_Banners(t *testing.T) {
 	}
 }
 
-// B2: a closed or filtered port is recorded as checked and not retried.
-func TestPortsB2_CompletedChecksAreNotRetried(t *testing.T) {
+// A closed or filtered port is recorded as checked and not retried.
+func TestPorts_CompletedChecksAreNotRetried(t *testing.T) {
 	p := newPorts(t)
 	open := p.serve("203.0.113.250", 7001, hello)
 	p.ports[7005] = true // closed
@@ -536,8 +535,8 @@ func TestPortsB2_CompletedChecksAreNotRetried(t *testing.T) {
 	}
 }
 
-// B2: --redo ports re-checks, and a port that has since closed is no longer current.
-func TestPortsB2_RedoMarksClosedPortNotCurrent(t *testing.T) {
+// --redo ports re-checks, and a port that has since closed is no longer current.
+func TestPorts_RedoMarksClosedPortNotCurrent(t *testing.T) {
 	p := newPorts(t)
 	srv := p.serve("203.0.113.250", 7001, hello)
 	p.sweep([]int{7001})
@@ -575,8 +574,8 @@ func (r refusingPorts) Run(ctx context.Context, c run.Check, e egress.Clients) (
 	return r.Stage.Run(ctx, c, e)
 }
 
-// B2/D5: checks are filtered by the same policy, so Refused is unexpected: a failure, retried next run.
-func TestPortsB2_RefusedIsAFailedCheckRetried(t *testing.T) {
+// Checks are filtered by the same policy, so Refused is unexpected: a failure, retried next run.
+func TestPorts_RefusedIsAFailedCheckRetried(t *testing.T) {
 	p := newPorts(t)
 	srv := p.serve("203.0.113.250", 7001, hello)
 	var refuse atomic.Bool
@@ -600,9 +599,9 @@ func TestPortsB2_RefusedIsAFailedCheckRetried(t *testing.T) {
 	}
 }
 
-// --- B3: hand-off to web probing ---
+// --- Hand-off to web probing ---
 
-func TestPortsB3_HTTPOnANonStandardPortIsProbed(t *testing.T) {
+func TestPorts_HTTPOnANonStandardPortIsProbed(t *testing.T) {
 	p := newPorts(t)
 	p.names("app.example.com")
 	p.host("app.example.com", "203.0.113.5")
@@ -624,9 +623,9 @@ func TestPortsB3_HTTPOnANonStandardPortIsProbed(t *testing.T) {
 	}
 }
 
-// --- visibility on read (D9) and plumbing (D11, D14) ---
+// --- Visibility on read and plumbing ---
 
-func TestPortsD9_ExclusionHidesAnOpenPortButNotTheView(t *testing.T) {
+func TestPorts_ExclusionHidesAnOpenPortButNotTheView(t *testing.T) {
 	p := newPorts(t)
 	p.names("app.example.com")
 	p.host("app.example.com", "203.0.113.7")
@@ -706,7 +705,7 @@ func TestPortsPlumbing_OpenPortsCSV(t *testing.T) {
 	}
 }
 
-func TestPortsD14_FoundLine(t *testing.T) {
+func TestPorts_FoundLine(t *testing.T) {
 	p := newPorts(t)
 	p.serve("203.0.113.250", 7001, hello)
 	p.sweep([]int{7001})

@@ -24,9 +24,9 @@ func stateOf(w *world, stage string) (string, string) {
 	return s.str("state"), s.str("reason")
 }
 
-// --- B1: sources ---
+// --- Sources ---
 
-func TestB1_KeylessSources(t *testing.T) {
+func TestSources_KeylessSources(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"a.example.com\n*.example.com", "b.example.com", "off.example.org"}}, nil)
 	w.waybackURLs("http://c.example.com/x", "https://c.example.com/y", "http://e.example.com/z")
@@ -73,7 +73,7 @@ func TestB1_KeylessSources(t *testing.T) {
 	}
 }
 
-func TestB1_KeyedSources(t *testing.T) {
+func TestSources_KeyedSources(t *testing.T) {
 	w := newWorld(t)
 	keys := map[string]string{"VIRUSTOTAL": "vt-SECRET-1", "SECURITYTRAILS": "st-SECRET-2", "SHODAN": "sh-SECRET-3", "WHOISXML": "wx-SECRET-4"}
 	for k, v := range keys {
@@ -131,8 +131,8 @@ func TestB1_KeyedSources(t *testing.T) {
 	}
 }
 
-// D4: a rejected or exhausted key fails the stage, records nothing, and is retried.
-func TestB1_KeyFailuresAbortAndRetry(t *testing.T) {
+// A rejected or exhausted key fails the stage, records nothing, and is retried.
+func TestSources_KeyFailuresAbortAndRetry(t *testing.T) {
 	for _, code := range []int{401, 403, 429} {
 		t.Run(fmt.Sprint(code), func(t *testing.T) {
 			w := newWorld(t)
@@ -169,7 +169,7 @@ func TestB1_KeyFailuresAbortAndRetry(t *testing.T) {
 // A 404 that means "no data" completes the check: VirusTotal for an unknown
 // domain, and a Common Crawl page with no captures (the page count is of index
 // blocks, not matches).
-func TestB1_NotFoundIsNoData(t *testing.T) {
+func TestSources_NotFoundIsNoData(t *testing.T) {
 	w := newWorld(t)
 	t.Setenv("RECON_KEYS_VIRUSTOTAL", "vt-key")
 	w.handle("www.virustotal.com", status(404))
@@ -203,7 +203,7 @@ func TestB1_NotFoundIsNoData(t *testing.T) {
 	}
 }
 
-func TestB1_TruncatedBodyIsAnError(t *testing.T) {
+func TestSources_TruncatedBodyIsAnError(t *testing.T) {
 	w := newWorld(t)
 	w.handle("crt.sh", func(rw http.ResponseWriter, r *http.Request) {
 		_, _ = rw.Write([]byte(`[{"name_value":"a.example.com"}`))
@@ -225,7 +225,7 @@ func TestB1_TruncatedBodyIsAnError(t *testing.T) {
 }
 
 // An unreadable Wayback page count is a failure, not "zero pages, complete".
-func TestB1_UnreadableWaybackPageCountIsAnError(t *testing.T) {
+func TestSources_UnreadableWaybackPageCountIsAnError(t *testing.T) {
 	w := newWorld(t)
 	w.handle("web.archive.org", func(rw http.ResponseWriter, r *http.Request) {
 		_, _ = rw.Write([]byte("<html>Service Unavailable</html>"))
@@ -239,7 +239,7 @@ func TestB1_UnreadableWaybackPageCountIsAnError(t *testing.T) {
 	}
 }
 
-func TestB1_CrtshHasALongerTimeout(t *testing.T) {
+func TestSources_CrtshHasALongerTimeout(t *testing.T) {
 	w := newWorld(t)
 	w.h.eopts.HTTPTimeout = 150 * time.Millisecond
 	slow := func(body string) http.HandlerFunc {
@@ -260,7 +260,7 @@ func TestB1_CrtshHasALongerTimeout(t *testing.T) {
 	}
 }
 
-// --- B2: permutations ---
+// --- Permutations ---
 
 func permWorld(t *testing.T, words string) (*world, string) {
 	w := newWorld(t)
@@ -283,7 +283,7 @@ func queriedPrefix(w *world, prefix string) []string {
 	return out
 }
 
-func TestB2_PermutationsAreNeverSeeds(t *testing.T) {
+func TestPermutations_PermutationsAreNeverSeeds(t *testing.T) {
 	w, wl := permWorld(t, "dev\nboth\n")
 	if code := w.run("--passive", "--wordlist", wl, "example.com"); code != 0 {
 		t.Fatalf("exit %d", code)
@@ -314,7 +314,7 @@ func TestB2_PermutationsAreNeverSeeds(t *testing.T) {
 
 // Seeding the apex would split it into the label "example" under "com" and
 // query other registrants' domains.
-func TestB2_ApexIsNotSeed(t *testing.T) {
+func TestPermutations_ApexIsNotSeed(t *testing.T) {
 	w := newWorld(t)
 	wl := writeFile(t, t.TempDir(), "words.txt", "dev\nmail\n")
 	w.crtsh(map[string][]string{"example.com": {"example.com", "api.example.com"}}, nil)
@@ -336,7 +336,7 @@ func TestB2_ApexIsNotSeed(t *testing.T) {
 	}
 }
 
-func TestB2_Disabled(t *testing.T) {
+func TestPermutations_Disabled(t *testing.T) {
 	w, wl := permWorld(t, "dev\n")
 	w.run("--passive", "--wordlist", wl, "--no-permutations", "example.com")
 	if st, reason := stateOf(w, "permutations"); st != "not-configured" || reason != "disabled" {
@@ -347,7 +347,7 @@ func TestB2_Disabled(t *testing.T) {
 	}
 }
 
-func TestB2_InvalidCapExits2(t *testing.T) {
+func TestPermutations_InvalidCapExits2(t *testing.T) {
 	w, _ := permWorld(t, "dev\n")
 	if code := w.run("--passive", "--permutations-max", "0", "example.com"); code != 2 {
 		t.Errorf("exit %d, want 2", code)
@@ -357,7 +357,7 @@ func TestB2_InvalidCapExits2(t *testing.T) {
 	}
 }
 
-func TestB2_CapAndSettingsChangeChecks(t *testing.T) {
+func TestPermutations_CapAndSettingsChangeChecks(t *testing.T) {
 	w, wl := permWorld(t, "dev\nboth\nstaging\ntest\nbeta\nold\nnew\nqa\n")
 	w.run("--passive", "--wordlist", wl, "--permutations-max", "5", "example.com")
 	var fromApi int
@@ -389,9 +389,9 @@ func TestB2_CapAndSettingsChangeChecks(t *testing.T) {
 	}
 }
 
-// --- B3: resolution ---
+// --- Resolution ---
 
-func TestB3_UnresolvedAndCNAME(t *testing.T) {
+func TestResolution_UnresolvedAndCNAME(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"nx.example.com", "nodata.example.com", "fail.example.com", "www.example.com", "bad.example.com"}}, nil)
 	w.dns.TXT("nodata.example.com", "just text") // exists, no A/AAAA
@@ -435,7 +435,7 @@ func TestB3_UnresolvedAndCNAME(t *testing.T) {
 	}
 }
 
-func TestB3_TimeoutIsTransient(t *testing.T) {
+func TestResolution_TimeoutIsTransient(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"slow.example.com"}}, nil)
 	w.dns.A("slow.example.com", "203.0.113.5")
@@ -457,9 +457,9 @@ func TestB3_TimeoutIsTransient(t *testing.T) {
 	}
 }
 
-// --- B4: wildcards ---
+// --- Wildcards ---
 
-func TestB4_Wildcards(t *testing.T) {
+func TestWildcards(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"junk1.example.com", "junk2.example.com", "real.example.com"}}, nil)
 	w.dns.Wildcard("example.com", "203.0.113.1", "203.0.113.2")
@@ -507,7 +507,7 @@ func TestB4_Wildcards(t *testing.T) {
 
 // With permutations on (the default) every generated name "exists" under a
 // wildcard, yet exactly one representative and the real host are probed.
-func TestB4_WildcardWithDefaultPermutations(t *testing.T) {
+func TestWildcards_WildcardWithDefaultPermutations(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"real.example.com"}}, nil)
 	w.dns.Wildcard("example.com", "203.0.113.1", "203.0.113.2")
@@ -529,7 +529,7 @@ func TestB4_WildcardWithDefaultPermutations(t *testing.T) {
 }
 
 // A sub-root's parents are not ours to probe.
-func TestB4_SubRootDoesNotProbeItsParent(t *testing.T) {
+func TestWildcards_SubRootDoesNotProbeItsParent(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"corp.example.com": {"a.corp.example.com"}}, nil)
 	w.dns.A("a.corp.example.com", "203.0.113.5")
@@ -541,7 +541,7 @@ func TestB4_SubRootDoesNotProbeItsParent(t *testing.T) {
 	}
 }
 
-func TestB4_WildcardByCNAME(t *testing.T) {
+func TestWildcards_WildcardByCNAME(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"x.example.com", "y.example.com", "z.example.com"}}, nil)
 	w.dns.WildcardCNAME("example.com", "lb.example.net")
@@ -554,9 +554,9 @@ func TestB4_WildcardByCNAME(t *testing.T) {
 	}
 }
 
-// --- B5, B8, B9: providers and eligibility ---
+// --- Providers and eligibility ---
 
-func TestB5_ProviderHosts(t *testing.T) {
+func TestProviderHosts(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"cdn.example.com", "dang.example.com", "plain.example.com"}}, nil)
 	w.dns.CNAME("cdn.example.com", "d1.cloudfront.net")
@@ -593,7 +593,7 @@ func TestB5_ProviderHosts(t *testing.T) {
 	}
 }
 
-func TestB8_ProviderLabelsAndSharedInfrastructure(t *testing.T) {
+func TestProviderLabelsAndSharedInfrastructure(t *testing.T) {
 	w := newWorld(t)
 	hosts := map[string]struct {
 		addr   string
@@ -659,7 +659,7 @@ func TestB8_ProviderLabelsAndSharedInfrastructure(t *testing.T) {
 	}
 }
 
-func TestB9_OwnerLookupFailureFailsClosed(t *testing.T) {
+func TestOwnerLookupFailureFailsClosed(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"cdn.example.com"}}, nil)
 	w.dns.A("cdn.example.com", "104.16.0.5")
@@ -674,9 +674,9 @@ func TestB9_OwnerLookupFailureFailsClosed(t *testing.T) {
 	}
 }
 
-// --- B6: organisation pivots ---
+// --- Organisation pivots ---
 
-func TestB6_OrganisationPivots(t *testing.T) {
+func TestOrganisationPivots(t *testing.T) {
 	w := newWorld(t)
 	t.Setenv("RECON_KEYS_WHOISXML", "wx-key")
 	w.crtsh(nil, map[string][]string{"Acme Corp": {"www.acme-global.com", "*.acme-global.net", "someone@acme-global.org"}})
@@ -737,9 +737,9 @@ func TestB6_OrganisationPivots(t *testing.T) {
 	}
 }
 
-// --- B7: netblocks and reverse DNS ---
+// --- Netblocks and reverse DNS ---
 
-func TestB7_ReverseDNSAndShodan(t *testing.T) {
+func TestReverseDNSAndShodan(t *testing.T) {
 	w := newWorld(t)
 	t.Setenv("RECON_KEYS_SHODAN", "sh-key")
 	w.dns.PTR("198.51.100.1", "host1.example.com")
@@ -787,7 +787,7 @@ func TestB7_ReverseDNSAndShodan(t *testing.T) {
 	}
 }
 
-func TestB7_IPv6OnlyChecksFoundAddresses(t *testing.T) {
+func TestReverseDNS_IPv6OnlyChecksFoundAddresses(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"v6.example.com"}}, nil)
 	w.dns.A("v6.example.com", "2001:db8:1::5")

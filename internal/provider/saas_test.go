@@ -6,7 +6,7 @@ import (
 	"github.com/rafaelh/recon/internal/provider"
 )
 
-// D5: cname entries carry a class, an nxdomain flag and a body fingerprint.
+// The cname entries carry a class, an nxdomain flag and a body fingerprint.
 func TestCNAMEEntries(t *testing.T) {
 	db := provider.Default()
 	cases := []struct {
@@ -58,7 +58,7 @@ func TestCNAMEEntries(t *testing.T) {
 	}
 }
 
-// D7: a matched entry has a short stable hash that changes when the entry does.
+// A matched entry has a short stable hash that changes when the entry does.
 func TestEntryHash(t *testing.T) {
 	a, err := provider.Parse([]byte("cname:\n  - {suffix: x.test, provider: p, service: S, body: 'foo'}\n"))
 	if err != nil {
@@ -82,7 +82,7 @@ func TestParseRejectsBadFingerprint(t *testing.T) {
 	}
 }
 
-// D5: SaaS is recognised by CNAME, ASN or address range.
+// SaaS is recognised by CNAME, ASN or address range.
 func TestSaaSRecognition(t *testing.T) {
 	db := provider.Default()
 	// By address range (apex records): GitHub Pages.

@@ -9,9 +9,9 @@ import (
 	"testing"
 )
 
-// --- B4: redirects ---
+// --- Redirects ---
 
-func TestWebB4_InScopeRedirectChain(t *testing.T) {
+func TestRedirect_InScopeRedirectChain(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -44,14 +44,14 @@ func TestWebB4_InScopeRedirectChain(t *testing.T) {
 		t.Errorf("hits: :80=%d /login=%d", s80.hits(), s443.count("/login"))
 	}
 	if u := find(x.urls(), "url", "https://a.example.com/login"); u == nil || !strings.Contains(u["found_by"], "httpprobe") || u["status"] != "200" {
-		t.Errorf("the redirect target must be recorded as a url with the status it returned (D15): %v", x.urls())
+		t.Errorf("the redirect target must be recorded as a url with the status it returned: %v", x.urls())
 	}
 	if got := x.observedBy("hostname", "httpprobe"); len(got) != 0 {
 		t.Errorf("a redirect to the probed host itself recorded hostnames %v", got)
 	}
 }
 
-func TestWebB4_OutOfScopeRedirectIsACandidateAndNotRequested(t *testing.T) {
+func TestRedirect_OutOfScopeRedirectIsACandidateAndNotRequested(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -83,7 +83,7 @@ func TestWebB4_OutOfScopeRedirectIsACandidateAndNotRequested(t *testing.T) {
 	}
 }
 
-func TestWebB4_ExcludedRedirectTargetIsNotRequested(t *testing.T) {
+func TestRedirect_ExcludedRedirectTargetIsNotRequested(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com", "blocked.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -103,7 +103,7 @@ func TestWebB4_ExcludedRedirectTargetIsNotRequested(t *testing.T) {
 	}
 }
 
-func TestWebB4_LoopAndHopCapTerminate(t *testing.T) {
+func TestRedirect_LoopAndHopCapTerminate(t *testing.T) {
 	x := newWeb(t)
 	x.names("loop.example.com", "deep.example.com")
 	x.host("loop.example.com", "203.0.113.5")
@@ -143,7 +143,7 @@ func TestWebB4_LoopAndHopCapTerminate(t *testing.T) {
 	}
 }
 
-func TestWebB4_RedirectToSelfOrAnIPAddsNoHostname(t *testing.T) {
+func TestRedirect_RedirectToSelfOrAnIPAddsNoHostname(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com", "b.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -167,9 +167,10 @@ func TestWebB4_RedirectToSelfOrAnIPAddsNoHostname(t *testing.T) {
 }
 
 // A name that only the permutation stage found must never become a seed
-// because its own service redirects to itself or lists itself in a SAN
-// (Spec 2 D14 via the stages that observed it; Spec 3 D11, D12).
-func TestWebB4B5_PermutationOnlyNameIsNeverSeededByItsOwnService(t *testing.T) {
+// because its own service redirects to itself or lists itself in a SAN: those
+// observations are made by the web stages, but only names first seen by a stage
+// other than the permutation stage are seeds.
+func TestRedirect_PermutationOnlyNameIsNeverSeededByItsOwnService(t *testing.T) {
 	x := newWeb(t)
 	x.perms = true
 	wl := writeFile(t, t.TempDir(), "words.txt", "dev\n")
@@ -195,9 +196,9 @@ func TestWebB4B5_PermutationOnlyNameIsNeverSeededByItsOwnService(t *testing.T) {
 	}
 }
 
-// --- B5: certificate SANs ---
+// --- Certificate SANs ---
 
-func TestWebB5_SANsFlowThroughOrBecomeCandidates(t *testing.T) {
+func TestCertificateSANsFlowThroughOrBecomeCandidates(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")

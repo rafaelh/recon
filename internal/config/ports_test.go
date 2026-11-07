@@ -10,7 +10,7 @@ import (
 	"github.com/rafaelh/recon/internal/config"
 )
 
-// Spec 4 D10: every default risky port is scanned by default.
+// Every default risky port is scanned by default.
 func TestDefaultPortsCoverRiskyPorts(t *testing.T) {
 	clearEnv(t)
 	s, err := load(t, "")
@@ -24,7 +24,7 @@ func TestDefaultPortsCoverRiskyPorts(t *testing.T) {
 	}
 }
 
-// Spec 4 D8: port_concurrency, default 100, > 0, from flag, env or file.
+// port_concurrency, default 100, > 0, from flag, env or file.
 func TestPortConcurrency(t *testing.T) {
 	clearEnv(t)
 	s, err := load(t, "")
@@ -58,7 +58,7 @@ func TestPortConcurrency(t *testing.T) {
 	}
 }
 
-// Spec 4 D8: both flags are in --help, and --concurrency says it does not bound the port sweep.
+// Both flags are in --help, and --concurrency says it does not bound the port sweep.
 func TestPortConcurrencyHelp(t *testing.T) {
 	fs := pflag.NewFlagSet("t", pflag.ContinueOnError)
 	config.RegisterFlags(fs)

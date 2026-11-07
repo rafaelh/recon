@@ -1,9 +1,9 @@
 // Package findings derives the severity-ranked list of obvious exposures from
-// the evidence the stages stored (Spec 5). Derivation is pure: stages store only
+// the evidence the stages stored. Derivation is pure: stages store only
 // evidence, and findings are computed on read from it, the Scope, the
 // Inventory, the settings and today's date, so a finding that is no longer true
 // (a port excluded later, a certificate renewed, the clock moving on) is simply
-// not derived any more and none can go stale (Spec 1 D16).
+// not derived any more and none can go stale.
 package findings
 
 import (

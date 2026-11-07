@@ -389,7 +389,7 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 
 // vetted returns the addresses a request for host may be sent to: never an
 // address in an excluded CIDR, and never an address of an excluded hostname
-// unless that address is shared provider infrastructure (D9).
+// unless that address is shared provider infrastructure.
 func (p *Policy) vetted(host string) []netip.Addr {
 	var out []netip.Addr
 	for _, a := range p.Resolutions[host] {

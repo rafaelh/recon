@@ -9,7 +9,7 @@ import (
 	"github.com/rafaelh/recon/internal/cli"
 )
 
-// Spec 6 B1/D2: --version prints "recon <version>" and exits without doing any work.
+// --version prints "recon <version>" and exits without doing any work.
 func TestVersionFlag(t *testing.T) {
 	h := newHarness(t, noop())
 	h.version = "v0.0.0-20261106032157-7e34c1b8d74f"
@@ -30,7 +30,7 @@ func TestVersionFlag(t *testing.T) {
 	}
 }
 
-// D2: with no Version in Deps (as the test harnesses build them), the version is "devel".
+// With no Version in Deps (as the test harnesses build them), the version is "devel".
 func TestVersionFlagZeroDeps(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := cli.Execute(context.Background(), []string{"--version"}, cli.Deps{Stdout: &stdout, Stderr: &stderr})
@@ -42,7 +42,7 @@ func TestVersionFlagZeroDeps(t *testing.T) {
 	}
 }
 
-// D10: with --json every stdout line must be JSON, so the version line goes to stderr.
+// With --json every stdout line must be JSON, so the version line goes to stderr.
 func TestVersionFlagJSON(t *testing.T) {
 	h := newHarness(t, noop())
 	h.version = "v1.2.3"
@@ -57,7 +57,7 @@ func TestVersionFlagJSON(t *testing.T) {
 	}
 }
 
-// D10: every spelling pflag accepts for --json counts, and the last one wins.
+// Every spelling pflag accepts for --json counts, and the last one wins.
 func TestVersionFlagJSONSpellings(t *testing.T) {
 	cases := []struct {
 		args []string
@@ -86,7 +86,7 @@ func TestVersionFlagJSONSpellings(t *testing.T) {
 	}
 }
 
-// D2: --version is long-only; -v must not become a shorthand that could be mistaken for --verbose.
+// --version is long-only; -v must not become a shorthand that could be mistaken for --verbose.
 func TestNoVersionShorthand(t *testing.T) {
 	h := newHarness(t, noop())
 	if code := h.exec("-v"); code != 2 {

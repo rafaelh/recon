@@ -16,7 +16,7 @@ import (
 	"github.com/rafaelh/recon/internal/scope"
 )
 
-// Spec 3 D6: web services on IP literals. The request is allowed iff the
+// Web services on IP literals. The request is allowed iff the
 // address is in an in-scope netblock and not excluded; egress dials that
 // address, sends no SNI, and brackets IPv6 in the Host header on every port.
 

@@ -94,7 +94,7 @@ func wantSet(t *testing.T, got []findings.Finding, want ...string) {
 	}
 }
 
-// B1: every finding type has a documented severity and each is exactly this.
+// Every finding type has a documented severity and each is exactly this.
 func TestSeverityTable(t *testing.T) {
 	want := map[string]string{
 		"takeover/dns-nxdomain":         "high",
@@ -159,7 +159,7 @@ func TestSeverityTable(t *testing.T) {
 	}
 }
 
-// B6: SPF, DMARC and MX cases.
+// SPF, DMARC and MX cases.
 func TestEmailFindings(t *testing.T) {
 	good := map[string]any{
 		"mx": "mail.example.com", "spf": "v=spf1 include:_spf.example.net -all", "spf_records": 1.0, "spf_all": "-all", "spf_lookups": 2.0,
@@ -223,7 +223,7 @@ func mapKV(m map[string]any) []any {
 	return kv
 }
 
-// B7: risky open ports are medium, filtered by port visibility.
+// Risky open ports are medium, filtered by port visibility.
 func TestRiskyPorts(t *testing.T) {
 	f := newFixture()
 	f.add(rec("open_port", "198.51.100.5:3389", "ip", "198.51.100.5", "port", 3389.0, "banner", ""))
@@ -240,7 +240,7 @@ func TestRiskyPorts(t *testing.T) {
 	wantSet(t, f.derive(t))
 }
 
-// B8: certificate findings follow the date.
+// Certificate findings follow the date.
 func TestCertificates(t *testing.T) {
 	f := newFixture()
 	f.host("old.example.com")
@@ -308,7 +308,7 @@ func byKey(fs []findings.Finding) map[string]findings.Finding {
 	return m
 }
 
-// B5/D11: a sensitive hit is a finding only while its service is current and visible.
+// A sensitive hit is a finding only while its service is current and visible.
 func TestSensitiveHits(t *testing.T) {
 	f := newFixture()
 	f.host("www.example.com")
@@ -351,7 +351,7 @@ func storageRec(provider, name, container string, kv ...any) store.Record {
 	return rec("storage", key, attrs...)
 }
 
-// B3: attributed storage findings.
+// Attributed storage findings.
 func TestAttributedStorage(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -399,7 +399,7 @@ func TestAttributedStorage(t *testing.T) {
 	}
 }
 
-// B3/B4: attribution by reference; guessed names that are also referenced are attributed.
+// Attribution by reference; guessed names that are also referenced are attributed.
 func TestStorageAttribution(t *testing.T) {
 	f := newFixture()
 	f.host("static.example.com")
@@ -444,7 +444,7 @@ func TestStorageAttribution(t *testing.T) {
 	wantSet(t, findings.Derive(in), "storage/listable=high", "storage/listable=high", "storage-unattributed/public=low")
 }
 
-// B3: Azure references attribute the account's containers.
+// Azure references attribute the account's containers.
 func TestAzureAttribution(t *testing.T) {
 	f := newFixture()
 	f.add(rec("storage_ref", "https://www.example.com/|https://acctone.blob.core.windows.net/media/a.png",
@@ -457,7 +457,7 @@ func TestAzureAttribution(t *testing.T) {
 	wantSet(t, f.derive(t), "storage/listable=high", "storage/exists=low", "storage-unattributed/listable=low")
 }
 
-// B2/D6: one takeover finding per hostname, merging every kind of evidence.
+// One takeover finding per hostname, merging every kind of evidence.
 func TestTakeoverDNS(t *testing.T) {
 	t.Run("dangling cname into an nxdomain provider", func(t *testing.T) {
 		f := newFixture()
@@ -522,7 +522,7 @@ func TestTakeoverDNS(t *testing.T) {
 	})
 }
 
-// B2/D2: a missing bucket referenced only by a link is low; by an asset, high.
+// A missing bucket referenced only by a link is low; by an asset, high.
 func TestMissingBucketReferences(t *testing.T) {
 	ref := func(via, key string) store.Record {
 		return rec("storage_ref", key, "provider", "s3", "name", "lost-bucket", "container", "", "object", "x.js",
@@ -548,7 +548,7 @@ func TestMissingBucketReferences(t *testing.T) {
 	wantSet(t, f2.derive(t))
 }
 
-// B2: a missing container in an existing Azure account cannot be claimed, so it
+// A missing container in an existing Azure account cannot be claimed, so it
 // is not a takeover; a missing account is.
 func TestMissingAzureContainerIsNotTakeover(t *testing.T) {
 	f := newFixture()
@@ -563,7 +563,7 @@ func TestMissingAzureContainerIsNotTakeover(t *testing.T) {
 	wantSet(t, f.derive(t), "takeover/storage-missing=high")
 }
 
-// D1: derivation is deterministic: the same input gives the same findings in the same order.
+// Derivation is deterministic: the same input gives the same findings in the same order.
 func TestDeriveDeterministic(t *testing.T) {
 	f := newFixture()
 	f.add(rec("open_port", "198.51.100.5:3389", "banner", ""))

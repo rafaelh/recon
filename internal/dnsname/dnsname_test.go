@@ -9,7 +9,7 @@ import (
 	"github.com/rafaelh/recon/internal/dnsname"
 )
 
-// B7/B8: reverse names for PTR sweeps and Team Cymru lookups.
+// Reverse names for PTR sweeps and Team Cymru lookups.
 func TestReverseNames(t *testing.T) {
 	cases := []struct{ addr, ptr, cymru string }{
 		{"192.0.2.10", "10.2.0.192.in-addr.arpa", "10.2.0.192.origin.asn.cymru.com"},
@@ -27,7 +27,7 @@ func TestReverseNames(t *testing.T) {
 	}
 }
 
-// B4: wildcard zones are the registrable parents of a name, nearest first.
+// Wildcard zones are the registrable parents of a name, nearest first.
 func TestParents(t *testing.T) {
 	got := dnsname.Parents("a.b.example.com")
 	if !slices.Equal(got, []string{"b.example.com", "example.com"}) {
@@ -41,7 +41,7 @@ func TestParents(t *testing.T) {
 	}
 }
 
-// B6: names reduce to their registrable domain.
+// Names reduce to their registrable domain.
 func TestETLDPlusOne(t *testing.T) {
 	for in, want := range map[string]string{"www.example.com": "example.com", "a.b.example.co.uk": "example.co.uk"} {
 		if got, ok := dnsname.ETLDPlusOne(in); !ok || got != want {
@@ -53,7 +53,7 @@ func TestETLDPlusOne(t *testing.T) {
 	}
 }
 
-// B2: permutations are deterministic, valid, unique, never the seed, and capped.
+// Permutations are deterministic, valid, unique, never the seed, and capped.
 func TestPermute(t *testing.T) {
 	words := []string{"dev", "staging"}
 	got := dnsname.Permute("api", words, 200)

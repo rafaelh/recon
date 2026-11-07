@@ -30,7 +30,7 @@ func addrs(s ...string) []netip.Addr {
 	return out
 }
 
-// B16, definitions: classification of hostnames.
+// Classification of hostnames.
 func TestClassifyHost(t *testing.T) {
 	s := scope.New(scope.Config{
 		Roots:      []string{"example.com"},
@@ -105,7 +105,7 @@ func TestInScopeIP(t *testing.T) {
 	}
 }
 
-// B15: overlapping netblocks are counted once; IPv6 is not counted.
+// Overlapping netblocks are counted once; IPv6 is not counted.
 func TestIPv4AddressCount(t *testing.T) {
 	s := scope.New(scope.Config{Netblocks: []netip.Prefix{
 		netip.MustParsePrefix("10.0.0.0/24"),
@@ -129,7 +129,7 @@ func TestIPv4AddressCount(t *testing.T) {
 	}
 }
 
-// B9, D18: the single eligibility function.
+// The single eligibility function.
 func TestPortEligible(t *testing.T) {
 	res := map[string][]netip.Addr{
 		"www.example.com":   addrs("203.0.113.5"),
@@ -179,7 +179,7 @@ func TestPortEligible(t *testing.T) {
 	}
 }
 
-// Spec 4: an in-scope netblock address that no exclusion names is decided
+// An in-scope netblock address that no exclusion names is decided
 // without asking who owns it, so a netblock sweep costs no owner lookups.
 func TestPortEligibleAsksOwnerOnlyWhenNeeded(t *testing.T) {
 	s := scope.New(scope.Config{

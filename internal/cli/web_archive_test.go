@@ -33,9 +33,9 @@ func (x *web) summaryTotal(category string) int {
 	return int(n)
 }
 
-// --- B6: archived URLs ---
+// --- Archived URLs ---
 
-func TestWebB6_ArchivedURLsUnderPassive(t *testing.T) {
+func TestArchive_ArchivedURLsUnderPassive(t *testing.T) {
 	x := newWeb(t)
 	x.host("a.example.com", "203.0.113.5")
 	a80 := x.plain("203.0.113.5", 80, page("live"))
@@ -98,7 +98,7 @@ func archiveWorld(t *testing.T) *web {
 
 // Archives return some URLs without a scheme; their hosts were always kept,
 // and so are the URLs.
-func TestWebB6_ArchivedURLsWithoutASchemeAreKept(t *testing.T) {
+func TestArchive_ArchivedURLsWithoutASchemeAreKept(t *testing.T) {
 	x := newWeb(t)
 	x.waybackURLs("www.example.com/admin/login.php")
 	x.commonCrawl("CC-1", "cc.example.com/z")
@@ -113,7 +113,7 @@ func TestWebB6_ArchivedURLsWithoutASchemeAreKept(t *testing.T) {
 	}
 }
 
-func TestWebB6_CapIsRoundRobinDeterministicAndPartOfTheCheckKey(t *testing.T) {
+func TestArchive_CapIsRoundRobinDeterministicAndPartOfTheCheckKey(t *testing.T) {
 	x := archiveWorld(t)
 	x.mustPassive("--archive-max-urls", "4")
 	capped := []string{"http://a.example.com/1", "http://a.example.com/2", "http://b.example.com/1", "http://b.example.com/2"}
@@ -143,7 +143,7 @@ func TestWebB6_CapIsRoundRobinDeterministicAndPartOfTheCheckKey(t *testing.T) {
 	}
 }
 
-func TestWebB6_CapSettingIsValidatedAndDocumented(t *testing.T) {
+func TestArchive_CapSettingIsValidatedAndDocumented(t *testing.T) {
 	for _, bad := range []string{"0", "-1", "many"} {
 		x := archiveWorld(t)
 		if code := x.passive("--archive-max-urls", bad); code != 2 {
@@ -168,7 +168,7 @@ func TestWebB6_CapSettingIsValidatedAndDocumented(t *testing.T) {
 	}
 }
 
-func TestWebB6_AnExclusionAddedLaterHidesArchivedURLs(t *testing.T) {
+func TestArchive_AnExclusionAddedLaterHidesArchivedURLs(t *testing.T) {
 	x := archiveWorld(t)
 	x.mustPassive()
 	if n := len(x.urlSet()); n != 6 {

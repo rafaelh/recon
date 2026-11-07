@@ -20,15 +20,15 @@ import (
 	"github.com/rafaelh/recon/internal/testkit"
 )
 
-// Every third-party host pattern the Spec 2 stages declare.
+// Every third-party host pattern the discovery and storage stages declare.
 var sourcePatterns = []string{
 	"crt.sh", "web.archive.org", "index.commoncrawl.org", "www.virustotal.com", "api.securitytrails.com",
 	"api.shodan.io", "reverse-whois.whoisxmlapi.com", "stat.ripe.net", "ip-ranges.amazonaws.com", "www.gstatic.com",
-	// Spec 5's storage stage; their default answer is "no such bucket".
+	// The storage stage's; their default answer is "no such bucket".
 	"s3.amazonaws.com", "s3.*.amazonaws.com", "storage.googleapis.com", "*.blob.core.windows.net",
 }
 
-// riskStages are Spec 5's stages. Worlds leave them out unless a test asks for
+// riskStages are the risk stages. Worlds leave them out unless a test asks for
 // them: sensitive-paths alone sends a score of requests to every web service.
 var riskStages = []string{"email", "storage", "takeover", "sensitive-paths"}
 
@@ -75,7 +75,7 @@ type world struct {
 
 func newWorld(t *testing.T) *world { return newWorldWith(t) }
 
-// newWorldWith is newWorld with the named Spec 5 stages kept in the stage list.
+// newWorldWith is newWorld with the named risk stages kept in the stage list.
 func newWorldWith(t *testing.T, keep ...string) *world {
 	t.Helper()
 	w := &world{t: t, src: map[string]*source{}}
@@ -90,7 +90,7 @@ func newWorldWith(t *testing.T, keep ...string) *world {
 		return nil
 	}}
 	// The real ports stage sweeps every eligible address on every listed port, and
-	// only the Spec 4 tests map those connects to local listeners; the others
+	// only the ports tests map those connects to local listeners; the others
 	// leave it out so nothing they run can reach the network.
 	stages := slices.DeleteFunc(cli.DefaultDeps().Stages, func(s run.Stage) bool {
 		return s.Name() == "ports" || slices.Contains(riskStages, s.Name()) && !slices.Contains(keep, s.Name())

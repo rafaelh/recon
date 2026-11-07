@@ -42,7 +42,7 @@ func clearEnv(t *testing.T) {
 	}
 }
 
-// B21: defaults.
+// Defaults.
 func TestDefaults(t *testing.T) {
 	clearEnv(t)
 	s, err := load(t, "")
@@ -69,7 +69,7 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
-// B5: file < env < flag for a scalar and a list.
+// File < env < flag for a scalar and a list.
 func TestPrecedence(t *testing.T) {
 	clearEnv(t)
 	cfg := writeFile(t, "concurrency: 2\nports: [80, 443]\n")
@@ -114,7 +114,7 @@ func TestNestedSettings(t *testing.T) {
 	}
 }
 
-// B5/B24/D8: keys from file and env only; never a flag; never formatted.
+// Keys from file and env only; never a flag; never formatted.
 func TestKeys(t *testing.T) {
 	clearEnv(t)
 	cfg := writeFile(t, "keys:\n  shodan: filesecret123\n")
@@ -152,7 +152,7 @@ func TestKeys(t *testing.T) {
 	})
 }
 
-// B22: invalid config values name the key and the value.
+// Invalid config values name the key and the value.
 func TestValidation(t *testing.T) {
 	clearEnv(t)
 	dir := t.TempDir()

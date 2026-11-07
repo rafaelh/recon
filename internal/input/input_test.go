@@ -10,7 +10,7 @@ import (
 	"github.com/rafaelh/recon/internal/input"
 )
 
-// B1/B22: domain forms.
+// Domain forms.
 func TestParseDomain(t *testing.T) {
 	ok := map[string]string{
 		"Example.COM":       "example.com",
@@ -69,7 +69,7 @@ func TestParseOrg(t *testing.T) {
 	}
 }
 
-// B16: exclusion matching table (also pinned at scope level).
+// Exclusion matching table (also pinned at scope level).
 func TestExclusions(t *testing.T) {
 	type tc struct {
 		entry, host string
@@ -105,7 +105,7 @@ func TestExclusions(t *testing.T) {
 	}
 }
 
-// B2: engagement name precedence and sanitisation.
+// Engagement name precedence and sanitisation.
 func TestEngagementName(t *testing.T) {
 	for in, want := range map[string]string{
 		"example.com":      "example.com",
@@ -147,7 +147,7 @@ func writeList(t *testing.T, body string) string {
 	return p
 }
 
-// B1: each input form; files ignore comments and blank lines.
+// Each input form; files ignore comments and blank lines.
 func TestParse(t *testing.T) {
 	df := writeList(t, "# targets\n\nfile.example.org\n  other.example.net  # trailing\n")
 	xf := writeList(t, "# skip\n*.dev.example.com\n\n192.0.2.0/24\n")
@@ -197,7 +197,7 @@ func TestParseFirstPrecedence(t *testing.T) {
 	}
 }
 
-// B22: every invalid form names the bad value.
+// Every invalid form names the bad value.
 func TestParseRejects(t *testing.T) {
 	for name, c := range map[string]struct {
 		raw  input.Raw

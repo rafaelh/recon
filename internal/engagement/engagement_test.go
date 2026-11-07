@@ -19,7 +19,7 @@ func open(t *testing.T, dir string) (*engagement.Engagement, error) {
 	return engagement.Open(dir, engagement.Options{Clock: clock})
 }
 
-// B4: empty dir adopted; non-recon dir refused naming it.
+// Empty dir adopted; non-recon dir refused naming it.
 func TestOpenCreatesAndAdopts(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "eng")
 	e, err := open(t, dir)
@@ -54,7 +54,7 @@ func TestRefusesNonEngagement(t *testing.T) {
 	}
 }
 
-// B4/B7: .recon with a lock but no DB (crash during creation) is adopted.
+// .recon with a lock but no DB (crash during creation) is adopted.
 func TestAdoptsInterruptedCreation(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".recon"), 0o700); err != nil {
@@ -70,7 +70,7 @@ func TestAdoptsInterruptedCreation(t *testing.T) {
 	e.Close()
 }
 
-// B23/B7: live lock refuses; a released (crashed) lock does not block.
+// Live lock refuses; a released (crashed) lock does not block.
 func TestLock(t *testing.T) {
 	dir := t.TempDir()
 	e, err := open(t, dir)
@@ -100,7 +100,7 @@ func TestLock(t *testing.T) {
 	}
 }
 
-// B3: inputs and exclusions are merged as a union and persisted.
+// Inputs and exclusions are merged as a union and persisted.
 func TestMergeInputs(t *testing.T) {
 	dir := t.TempDir()
 	e, _ := open(t, dir)

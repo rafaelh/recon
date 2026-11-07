@@ -46,7 +46,7 @@ func portOf(t *testing.T, hostport string) int {
 	return n
 }
 
-// --- DNS (B8) ---
+// --- DNS ---
 
 func fakeDNS(t *testing.T, h mdns.HandlerFunc) string {
 	t.Helper()
@@ -131,7 +131,7 @@ func TestResolverHasNoZoneTransfer(t *testing.T) {
 	}
 }
 
-// --- TCP (B8, B12, B16) ---
+// --- TCP ---
 
 func tcpPolicy(t *testing.T, ports ...int) *egress.Policy {
 	return &egress.Policy{
@@ -199,7 +199,7 @@ func TestTCPOutcomes(t *testing.T) {
 	}
 }
 
-// B12: port list, scope, passive and ack are enforced.
+// Port list, scope, passive and ack are enforced.
 func TestTCPPolicyRefusals(t *testing.T) {
 	p := tcpPolicy(t, 8080)
 	eg := egress.New(egress.Options{ConnectTimeout: 100 * time.Millisecond, RatePerHost: 1000})
@@ -229,7 +229,7 @@ func TestTCPPolicyRefusals(t *testing.T) {
 	check("no ack", res, err)
 }
 
-// B16: addresses of excluded hosts and excluded CIDRs are refused; the guard reports it.
+// Addresses of excluded hosts and excluded CIDRs are refused; the guard reports it.
 func TestTCPExclusions(t *testing.T) {
 	var reported []string
 	p := &egress.Policy{
@@ -262,7 +262,7 @@ func TestTCPExclusions(t *testing.T) {
 	}
 }
 
-// --- HTTP (B12, B16) ---
+// --- HTTP ---
 
 type httpFixture struct {
 	srv  *httptest.Server
@@ -452,7 +452,7 @@ func TestHTTPNoService(t *testing.T) {
 	}
 }
 
-// B16/D9: excluded host's address is refused unless labelled shared.
+// Excluded host's address is refused unless labelled shared.
 func TestHTTPExclusionAndSharedInfra(t *testing.T) {
 	var reported []string
 	f := newHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(r.Host)) })
@@ -498,7 +498,7 @@ func TestHTTPDialMap(t *testing.T) {
 	}
 }
 
-// B12: API shape. No method other than Get/Head, no raw URLs, no connections.
+// API shape. No method other than Get/Head, no raw URLs, no connections.
 func TestTargetAPIShape(t *testing.T) {
 	ht := reflect.TypeOf((*egress.TargetHTTP)(nil)).Elem()
 	var names []string
@@ -547,7 +547,7 @@ func TestTargetAPIShape(t *testing.T) {
 	}
 }
 
-// B12/D14: Target clients are only given to Target stages.
+// Target clients are only given to Target stages.
 func TestClientsForThirdPartyStageHaveNoTargetClients(t *testing.T) {
 	eg := egress.New(egress.Options{})
 	c := eg.Clients("s", false, []string{"stat.ripe.net"})
@@ -563,7 +563,7 @@ func TestClientsForThirdPartyStageHaveNoTargetClients(t *testing.T) {
 	}
 }
 
-// --- ThirdPartyHTTP (B12) ---
+// --- ThirdPartyHTTP ---
 
 func TestThirdParty(t *testing.T) {
 	var gotPath, gotMethod string
@@ -655,7 +655,7 @@ func TestThirdPartyEncodedKeyScrubbedFromErrors(t *testing.T) {
 	}
 }
 
-// --- Rate limits (B21) ---
+// --- Rate limits ---
 
 func TestPerIPRateLimit(t *testing.T) {
 	ln, _ := net.Listen("tcp", "127.0.0.1:0")

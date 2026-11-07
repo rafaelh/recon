@@ -59,7 +59,7 @@ func refCompare(a, b cloudstorage.Reference) int {
 		cmp.Compare(a.Object, b.Object), cmp.Compare(a.Via, b.Via), cmp.Compare(a.From, b.From))
 }
 
-// StorageAttr is the attribution of a storage record (Spec 5 D9): whether a
+// StorageAttr is the attribution of a storage record: whether a
 // reference attributes it, the inputs that would have guessed it, its public
 // state ("yes", "no" or "unknown") and, for an unattributed one, the severity
 // storage-unattributed.csv lists it with.

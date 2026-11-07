@@ -31,7 +31,7 @@ import (
 	"github.com/rafaelh/recon/internal/store"
 )
 
-// Exit codes (D17).
+// Exit codes.
 const (
 	ExitOK          = 0
 	ExitFatal       = 1
@@ -197,7 +197,7 @@ func (r *Runner) passes(ctx context.Context) (int, error) {
 				if err := r.buildScope(); err != nil {
 					return exitFor(err), err
 				}
-				// Spec 5 D1: findings follow every stage that did work, so a finding's
+				// Findings follow every stage that did work, so a finding's
 				// found line is printed as soon as its evidence is stored.
 				if err := r.deriveFindings(); err != nil {
 					return ExitFatal, err
@@ -231,7 +231,7 @@ var scopeKinds = []kinds.Named{kinds.Hostname, kinds.Root, kinds.Netblock, kinds
 	kinds.IP, kinds.IPOwner, kinds.IPHostname, kinds.ProviderRange}
 
 // buildScope builds the Scope and the egress Policy from stored inputs and
-// observations, then applies the netblock guard (B15). It does nothing when
+// observations, then applies the netblock guard. It does nothing when
 // none of them has changed since the last build.
 func (r *Runner) buildScope() error {
 	eng := r.cfg.Engagement
@@ -610,7 +610,7 @@ func (r *Runner) failCheck(stage, key, msg string) {
 
 // emitCounts emits the category counts that changed. They are counted from the
 // snapshot render wrote the files from, with its Visibility, so the totals match
-// the files' rows (Spec 3 D17).
+// the files' rows.
 func (r *Runner) emitCounts(snap output.Snapshot) {
 	totals := snap.Vis.Totals(snap.Records)
 	r.lastTot = totals

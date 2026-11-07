@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// --- B7: the light crawl ---
+// --- The light crawl ---
 
 const crawlRootHTML = `<html><body>
 <a href="/p1">1</a> <a href="/p2">2</a> <a href="/p3">3</a>
@@ -40,7 +40,7 @@ func crawlFixture(t *testing.T) (*web, *site) {
 	return x, s
 }
 
-func TestWebB7_FetchesAndRecordsAsSpecified(t *testing.T) {
+func TestCrawl_FetchesAndRecords(t *testing.T) {
 	x, s := crawlFixture(t)
 	x.mustRun("--crawl-depth", "2", "--crawl-pages", "100")
 
@@ -94,7 +94,7 @@ func TestWebB7_FetchesAndRecordsAsSpecified(t *testing.T) {
 	}
 }
 
-func TestWebB7_RelativeLinksResolveAgainstBaseHref(t *testing.T) {
+func TestCrawl_RelativeLinksResolveAgainstBaseHref(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -114,7 +114,7 @@ func TestWebB7_RelativeLinksResolveAgainstBaseHref(t *testing.T) {
 	}
 }
 
-func TestWebB7_PageAndDepthCaps(t *testing.T) {
+func TestCrawl_PageAndDepthCaps(t *testing.T) {
 	t.Run("pages count the root", func(t *testing.T) {
 		x, s := crawlFixture(t)
 		x.mustRun("--crawl-pages", "3")
@@ -134,7 +134,7 @@ func TestWebB7_PageAndDepthCaps(t *testing.T) {
 	})
 }
 
-func TestWebB7_RecordedURLsAreCappedAt20TimesPages(t *testing.T) {
+func TestCrawl_RecordedURLsAreCappedAt20TimesPages(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -155,7 +155,7 @@ func TestWebB7_RecordedURLsAreCappedAt20TimesPages(t *testing.T) {
 	}
 }
 
-func TestWebB7_Errors(t *testing.T) {
+func TestCrawl_Errors(t *testing.T) {
 	t.Run("a failing non-root page is skipped and the check completes", func(t *testing.T) {
 		x := newWeb(t)
 		x.names("a.example.com")
@@ -208,7 +208,7 @@ func TestWebB7_Errors(t *testing.T) {
 	})
 }
 
-func TestWebB7_RootRedirectToAnotherOriginEndsTheCrawl(t *testing.T) {
+func TestCrawl_RootRedirectToAnotherOriginEndsTheCrawl(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -236,7 +236,7 @@ func TestWebB7_RootRedirectToAnotherOriginEndsTheCrawl(t *testing.T) {
 	}
 }
 
-func TestWebB7_SameOriginRedirectsAreFollowedAndOnlyHTMLIsParsed(t *testing.T) {
+func TestCrawl_SameOriginRedirectsAreFollowedAndOnlyHTMLIsParsed(t *testing.T) {
 	x := newWeb(t)
 	x.names("a.example.com")
 	x.host("a.example.com", "203.0.113.5")
@@ -265,7 +265,7 @@ func TestWebB7_SameOriginRedirectsAreFollowedAndOnlyHTMLIsParsed(t *testing.T) {
 	}
 }
 
-func TestWebB7_DisabledAndSettingsAreInTheCheckKey(t *testing.T) {
+func TestCrawl_DisabledAndSettingsAreInTheCheckKey(t *testing.T) {
 	x, s := crawlFixture(t)
 	x.mustRun("--crawl-pages", "0")
 	if st, reason := stateOf(x.world, "crawl"); st != "not-configured" || reason != "disabled" {

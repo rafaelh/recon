@@ -11,7 +11,7 @@ import (
 	"github.com/rafaelh/recon/internal/scope"
 )
 
-// B5: a permutation whose CNAME dangles (NXDOMAIN) exists, and is a takeover
+// A permutation whose CNAME dangles (NXDOMAIN) exists, and is a takeover
 // candidate; a plain NXDOMAIN does not.
 func TestPermutationsKeepDanglingCNAME(t *testing.T) {
 	d := egresstest.NewDNS(t)

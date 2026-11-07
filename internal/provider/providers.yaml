@@ -1,4 +1,4 @@
-# Shared-infrastructure recognition (Spec 2, B8). Embedded in the binary; edit and rebuild to extend.
+# Shared-infrastructure recognition. Embedded in the binary; edit and rebuild to extend.
 #
 # cname: a CNAME target that ends with `suffix` (on a label boundary) is hosted by that provider.
 # asn:   an address whose origin AS is listed belongs to the provider. `class` is
@@ -6,7 +6,7 @@
 #        provider range proves the address is a dedicated virtual machine) or
 #        saas (a third-party platform serving other companies' content).
 #
-# Spec 5 adds to cname entries:
+# cname entries may also carry:
 #   class: saas      the host is served by a third-party SaaS platform, never requested for sensitive paths
 #   nxdomain: true   a chain that dangles into the suffix can be claimed by anyone (a takeover)
 #   body: <RE2>      matches the page an unclaimed resource serves; a takeover when a probe sees it

@@ -19,8 +19,8 @@ func pathsFile(t *testing.T, body string) string {
 	return p
 }
 
-// D15: storage.max_names (default 50, > 0) and cert_expiry_days (default 30, >= 0).
-func TestSpec5Settings(t *testing.T) {
+// storage.max_names (default 50, > 0) and cert_expiry_days (default 30, >= 0).
+func TestStorageAndCertificateSettings(t *testing.T) {
 	clearEnv(t)
 	s, err := load(t, "")
 	if err != nil {
@@ -53,7 +53,7 @@ func TestSpec5Settings(t *testing.T) {
 	}
 }
 
-// D11: the built-in list is about 20 entries, each with a signature or magic.
+// The built-in list is about 20 entries, each with a signature or magic.
 func TestBuiltinSensitivePaths(t *testing.T) {
 	clearEnv(t)
 	s, err := load(t, "")
@@ -83,7 +83,7 @@ func TestBuiltinSensitivePaths(t *testing.T) {
 	}
 }
 
-// D11: entry format, defaults and matching.
+// Entry format, defaults and matching.
 func TestSensitivePathEntries(t *testing.T) {
 	clearEnv(t)
 	file := pathsFile(t, `
@@ -141,7 +141,7 @@ func TestSensitivePathEntries(t *testing.T) {
 	}
 }
 
-// D11: invalid entries fail validation (exit 2 in the CLI).
+// Invalid entries fail validation (exit 2 in the CLI).
 func TestSensitivePathValidation(t *testing.T) {
 	clearEnv(t)
 	cases := map[string]string{

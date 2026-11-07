@@ -6,8 +6,8 @@ import (
 	"github.com/rafaelh/recon/internal/kinds"
 )
 
-// D17: the evidence kinds are internal, with no category, so totals count findings only.
-func TestSpec5Kinds(t *testing.T) {
+// The evidence kinds are internal, with no category, so totals count findings only.
+func TestEvidenceKinds(t *testing.T) {
 	for _, name := range []string{"takeover_http", "storage", "storage_account", "storage_object", "storage_ref", "sensitive_hit", "email_posture"} {
 		k, ok := kinds.Get(name)
 		if !ok {

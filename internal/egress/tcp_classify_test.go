@@ -17,7 +17,7 @@ func dialError(e syscall.Errno) error {
 	return &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", e)}
 }
 
-// Spec 4 D12 / B2: what a dial error means.
+// What a dial error means.
 func TestClassifyDial(t *testing.T) {
 	a := netip.MustParseAddr("203.0.113.5")
 	noRoute := func(netip.Addr) error { return dialError(syscall.ENETUNREACH) }

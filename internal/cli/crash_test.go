@@ -215,7 +215,7 @@ func finishAndCheck(t *testing.T, out string, wantRun2 []string, o childOpts) {
 	assertOutputsIntact(t, out)
 }
 
-// B7(a): kill -9 while an output file is mid-write.
+// A kill -9 while an output file is mid-write.
 func TestCrashRenderMidFile(t *testing.T) {
 	out := t.TempDir()
 	c1 := startChild(t, out, childOpts{n: nChecks, args: []string{"a.com"}})
@@ -247,7 +247,7 @@ func TestCrashRenderMidFile(t *testing.T) {
 	assertOutputsIntact(t, out)
 }
 
-// B7(b)/(c): kill -9 at in-check-tx, in-flight and after-commit.
+// A kill -9 at in-check-tx, in-flight and after-commit.
 func TestCrashPoints(t *testing.T) {
 	for _, point := range []string{"in-check-tx", "in-flight", "after-commit"} {
 		t.Run(point, func(t *testing.T) {
@@ -279,7 +279,7 @@ func TestCrashPoints(t *testing.T) {
 	}
 }
 
-// B10/B7: a redo interrupted after a commit is finished by the next plain run.
+// A redo interrupted after a commit is finished by the next plain run.
 func TestCrashDuringRedo(t *testing.T) {
 	out := t.TempDir()
 	c1 := startChild(t, out, childOpts{n: nChecks, args: []string{"a.com"}})
@@ -308,7 +308,7 @@ func TestCrashDuringRedo(t *testing.T) {
 	}
 }
 
-// B7(d): SIGINT and SIGTERM exit 130 with the same guarantees.
+// SIGINT and SIGTERM exit 130 with the same guarantees.
 func TestSignals(t *testing.T) {
 	for name, sig := range map[string]syscall.Signal{"SIGINT": syscall.SIGINT, "SIGTERM": syscall.SIGTERM, "SIGHUP": syscall.SIGHUP} {
 		t.Run(name, func(t *testing.T) {

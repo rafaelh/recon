@@ -49,8 +49,8 @@ func includes(n int) string {
 	return "v=spf1 " + strings.Join(parts, " ") + " -all"
 }
 
-// B6: SPF, DMARC and MX cases, each producing exactly the findings the spec lists.
-func TestRiskB6_EmailPosture(t *testing.T) {
+// SPF, DMARC and MX cases, each producing exactly the findings listed.
+func TestEmail_Posture(t *testing.T) {
 	cases := []struct {
 		name string
 		edit func(*mail)
@@ -164,8 +164,8 @@ func TestRiskB6_EmailPosture(t *testing.T) {
 	}
 }
 
-// B6/D2: severities of the email findings.
-func TestRiskB6_EmailSeverities(t *testing.T) {
+// Severities of the email findings.
+func TestEmail_Severities(t *testing.T) {
 	x := newRisk(t, "email")
 	x.names()
 	m := healthy()
@@ -185,8 +185,8 @@ func TestRiskB6_EmailSeverities(t *testing.T) {
 	}
 }
 
-// B6: a SERVFAIL on _dmarc is a failed check, retried on the next run.
-func TestRiskB6_DMARCServfailIsTransient(t *testing.T) {
+// A SERVFAIL on _dmarc is a failed check, retried on the next run.
+func TestEmail_DMARCServfailIsTransient(t *testing.T) {
 	x := newRisk(t, "email")
 	x.names()
 	m := healthy()
@@ -210,9 +210,9 @@ func TestRiskB6_DMARCServfailIsTransient(t *testing.T) {
 	}
 }
 
-// B6: a SERVFAIL on an SPF include is a temperror: the check fails and is
+// A SERVFAIL on an SPF include is a temperror: the check fails and is
 // retried, instead of completing with a permanent spf-invalid.
-func TestRiskB6_IncludeServfailIsTransient(t *testing.T) {
+func TestEmail_IncludeServfailIsTransient(t *testing.T) {
 	x := newRisk(t, "email")
 	x.names()
 	m := healthy()
@@ -237,8 +237,8 @@ func TestRiskB6_IncludeServfailIsTransient(t *testing.T) {
 	}
 }
 
-// B6: a SERVFAIL on a selector is recorded, not fatal.
-func TestRiskB6_SelectorErrorsRecorded(t *testing.T) {
+// A SERVFAIL on a selector is recorded, not fatal.
+func TestEmail_SelectorErrorsRecorded(t *testing.T) {
 	x := newRisk(t, "email")
 	x.names()
 	m := healthy()
@@ -253,8 +253,8 @@ func TestRiskB6_SelectorErrorsRecorded(t *testing.T) {
 	}
 }
 
-// B6: for a subdomain root the organisational domain's sp= applies, and its p= when there is no sp=.
-func TestRiskB6_SubdomainRootUsesOrgPolicy(t *testing.T) {
+// For a subdomain root the organisational domain's sp= applies, and its p= when there is no sp=.
+func TestEmail_SubdomainRootUsesOrgPolicy(t *testing.T) {
 	for name, tc := range map[string]struct {
 		dmarc string
 		want  []string
@@ -290,8 +290,8 @@ func TestRiskB6_SubdomainRootUsesOrgPolicy(t *testing.T) {
 	}
 }
 
-// B6: only in-scope input roots are checked; an excluded root is not.
-func TestRiskB6_OnlyInScopeRoots(t *testing.T) {
+// Only in-scope input roots are checked; an excluded root is not.
+func TestEmail_OnlyInScopeRoots(t *testing.T) {
 	x := newRisk(t, "email")
 	x.names()
 	healthy().apply(x.dns, "example.com")

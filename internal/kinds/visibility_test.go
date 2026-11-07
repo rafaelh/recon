@@ -46,7 +46,7 @@ func rec(key string, kv ...string) store.Record {
 	return store.Record{Key: key, Current: true, Attrs: a}
 }
 
-// Spec 4 D9: an open_port is shown only while its address is port-eligible.
+// An open_port is shown only while its address is port-eligible.
 func TestPortShown(t *testing.T) {
 	for _, c := range []struct {
 		name, key string
@@ -68,7 +68,7 @@ func TestPortShown(t *testing.T) {
 	}
 }
 
-// Spec 3 D17: a web record is shown while its host is in scope; without a host
+// A web record is shown while its host is in scope; without a host
 // attribute the host comes from its key.
 func TestWebShown(t *testing.T) {
 	for _, c := range []struct {
@@ -153,7 +153,7 @@ func TestPrinted(t *testing.T) {
 	}
 }
 
-// Spec 3 D17: totals count current, shown records, and list empty categories.
+// Totals count current, shown records, and list empty categories.
 func TestTotals(t *testing.T) {
 	gone := rec("https://www.example.com/b")
 	gone.Current = false

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// risk is a web world with some of Spec 5's stages in the stage list.
+// risk is a web world with some of the risk stages in the stage list.
 type risk struct{ *web }
 
 func newRisk(t *testing.T, stages ...string) *risk {

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Spec 6 B1/D2: the version string comes from the build info; "" (no version)
+// The version string comes from the build info; "" (no version)
 // is turned into "devel" by Execute, which TestVersionFlagZeroDeps covers.
 func TestVersionString(t *testing.T) {
 	const pseudo = "v0.0.0-20261106032157-7e34c1b8d74f+dirty"

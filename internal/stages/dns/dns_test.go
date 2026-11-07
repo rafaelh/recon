@@ -23,7 +23,7 @@ func clients(t *testing.T, d *egresstest.DNS) egress.Clients {
 	return eg.Clients("t", false, nil)
 }
 
-// D10: the probe labels come from an injectable source; there are always two, and they differ.
+// The probe labels come from an injectable source; there are always two, and they differ.
 func TestWildcardProbeLabels(t *testing.T) {
 	d := egresstest.NewDNS(t)
 	labels := []string{"aaaa", "aaaa", "bbbb"} // the second draw repeats the first
@@ -56,7 +56,7 @@ func TestDefaultWildcardLabelsAreRandom16(t *testing.T) {
 	}
 }
 
-// B4: a SERVFAIL on a probe is a transient failure, never "not a wildcard".
+// A SERVFAIL on a probe is a transient failure, never "not a wildcard".
 func TestWildcardServFailIsAnError(t *testing.T) {
 	d := egresstest.NewDNS(t)
 	d.RcodeSuffix("example.com", 2) // SERVFAIL
@@ -65,7 +65,7 @@ func TestWildcardServFailIsAnError(t *testing.T) {
 	}
 }
 
-// B4: a probe that answered proves the wildcard even if another probe SERVFAILs.
+// A probe that answered proves the wildcard even if another probe SERVFAILs.
 func TestWildcardAnswerWinsOverServFail(t *testing.T) {
 	d := egresstest.NewDNS(t)
 	d.Wildcard("example.com", "203.0.113.1")
@@ -79,7 +79,7 @@ func TestWildcardAnswerWinsOverServFail(t *testing.T) {
 	}
 }
 
-// B4: a wildcard CNAME that dangles (NXDOMAIN) is still a wildcard, so the
+// A wildcard CNAME that dangles (NXDOMAIN) is still a wildcard, so the
 // permutations it makes "exist" come out wildcard-only.
 func TestWildcardDanglingCNAME(t *testing.T) {
 	d := egresstest.NewDNS(t)
@@ -90,7 +90,7 @@ func TestWildcardDanglingCNAME(t *testing.T) {
 	}
 }
 
-// D19: a resolver failure is transient; an address Cymru does not know is a result.
+// A resolver failure is transient; an address Cymru does not know is a result.
 func TestIPOwnerFailureModes(t *testing.T) {
 	d := egresstest.NewDNS(t)
 	st := dns.NewIPOwner()

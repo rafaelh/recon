@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-// B3: a bucket referenced by an in-scope CNAME is attributed. A listable bucket
+// A bucket referenced by an in-scope CNAME is attributed. A listable bucket
 // records an object count and the first keys; objects are never fetched, only
 // the first listed key and referenced objects are HEADed.
-func TestRiskB3_AttributedByCNAME(t *testing.T) {
+func TestStorage_AttributedByCNAME(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("static.example.com")
 	x.dns.CNAME("static.example.com", "acme-assets.s3.amazonaws.com")
@@ -55,8 +55,8 @@ func TestRiskB3_AttributedByCNAME(t *testing.T) {
 	}
 }
 
-// B3: a script reference is attributed; a truncated listing says 1000+ and keeps five keys.
-func TestRiskB3_AttributedByScript(t *testing.T) {
+// A script reference is attributed; a truncated listing says 1000+ and keeps five keys.
+func TestStorage_AttributedByScript(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -78,8 +78,8 @@ func TestRiskB3_AttributedByScript(t *testing.T) {
 	}
 }
 
-// B3: a redirect hop to a storage URL is a reference, and 403 means it exists and is private.
-func TestRiskB3_AttributedByRedirectAndPrivate(t *testing.T) {
+// A redirect hop to a storage URL is a reference, and 403 means it exists and is private.
+func TestStorage_AttributedByRedirectAndPrivate(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -95,8 +95,8 @@ func TestRiskB3_AttributedByRedirectAndPrivate(t *testing.T) {
 	}
 }
 
-// B3: the region a bucket lives in is followed from the 301.
-func TestRiskB3_RegionRedirectFollowed(t *testing.T) {
+// The region a bucket lives in is followed from the 301.
+func TestStorage_RegionRedirectFollowed(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("static.example.com")
 	x.dns.CNAME("static.example.com", "acme-eu.s3.amazonaws.com")
@@ -122,9 +122,9 @@ func TestRiskB3_RegionRedirectFollowed(t *testing.T) {
 	}
 }
 
-// B3: an Azure account is found by DNS, then the fixed container list is tried.
+// An Azure account is found by DNS, then the fixed container list is tried.
 // The account's host is a candidate (a redirect recorded it) and is still contacted.
-func TestRiskB3_AzureAccountThenContainers(t *testing.T) {
+func TestStorage_AzureAccountThenContainers(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -172,9 +172,9 @@ func TestRiskB3_AzureAccountThenContainers(t *testing.T) {
 	}
 }
 
-// B3: a newly referenced object adds one HEAD check, does not re-list the bucket,
+// A newly referenced object adds one HEAD check, does not re-list the bucket,
 // and leaves no stale "public".
-func TestRiskB3_NewObjectReference(t *testing.T) {
+func TestStorage_NewObjectReference(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com", "static.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -211,9 +211,9 @@ func TestRiskB3_NewObjectReference(t *testing.T) {
 	}
 }
 
-// B4: guessed names are capped per root and per org, in priority order, and checked
+// Guessed names are capped per root and per org, in priority order, and checked
 // on all three providers, under --passive.
-func TestRiskB4_GuessedNamesCappedAndPassive(t *testing.T) {
+func TestStorage_GuessedNamesCappedAndPassive(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names()
 	x.mustRun("--passive", "--storage-max-names", "4", "--org", "Acme Corp")
@@ -250,10 +250,10 @@ func TestRiskB4_GuessedNamesCappedAndPassive(t *testing.T) {
 	}
 }
 
-// B4: unattributed names appear in storage-unattributed.csv and never in risk-storage.csv;
+// Unattributed names appear in storage-unattributed.csv and never in risk-storage.csv;
 // only public or listable ones are findings, and always low. A guessed name that is also
 // referenced is attributed.
-func TestRiskB4_Unattributed(t *testing.T) {
+func TestStorage_Unattributed(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("static.example.com")
 	x.dns.CNAME("static.example.com", "example-backup.s3.amazonaws.com") // also a guess
@@ -303,8 +303,8 @@ func TestRiskB4_Unattributed(t *testing.T) {
 	}
 }
 
-// B1: an unattributed listable bucket is low and never reaches the summary's high/medium list.
-func TestRiskB1_UnattributedNeverInSummary(t *testing.T) {
+// An unattributed listable bucket is low and never reaches the summary's high/medium list.
+func TestStorage_UnattributedNeverInSummary(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names()
 	x.handle("storage.googleapis.com", bucketHandler(map[string]bucket{"example": {list: 200, keys: []string{"secrets.txt"}, objs: map[string]int{"secrets.txt": 200}}}))
@@ -325,9 +325,9 @@ func TestRiskB1_UnattributedNeverInSummary(t *testing.T) {
 	}
 }
 
-// D16: a redirect to a path-style provider endpoint records it as a candidate
+// A redirect to a path-style provider endpoint records it as a candidate
 // hostname; the storage stage still contacts it, like an Azure account host.
-func TestRiskB3_PathStyleEndpointCandidateIsContacted(t *testing.T) {
+func TestStorage_PathStyleEndpointCandidateIsContacted(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -345,10 +345,10 @@ func TestRiskB3_PathStyleEndpointCandidateIsContacted(t *testing.T) {
 	}
 }
 
-// D10: Azure answers an anonymous listing with 404 ResourceNotFound (private or
+// Azure answers an anonymous listing with 404 ResourceNotFound (private or
 // missing) or 409 PublicAccessNotPermitted. Existence is unknown: the check
 // completes, is not retried, and is neither a finding nor a takeover.
-func TestRiskB3_AzureUnknownContainersComplete(t *testing.T) {
+func TestStorage_AzureUnknownContainersComplete(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -384,8 +384,8 @@ func TestRiskB3_AzureUnknownContainersComplete(t *testing.T) {
 	}
 }
 
-// D10: a 307 for a new bucket may name its region only in Location.
-func TestRiskB3_RegionFromLocation(t *testing.T) {
+// A 307 for a new bucket may name its region only in Location.
+func TestStorage_RegionFromLocation(t *testing.T) {
 	x := newRisk(t, "storage")
 	x.names("static.example.com")
 	x.dns.CNAME("static.example.com", "acme-new.s3.amazonaws.com")

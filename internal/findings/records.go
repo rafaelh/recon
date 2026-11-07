@@ -131,7 +131,7 @@ func Files() []File {
 }
 
 // riskFile lists every finding record of a category: current ones and those no
-// longer derived, which stay on record (Spec 5 D13). The findings are derived
+// longer derived, which stay on record. The findings are derived
 // with scope and visibility already applied, so the file does not filter again.
 func riskFile(category string, columns []string, fromKey func(typ, target string) map[string]string) File {
 	return File{Name: "risk-" + category + ".csv", Columns: columns, Rows: func(l Listing) []FileRow {

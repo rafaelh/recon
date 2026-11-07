@@ -52,7 +52,7 @@ func TestRun(t *testing.T) {
 	}
 }
 
-// D7: a non-ok body status is a transient failure (an error), not an empty result.
+// A non-ok body status is a transient failure (an error), not an empty result.
 func TestRunErrors(t *testing.T) {
 	for name, h := range map[string]http.HandlerFunc{
 		"status":   func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"status":"error","data":{}}`)) },

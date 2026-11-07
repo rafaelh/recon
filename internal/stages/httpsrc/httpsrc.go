@@ -36,7 +36,7 @@ func Crtsh(ctx context.Context, c egress.Clients, q url.Values) ([]byte, error) 
 var ErrNotFound = errors.New("HTTP 404")
 
 // Get performs a request and maps the failures every source shares. For a
-// keyed request a 401, 403 or 429 aborts the stage (D4): the key is bad or the
+// keyed request a 401, 403 or 429 aborts the stage: the key is bad or the
 // quota is spent, so nothing may be recorded as done. A 404 is ErrNotFound.
 // A truncated body or any other non-200 status is a transient error.
 func Get(ctx context.Context, c egress.Clients, req egress.ThirdPartyRequest) ([]byte, error) {

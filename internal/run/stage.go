@@ -102,7 +102,7 @@ type Retiring interface {
 	RetiresUnlistedChecks()
 }
 
-// recordCache holds the records a View has read, for one stage pass (D28).
+// recordCache holds the records a View has read, for one stage pass.
 type recordCache struct {
 	mu    sync.Mutex
 	m     map[string][]store.Record
@@ -218,7 +218,7 @@ func (v View) ResolvableHostnames() []string {
 func (v View) ProbeHostnames() []string { return v.inv.ProbeHostnames(v.sc) }
 
 // ProviderHosts are the in-scope names on shared provider infrastructure, with
-// Resolves=false for chains that dangle. Spec 5's takeover checks read it.
+// Resolves=false for chains that dangle. The takeover checks read it.
 func (v View) ProviderHosts() []inventory.ProviderHost { return v.inv.ProviderHosts(v.sc) }
 
 // SaaSServed reports whether a host (a name or an IP literal) is served by a
@@ -231,11 +231,11 @@ func (v View) StorageRefs() []cloudstorage.Reference {
 	return findings.References(findings.Input{Scope: v.sc, Inv: v.inv, Records: v.Records})
 }
 
-// Seeds are the hostnames the generator stage derives names from (D14): never
+// Seeds are the hostnames the generator stage derives names from: never
 // names only the generator itself observed.
 func (v View) Seeds(generator string) []string { return v.inv.Seeds(v.sc, generator) }
 
-// OpenPort is a current open_port record: Spec 4's port stage emits one per
+// OpenPort is a current open_port record: the port stage emits one per
 // open port, keyed by netip.AddrPort.String(), with an unprompted banner if any.
 type OpenPort struct {
 	Addr   netip.AddrPort

@@ -51,7 +51,7 @@ func newScope(inv *inventory.Inventory, d inventory.Data, excl ...string) *scope
 	})
 }
 
-// B4: wildcard-only names are computed on read, by CNAME or by overlapping addresses.
+// Wildcard-only names are computed on read, by CNAME or by overlapping addresses.
 func TestWildcardOnly(t *testing.T) {
 	var d inventory.Data
 	d.Wildcards = []inventory.Wildcard{{Zone: "example.com", Addrs: ips("203.0.113.1", "203.0.113.2")}}
@@ -90,7 +90,7 @@ func TestWildcardOnlyByCNAME(t *testing.T) {
 	}
 }
 
-// B4: one representative per wildcard reaches ProbeHostnames; wildcard-only names do not.
+// One representative per wildcard reaches ProbeHostnames; wildcard-only names do not.
 func TestProbeHostnames(t *testing.T) {
 	var d inventory.Data
 	d.Wildcards = []inventory.Wildcard{{Zone: "example.com", Addrs: ips("203.0.113.1")}}
@@ -111,7 +111,7 @@ func TestProbeHostnames(t *testing.T) {
 	}
 }
 
-// B4: the representative is chosen among probeable names, so an excluded or
+// The representative is chosen among probeable names, so an excluded or
 // address-less wildcard-only name never costs the zone its only probe.
 func TestRepresentativeIsProbeable(t *testing.T) {
 	var d inventory.Data
@@ -127,7 +127,7 @@ func TestRepresentativeIsProbeable(t *testing.T) {
 	}
 }
 
-// D14, B2: only names seen by a stage other than permutations are seeds.
+// Only names seen by a stage other than permutations are seeds.
 func TestSeeds(t *testing.T) {
 	var d inventory.Data
 	d.Wildcards = []inventory.Wildcard{{Zone: "example.com", Addrs: ips("203.0.113.1")}}
@@ -148,7 +148,7 @@ func TestSeeds(t *testing.T) {
 	}
 }
 
-// B5: CNAME-to-provider rows, with resolves=false for dangling chains.
+// CNAME-to-provider rows, with resolves=false for dangling chains.
 func TestProviderHosts(t *testing.T) {
 	var d inventory.Data
 	d.Hosts = []inventory.Host{
@@ -189,7 +189,7 @@ func TestProviderHosts(t *testing.T) {
 	}
 }
 
-// B8/B9: IP rows, owners, eligibility; unknown owner fails closed.
+// IP rows, owners, eligibility; unknown owner fails closed.
 func TestIPRows(t *testing.T) {
 	var d inventory.Data
 	resolve(&d, "www.example.com", "203.0.113.5")
@@ -222,7 +222,7 @@ func TestIPRows(t *testing.T) {
 	}
 }
 
-// B9: the ips.csv port_eligible column equals egress's decision for the same address.
+// The ips.csv port_eligible column equals egress's decision for the same address.
 func TestIPRowsMatchEgress(t *testing.T) {
 	var d inventory.Data
 	resolve(&d, "www.example.com", "203.0.113.5")
@@ -293,7 +293,7 @@ func TestIPRowsMatchEgress(t *testing.T) {
 	}
 }
 
-// D28 / B8: a hyperscaler address with no range data is shared; EC2-only is not.
+// A hyperscaler address with no range data is shared; EC2-only is not.
 func TestSharedFromRanges(t *testing.T) {
 	var d inventory.Data
 	d.Ranges = provider.NewRanges([]provider.Range{
@@ -330,7 +330,7 @@ func TestCNAMESharedLabelIsStable(t *testing.T) {
 	}
 }
 
-// Spec 4 D2: one eligibility function for the sweep, egress and ips.csv.
+// One eligibility function for the sweep, egress and ips.csv.
 func TestPortEligibleMatchesIPRows(t *testing.T) {
 	var d inventory.Data
 	resolve(&d, "www.example.com", "203.0.113.5")

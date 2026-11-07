@@ -68,13 +68,13 @@ func DefaultDeps() Deps {
 	}
 }
 
-// defaultStages is the registry order (Spec 2 D25): sources first, then DNS,
+// defaultStages is the registry order: sources first, then DNS,
 // then the stages derived from what the sources found. Passes repeat, so
 // late discoveries are picked up. The port sweep is last so that probing
 // hostnames on 80 and 443 does not wait for a sweep that can take hours; the
-// pass after it probes the ports it found (Spec 4 D1). Spec 5's email stage
-// follows the DNS stages; storage follows the crawl so references found in the
-// same pass are checked, and the Target stages run before the port sweep (Spec 5 D4).
+// pass after it probes the ports it found. The email stage follows the DNS
+// stages; storage follows the crawl so references found in the
+// same pass are checked, and the Target stages run before the port sweep.
 func defaultStages() []run.Stage {
 	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails
 	stages := []run.Stage{asn.New(), orgpivot.NewOrgASN(), orgpivot.NewCTOrg(), orgpivot.NewWhoisXML()}
@@ -345,7 +345,7 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 }
 
 // acknowledge records the operator's authorisation: by flag, or once per
-// engagement by prompt when there is a terminal (B14).
+// engagement by prompt when there is a terminal.
 func acknowledge(eng *engagement.Engagement, o *options, d Deps) error {
 	if o.authorised {
 		return eng.SetAck()

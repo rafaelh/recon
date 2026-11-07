@@ -7,7 +7,7 @@ import (
 	"github.com/rafaelh/recon/internal/scope"
 )
 
-// Spec 3 D17: the one function that decides whether a web service or URL host
+// The one function that decides whether a web service or URL host
 // is shown. An IP literal is in scope iff it is inside an in-scope netblock and
 // not excluded; a name iff it classifies as in scope.
 func TestWebHostInScope(t *testing.T) {

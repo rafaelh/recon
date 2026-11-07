@@ -40,9 +40,9 @@ func leaky(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// B5: each path once per live service, flagged by signature or magic, with the
+// Each path once per live service, flagged by signature or magic, with the
 // body never stored; a catch-all 200 is not flagged.
-func TestRiskB5_RequestedOnceAndMatched(t *testing.T) {
+func TestSensitivePaths_RequestedOnceAndMatched(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	x.names("www.example.com", "plain.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -99,8 +99,8 @@ func TestRiskB5_RequestedOnceAndMatched(t *testing.T) {
 	}
 }
 
-// B5: a transient failure is retried on the next run; the rest are not repeated.
-func TestRiskB5_TransientFailureRetried(t *testing.T) {
+// A transient failure is retried on the next run; the rest are not repeated.
+func TestSensitivePaths_TransientFailureRetried(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -133,9 +133,9 @@ func TestRiskB5_TransientFailureRetried(t *testing.T) {
 	}
 }
 
-// B5: company hosts behind CDNs, on PaaS and by IP literal are requested; hosts
+// Company hosts behind CDNs, on PaaS and by IP literal are requested; hosts
 // served by third-party SaaS (by CNAME, and an apex by address range) are not.
-func TestRiskB5_WhichServicesAreRequested(t *testing.T) {
+func TestSensitivePaths_WhichServicesAreRequested(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	x.names("cdn.example.com", "app.example.com", "help.example.com", "pages.example.com", "plain.example.com")
 	x.dns.CNAME("cdn.example.com", "d1.cloudfront.net")
@@ -175,8 +175,8 @@ func TestRiskB5_WhichServicesAreRequested(t *testing.T) {
 	}
 }
 
-// B5: invalid sensitive-path entries exit 2.
-func TestRiskB5_InvalidEntriesExit2(t *testing.T) {
+// Invalid sensitive-path entries exit 2.
+func TestSensitivePaths_InvalidEntriesExit2(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	for name, body := range map[string]string{
 		"plain string": "- /admin\n", "no signature": "- path: /admin\n", "bad regex": "- path: /a\n  signature: '(['\n",
@@ -190,8 +190,8 @@ func TestRiskB5_InvalidEntriesExit2(t *testing.T) {
 	}
 }
 
-// B5: a hit is a finding only while its service is current and visible.
-func TestRiskB5_HitNeedsCurrentService(t *testing.T) {
+// A hit is a finding only while its service is current and visible.
+func TestSensitivePaths_HitNeedsCurrentService(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -211,10 +211,10 @@ func TestRiskB5_HitNeedsCurrentService(t *testing.T) {
 	}
 }
 
-// D11: editing an entry's signature retires the old check, so its hit stops
+// Editing an entry's signature retires the old check, so its hit stops
 // being current instead of staying a finding at its old evidence; the other
 // entries are not requested again.
-func TestRiskB5_EditedEntrySupersedesOldHit(t *testing.T) {
+func TestSensitivePaths_EditedEntrySupersedesOldHit(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")
@@ -244,9 +244,9 @@ func TestRiskB5_EditedEntrySupersedesOldHit(t *testing.T) {
 	}
 }
 
-// D11: a body larger than the 1 MiB read cap reports its Content-Length, or
+// A body larger than the 1 MiB read cap reports its Content-Length, or
 // "1048576+" when the response does not declare one.
-func TestRiskB5_LargeBodySize(t *testing.T) {
+func TestSensitivePaths_LargeBodySize(t *testing.T) {
 	x := newRisk(t, "sensitive-paths")
 	x.names("www.example.com")
 	x.host("www.example.com", "203.0.113.5")

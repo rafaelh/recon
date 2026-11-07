@@ -22,7 +22,7 @@ import (
 	"github.com/rafaelh/recon/internal/scope"
 )
 
-// D9, B3, B5: CNAME links keep their owner names, in answer order, and survive
+// CNAME links keep their owner names, in answer order, and survive
 // NXDOMAIN and NODATA so a dangling chain can be seen.
 func TestResolverCNAMEsOnEveryRcode(t *testing.T) {
 	d := egresstest.NewDNS(t)
@@ -73,7 +73,7 @@ func thirdPartyServer(t *testing.T, h http.HandlerFunc, opts egress.Options) egr
 	return eg.Clients("s", false, []string{"api.example.net"}).ThirdParty
 }
 
-// D23: a body over the 10 MiB cap is cut and flagged, never silently complete.
+// A body over the 10 MiB cap is cut and flagged, never silently complete.
 func TestThirdPartyTruncated(t *testing.T) {
 	big := bytes.Repeat([]byte("x"), 10<<20+500)
 	c := thirdPartyServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +93,7 @@ func TestThirdPartyTruncated(t *testing.T) {
 	}
 }
 
-// D23: a request may ask for a longer timeout than the default, capped at 120 s.
+// A request may ask for a longer timeout than the default, capped at 120 s.
 func TestThirdPartyTimeout(t *testing.T) {
 	c := thirdPartyServer(t, func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(300 * time.Millisecond)
@@ -108,7 +108,7 @@ func TestThirdPartyTimeout(t *testing.T) {
 	}
 }
 
-// D7: the client puts the key into the JSON body; the stage never sees it.
+// The client puts the key into the JSON body; the stage never sees it.
 func TestThirdPartyKeyBodyField(t *testing.T) {
 	var got map[string]any
 	c := thirdPartyServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +133,7 @@ func TestThirdPartyKeyBodyField(t *testing.T) {
 	}
 }
 
-// --- TCP eligibility (B9, B16, D18, D20) ---
+// --- TCP eligibility ---
 
 type tcpEnv struct {
 	t    *testing.T
@@ -186,7 +186,7 @@ func (e *tcpEnv) refused(a string) bool {
 	return ok
 }
 
-// B9/D18: a hostname-resolved address is port-checked unless it is shared;
+// A hostname-resolved address is port-checked unless it is shared;
 // wildcard-only names do not count; an unknown owner fails closed.
 func TestTCPEligibility(t *testing.T) {
 	res := map[string][]netip.Addr{
@@ -223,7 +223,7 @@ func TestTCPEligibility(t *testing.T) {
 	}
 }
 
-// D20/B16: an excluded host's address is allowed only when it is shared and
+// An excluded host's address is allowed only when it is shared and
 // otherwise eligible (an in-scope IP); an excluded CIDR always refuses.
 func TestTCPExcludedHostOnSharedInfra(t *testing.T) {
 	res := map[string][]netip.Addr{"admin.example.com": {addr("198.51.100.7"), addr("198.51.100.8")}}

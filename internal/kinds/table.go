@@ -145,7 +145,7 @@ type OpenPortAttrs struct {
 // finding's category, which the findings package owns.
 var Finding = define[map[string]any](Kind{Name: "finding", Singular: "finding", Category: "findings", Printed: true})
 
-// Evidence (Spec 5): stages store these, the findings package derives findings from them.
+// Evidence: stages store these, the findings package derives findings from them.
 var (
 	TakeoverHTTP   = define[TakeoverHTTPAttrs](Kind{Name: "takeover_http"})
 	Storage        = define[StorageAttrs](Kind{Name: "storage"})

@@ -17,7 +17,7 @@ import (
 	"github.com/rafaelh/recon/internal/run"
 )
 
-// Storage checks cloud storage (Spec 5 D8 to D10): buckets and accounts that
+// Storage checks cloud storage: buckets and accounts that
 // in-scope names and pages reference, and names guessed from the roots and
 // organisations. It lists a bucket anonymously, HEADs one object, and never
 // fetches object contents. Everything it asks is a public provider endpoint,

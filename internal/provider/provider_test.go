@@ -10,7 +10,7 @@ import (
 func pfx(s string) netip.Prefix { return netip.MustParsePrefix(s) }
 func ip(s string) netip.Addr    { return netip.MustParseAddr(s) }
 
-// B5/B8: CNAME suffix labels.
+// CNAME suffix labels.
 func TestCNAMESuffix(t *testing.T) {
 	db := provider.Default()
 	for target, want := range map[string]provider.Match{

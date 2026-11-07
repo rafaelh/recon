@@ -69,7 +69,7 @@ type links struct {
 	follow, record []string
 	base           string
 	// refs is every URL-bearing attribute of an a, area, link, script, img,
-	// iframe, source or form element, with its element, for storage references (Spec 5 D8).
+	// iframe, source or form element, with its element, for storage references.
 	refs []linkRef
 }
 

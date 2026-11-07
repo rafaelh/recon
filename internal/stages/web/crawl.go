@@ -17,7 +17,7 @@ import (
 )
 
 // urlsPerPage caps the URLs one crawl records at this many per page allowed, so
-// a calendar or faceted search cannot flood urls.csv (Spec 3 D14).
+// a calendar or faceted search cannot flood urls.csv.
 const urlsPerPage = 20
 
 // Crawl is the crawl stage: a breadth-first walk of one web service's own
@@ -92,7 +92,7 @@ type crawler struct {
 	storageKeys []string               // in first-seen order
 }
 
-// storageRef is a storage URL a page links to or loads (Spec 5 D8).
+// storageRef is a storage URL a page links to or loads.
 type storageRef struct {
 	ref       cloudstorage.Ref
 	url, page string
@@ -296,7 +296,7 @@ func (c *crawler) observations() []run.Observation {
 }
 
 // neverRequested is true for robots.txt and sitemap.xml: the crawl may record a
-// link to one but does not ask for it, and does not honour robots.txt (D14).
+// link to one but does not ask for it, and does not honour robots.txt.
 func neverRequested(abs string) bool {
 	u, err := url.Parse(abs)
 	if err != nil {

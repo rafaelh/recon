@@ -13,8 +13,8 @@ import (
 	"github.com/rafaelh/recon/internal/input"
 )
 
-// NormaliseURL returns the canonical form of an absolute http or https URL
-// (Spec 3 D15): lower-case scheme and host, an IP literal in its canonical
+// NormaliseURL returns the canonical form of an absolute http or https URL:
+// lower-case scheme and host, an IP literal in its canonical
 // form (IPv6 bracketed), a decimal port with the default omitted, no fragment,
 // no userinfo, the query kept, and "/" for an empty path. ok is false for
 // anything else.

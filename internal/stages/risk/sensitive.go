@@ -13,8 +13,8 @@ import (
 )
 
 // SensitivePaths is the sensitive-paths stage: each configured path is requested
-// once per live web service, except services third-party SaaS platforms serve
-// (Spec 5 D11). Only a response matching the entry's signature is recorded, and
+// once per live web service, except services third-party SaaS platforms serve.
+// Only a response matching the entry's signature is recorded, and
 // its body is never stored.
 type SensitivePaths struct{}
 

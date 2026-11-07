@@ -31,7 +31,7 @@ func newDir(t *testing.T) string {
 	return d
 }
 
-// B20: TXT lists current records only, sorted; CSV lists all with date and currency columns.
+// TXT lists current records only, sorted; CSV lists all with date and currency columns.
 func TestTXTAndCSV(t *testing.T) {
 	dir := newDir(t)
 	rs := rows(
@@ -97,7 +97,7 @@ func TestEmptyFilesNotWritten(t *testing.T) {
 	}
 }
 
-// B20: CSV injection and control characters.
+// CSV injection and control characters.
 func TestCSVSafety(t *testing.T) {
 	dir := newDir(t)
 	files := []output.File{{Name: "t.csv", Format: output.CSV, Columns: []string{"a", "b"}, Rows: rows(
@@ -131,7 +131,7 @@ func TestCSVSafety(t *testing.T) {
 	}
 }
 
-// B20/B7/D12: rendered through .recon/tmp then renamed; no leftovers; sweep clears stale temp files.
+// Rendered through .recon/tmp then renamed; no leftovers; sweep clears stale temp files.
 func TestAtomicRenderAndSweep(t *testing.T) {
 	dir := newDir(t)
 	f := output.File{Name: "a.txt", Format: output.TXT, Rows: rows(output.Row{Cells: []string{"one"}, Current: true})}
@@ -161,8 +161,7 @@ func TestAtomicRenderAndSweep(t *testing.T) {
 	}
 }
 
-// Spec 1 registered scope, candidates and excluded; Spec 2 adds the DNS files (D27);
-// Spec 3 adds the web files, Spec 4 open-ports.csv.
+// Every default file is registered, in order, and every CSV has columns.
 func TestDefaultRegistry(t *testing.T) {
 	var names []string
 	for _, f := range output.Default() {

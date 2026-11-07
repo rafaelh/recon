@@ -6,7 +6,7 @@ import (
 	"github.com/rafaelh/recon/internal/kinds"
 )
 
-// Spec 3 D17/D18: web_service and url name the attribute holding their host so
+// web_service and url name the attribute holding their host so
 // the summary and the CSVs filter them identically; http_port is internal.
 func TestWebKinds(t *testing.T) {
 	for _, name := range []string{"web_service", "url"} {

@@ -39,7 +39,7 @@ func (s evidenceSet) add(target, typ, detail string, attrs map[string]any) {
 	}
 }
 
-// takeovers derives the takeover candidates (B2): DNS evidence needs no query
+// takeovers derives the takeover candidates: DNS evidence needs no query
 // of its own, so it is derived under --passive too.
 func (d *deriver) takeovers() []Finding {
 	ev := evidenceSet{}

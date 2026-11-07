@@ -8,7 +8,7 @@ import (
 	"github.com/rafaelh/recon/internal/provider"
 )
 
-// D5: SaaSServed is true when a CNAME on the chain, an address's ASN or an address range is SaaS.
+// SaaSServed is true when a CNAME on the chain, an address's ASN or an address range is SaaS.
 func TestSaaSServed(t *testing.T) {
 	var d inventory.Data
 	d.Resolutions = []inventory.Resolution{
@@ -44,7 +44,7 @@ func TestSaaSServed(t *testing.T) {
 	}
 }
 
-// D5: ProviderHosts carries the matched entry, with its fingerprint.
+// ProviderHosts carries the matched entry, with its fingerprint.
 func TestProviderHostEntry(t *testing.T) {
 	var d inventory.Data
 	d.Hosts = []inventory.Host{{Name: "shop.example.com", Stages: []string{"crtsh"}}, {Name: "app.example.com", Stages: []string{"crtsh"}}}
