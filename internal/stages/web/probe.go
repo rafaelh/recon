@@ -295,11 +295,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 // sanHost turns a certificate DNS name into a hostname: a wildcard contributes
 // its base name; malformed names, IP literals and public suffixes are skipped.
 func sanHost(name string) (string, bool) {
-	name = strings.TrimPrefix(strings.TrimSpace(name), "*.")
-	if strings.ContainsAny(name, "*@/: ") {
-		return "", false
-	}
-	d, err := input.ParseDomain(name)
+	d, err := input.ParseDomain(strings.TrimPrefix(strings.TrimSpace(name), "*."))
 	return d, err == nil
 }
 

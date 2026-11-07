@@ -73,6 +73,30 @@ func TestSources_KeylessSources(t *testing.T) {
 	}
 }
 
+func TestSources_InternationalNamesAreStoredAsPunycode(t *testing.T) {
+	w := newWorld(t)
+	w.crtsh(map[string][]string{
+		"example.com":         {"Bücher.Example.com.", "xn--bcher-kva.example.com"},
+		"xn--caf-dma.example": {"zq7.café.example"},
+	}, nil)
+	w.dns.A("xn--bcher-kva.example.com", "203.0.113.5")
+	w.dns.A("zq7.xn--caf-dma.example", "203.0.113.6")
+	if code := w.run("--passive", "-e", eng, "example.com", "café.example"); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	got := w.lines(eng, "subdomains.txt")
+	for _, want := range []string{"xn--bcher-kva.example.com", "zq7.xn--caf-dma.example"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("subdomains.txt missing %s: %v", want, got)
+		}
+	}
+	for k := range w.obsAttrs(eng, "hostname") {
+		if strings.ContainsAny(k, "üé") {
+			t.Errorf("hostname stored in Unicode form: %q", k)
+		}
+	}
+}
+
 func TestSources_KeyedSources(t *testing.T) {
 	w := newWorld(t)
 	keys := map[string]string{"VIRUSTOTAL": "vt-SECRET-1", "SECURITYTRAILS": "st-SECRET-2", "SHODAN": "sh-SECRET-3", "WHOISXML": "wx-SECRET-4"}

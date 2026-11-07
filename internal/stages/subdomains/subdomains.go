@@ -156,16 +156,11 @@ func pickURLs(raw []string, root string, max int) []archivedURL {
 	return out
 }
 
-// cleanName normalises a name from a source; wildcards and non-hostnames are dropped.
+// cleanName returns a name from a source in canonical punycode form, or ""
+// for a wildcard or non-hostname.
 func cleanName(n string) string {
-	n = input.NormaliseHost(strings.TrimSpace(n))
-	if n == "" || strings.ContainsAny(n, "*@/: ") {
-		return ""
-	}
-	if _, err := input.ParseDomain(n); err != nil {
-		return ""
-	}
-	return n
+	d, _ := input.ParseDomain(n)
+	return d
 }
 
 // --- crt.sh ---

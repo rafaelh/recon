@@ -2,6 +2,7 @@ package asn_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -52,17 +53,22 @@ func TestRun(t *testing.T) {
 	}
 }
 
-// A non-ok body status is a transient failure (an error), not an empty result.
+// A non-ok body status or HTTP status is a transient failure (an error), not
+// an empty result. A 429 does not abort the stage: the source is keyless.
 func TestRunErrors(t *testing.T) {
 	for name, h := range map[string]http.HandlerFunc{
 		"status":   func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"status":"error","data":{}}`)) },
 		"http 500": func(w http.ResponseWriter, r *http.Request) { http.Error(w, "x", 500) },
+		"http 404": func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) },
 		"bad json": func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`<html>`)) },
 		"http 429": func(w http.ResponseWriter, r *http.Request) { http.Error(w, "slow down", http.StatusTooManyRequests) },
 	} {
 		c, _ := clients(t, h)
-		if obs, err := asn.New().Run(context.Background(), run.Check{Key: "AS1", Input: "AS1"}, c); err == nil {
+		obs, err := asn.New().Run(context.Background(), run.Check{Key: "AS1", Input: "AS1"}, c)
+		if err == nil {
 			t.Errorf("%s: want error, got %+v", name, obs)
+		} else if errors.Is(err, run.ErrAbortStage) {
+			t.Errorf("%s: want a transient error, got an abort: %v", name, err)
 		}
 	}
 }

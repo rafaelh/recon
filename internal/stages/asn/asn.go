@@ -12,6 +12,7 @@ import (
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
+	"github.com/rafaelh/recon/internal/stages/httpsrc"
 )
 
 // Stage is the asn stage. A netblock it observes under a check for an input
@@ -51,17 +52,14 @@ type announced struct {
 func (*Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
 	asn := c.Key
 	q := url.Values{"resource": {asn}, "sourceapp": {"recon"}}
-	resp, err := e.ThirdParty.Do(ctx, egress.ThirdPartyRequest{
+	raw, err := httpsrc.Get(ctx, e, egress.ThirdPartyRequest{
 		Method: "GET", URL: "https://stat.ripe.net/data/announced-prefixes/data.json?" + q.Encode(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("asn %s: %w", asn, err)
-	}
-	if resp.Status != 200 {
-		return nil, fmt.Errorf("asn %s: RIPEstat answered HTTP %d", asn, resp.Status)
+		return nil, fmt.Errorf("asn %s: RIPEstat: %w", asn, err)
 	}
 	var body announced
-	if err := json.Unmarshal(resp.Body, &body); err != nil {
+	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, fmt.Errorf("asn %s: unreadable RIPEstat response: %v", asn, err)
 	}
 	if body.Status != "ok" {
