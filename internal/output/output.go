@@ -218,6 +218,16 @@ func Default() []File {
 var webServiceColumns = []string{"url", "host", "port", "scheme", "status", "title", "server", "technologies", "redirect",
 	"final_url", "tls_subject", "tls_sans", "tls_issuer", "tls_expiry", "tls_error", "tls_self_signed"}
 
+// webServiceCells are a web service's cells, in webServiceColumns order.
+func webServiceCells(key string, a kinds.WebServiceAttrs) []string {
+	selfSigned := ""
+	if a.TLSSelfSigned != nil {
+		selfSigned = strconv.FormatBool(*a.TLSSelfSigned)
+	}
+	return []string{key, a.Host, strconv.Itoa(a.Port), a.Scheme, strconv.Itoa(a.Status), a.Title, a.Server, a.Technologies,
+		a.Redirect, a.FinalURL, a.TLSSubject, a.TLSSANs, a.TLSIssuer, a.TLSExpiry, a.TLSError, selfSigned}
+}
+
 // vis is the snapshot's Visibility. Render always sets one; a file's Rows
 // called on its own (in a test) gets a new one.
 func (s Snapshot) vis() *kinds.Visibility {
@@ -245,14 +255,9 @@ func webServiceRows(s Snapshot) []Row {
 	var rows []Row
 	vis := s.vis()
 	for _, r := range s.of(kinds.WebService) {
-		if !vis.Shown("web_service", r) {
-			continue
+		if vis.Shown(kinds.WebService, r) {
+			rows = append(rows, recordRow(r, webServiceCells(r.Key, kinds.WebService.Attrs(r))...))
 		}
-		cells := []string{r.Key}
-		for _, col := range webServiceColumns[1:] {
-			cells = append(cells, attrCell(r, col))
-		}
-		rows = append(rows, recordRow(r, cells...))
 	}
 	return rows
 }
@@ -261,8 +266,12 @@ func urlRows(s Snapshot) []Row {
 	var rows []Row
 	vis := s.vis()
 	for _, r := range s.of(kinds.URL) {
-		if vis.Shown("url", r) {
-			rows = append(rows, recordRow(r, r.Key, attrCell(r, "host"), attrCell(r, "status"), strings.Join(r.Stages, ",")))
+		if vis.Shown(kinds.URL, r) {
+			a, status := kinds.URL.Attrs(r), ""
+			if a.Status != 0 { // fetched
+				status = strconv.Itoa(a.Status)
+			}
+			rows = append(rows, recordRow(r, r.Key, a.Host, status, strings.Join(r.Stages, ",")))
 		}
 	}
 	return rows
@@ -279,12 +288,12 @@ func openPortRows(s Snapshot) []Row {
 	vis := s.vis()
 	var rows []Row
 	for _, r := range recs {
-		if !vis.Shown("open_port", r) {
+		if !vis.Shown(kinds.OpenPort, r) {
 			continue
 		}
 		ap := netip.MustParseAddrPort(r.Key) // shown, so it parsed
 		addr := ap.Addr().Unmap()
-		rows = append(rows, recordRow(r, addr.String(), strconv.Itoa(int(ap.Port())), r.Str("banner"), strings.Join(hostnames[addr], ";")))
+		rows = append(rows, recordRow(r, addr.String(), strconv.Itoa(int(ap.Port())), kinds.OpenPort.Attrs(r).Banner, strings.Join(hostnames[addr], ";")))
 	}
 	return rows
 }

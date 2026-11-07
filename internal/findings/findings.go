@@ -110,7 +110,7 @@ func (d *deriver) services() map[string]store.Record {
 	}
 	d.svcs = map[string]store.Record{}
 	for _, r := range d.current(kinds.WebService) {
-		if d.vis.Shown("web_service", r) {
+		if d.vis.Shown(kinds.WebService, r) {
 			d.svcs[r.Key] = r
 		}
 	}
@@ -224,7 +224,7 @@ func (d *deriver) ports() []Finding {
 	var out []Finding
 	for _, r := range d.current(kinds.OpenPort) {
 		ap, err := netip.ParseAddrPort(r.Key)
-		if err != nil || !risky[int(ap.Port())] || !d.vis.Shown("open_port", r) {
+		if err != nil || !risky[int(ap.Port())] || !d.vis.Shown(kinds.OpenPort, r) {
 			continue
 		}
 		if hostnames == nil {
@@ -233,7 +233,7 @@ func (d *deriver) ports() []Finding {
 		addr := netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
 		out = append(out, newFinding(Ports, "risky-port", Severity(Ports, "risky-port"), addr.String(),
 			fmt.Sprintf("port %d is open on %s", ap.Port(), addr.Addr()),
-			map[string]any{"ip": addr.Addr().String(), "port": int(ap.Port()), "banner": r.Str("banner"),
+			map[string]any{"ip": addr.Addr().String(), "port": int(ap.Port()), "banner": kinds.OpenPort.Attrs(r).Banner,
 				"hostnames": strings.Join(hostnames[addr.Addr()], ";")}))
 	}
 	return out
@@ -247,11 +247,12 @@ func (d *deriver) certificates() []Finding {
 	horizon := today.AddDate(0, 0, d.in.Settings.CertExpiryDays).Format(time.DateOnly)
 	var out []Finding
 	for _, r := range d.current(kinds.WebService) {
-		if !d.vis.Shown("web_service", r) {
+		if !d.vis.Shown(kinds.WebService, r) {
 			continue
 		}
+		a := kinds.WebService.Attrs(r)
 		var types []string
-		expiry := r.Str("tls_expiry")
+		expiry := a.TLSExpiry
 		switch {
 		case expiry == "":
 		case expiry < d.in.Today:
@@ -259,7 +260,7 @@ func (d *deriver) certificates() []Finding {
 		case expiry < horizon:
 			types = append(types, "expiring")
 		}
-		if flag(r, "tls_self_signed") {
+		if a.TLSSelfSigned != nil && *a.TLSSelfSigned {
 			types = append(types, "self-signed")
 		}
 		if len(types) == 0 {
@@ -267,8 +268,8 @@ func (d *deriver) certificates() []Finding {
 		}
 		typ := strings.Join(types, ";") // "expired", "expiring" sort before "self-signed"
 		out = append(out, newFinding(Certificates, typ, Severity(Certificates, typ), r.Key,
-			fmt.Sprintf("%s certificate (%s), expires %s", typ, r.Str("tls_subject"), expiry),
-			map[string]any{"url": r.Key, "tls_subject": r.Str("tls_subject"), "tls_issuer": r.Str("tls_issuer"), "tls_expiry": expiry}))
+			fmt.Sprintf("%s certificate (%s), expires %s", typ, a.TLSSubject, expiry),
+			map[string]any{"url": r.Key, "tls_subject": a.TLSSubject, "tls_issuer": a.TLSIssuer, "tls_expiry": expiry}))
 	}
 	return out
 }

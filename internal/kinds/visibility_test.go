@@ -62,7 +62,7 @@ func TestPortShown(t *testing.T) {
 		{"netblock address excluded later", "198.51.100.7:22", []string{"198.51.100.0/28"}, false},
 		{"key that is not an address and port", "203.0.113.5", nil, false},
 	} {
-		if got := world(t, c.excl...).Shown("open_port", rec(c.key)); got != c.want {
+		if got := world(t, c.excl...).Shown(kinds.OpenPort, rec(c.key)); got != c.want {
 			t.Errorf("%s: Shown(open_port %s) = %v, want %v", c.name, c.key, got, c.want)
 		}
 	}
@@ -84,9 +84,9 @@ func TestWebShown(t *testing.T) {
 		{"candidate host from the key", rec("https://www.other.org/a"), nil, false},
 	} {
 		v := world(t, c.excl...)
-		for _, kind := range []string{"web_service", "url"} {
+		for _, kind := range []kinds.Named{kinds.WebService, kinds.URL} {
 			if got := v.Shown(kind, c.r); got != c.want {
-				t.Errorf("%s: Shown(%s) = %v, want %v", c.name, kind, got, c.want)
+				t.Errorf("%s: Shown(%s) = %v, want %v", c.name, kind.Name(), got, c.want)
 			}
 		}
 	}
@@ -94,14 +94,11 @@ func TestWebShown(t *testing.T) {
 
 func TestOtherKindsShown(t *testing.T) {
 	v := world(t)
-	if !v.Shown("finding", rec("ports|risky-port|192.0.2.9:445")) || !v.Shown("hostname", rec("www.other.org")) {
+	if !v.Shown(kinds.Finding, rec("ports|risky-port|192.0.2.9:445")) || !v.Shown(kinds.Hostname, rec("www.other.org")) {
 		t.Error("kinds without a showing rule, and entities, are always shown")
 	}
-	if v.Shown("no_such_kind", rec("x")) {
-		t.Error("an unknown kind is not shown")
-	}
 	var none *kinds.Visibility // before the first Scope is built
-	if !none.Shown("finding", rec("x")) || none.Shown("web_service", rec("https://www.example.com")) || none.Shown("open_port", rec("203.0.113.5:80")) {
+	if !none.Shown(kinds.Finding, rec("x")) || none.Shown(kinds.WebService, rec("https://www.example.com")) || none.Shown(kinds.OpenPort, rec("203.0.113.5:80")) {
 		t.Error("with no Scope, only kinds whose rules need none are shown")
 	}
 }
@@ -109,23 +106,24 @@ func TestOtherKindsShown(t *testing.T) {
 func TestCategory(t *testing.T) {
 	v := world(t, "old.example.com")
 	for _, c := range []struct {
-		kind, key, want string
+		kind      kinds.Named
+		key, want string
 	}{
-		{"hostname", "www.example.com", kinds.Hosts},
-		{"hostname", "www.other.org", kinds.Candidates},
-		{"hostname", "old.example.com", kinds.Excluded},
-		{"root", "example.com", ""},
-		{"root", "other.org", kinds.Candidates},
-		{"netblock", "198.51.100.0/24", kinds.Netblocks},
-		{"netblock", "192.0.2.0/24", kinds.Candidates},
-		{"excluded", "192.0.2.9", kinds.Excluded},
-		{"open_port", "203.0.113.5:80", "open ports"},
-		{"open_port", "104.16.0.1:80", ""},
-		{"web_service", "https://www.other.org", ""},
-		{"resolution", "www.example.com|A|203.0.113.5", ""},
+		{kinds.Hostname, "www.example.com", kinds.Hosts},
+		{kinds.Hostname, "www.other.org", kinds.Candidates},
+		{kinds.Hostname, "old.example.com", kinds.Excluded},
+		{kinds.Root, "example.com", ""},
+		{kinds.Root, "other.org", kinds.Candidates},
+		{kinds.Netblock, "198.51.100.0/24", kinds.Netblocks},
+		{kinds.Netblock, "192.0.2.0/24", kinds.Candidates},
+		{kinds.ExcludedKind, "192.0.2.9", kinds.Excluded},
+		{kinds.OpenPort, "203.0.113.5:80", "open ports"},
+		{kinds.OpenPort, "104.16.0.1:80", ""},
+		{kinds.WebService, "https://www.other.org", ""},
+		{kinds.Resolution, "www.example.com|A|203.0.113.5", ""},
 	} {
 		if got := v.Category(c.kind, rec(c.key)); got != c.want {
-			t.Errorf("Category(%s %s) = %q, want %q", c.kind, c.key, got, c.want)
+			t.Errorf("Category(%s %s) = %q, want %q", c.kind.Name(), c.key, got, c.want)
 		}
 	}
 }

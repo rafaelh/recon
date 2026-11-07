@@ -38,10 +38,9 @@ func NewVisibility(sc *scope.Scope, inv *inventory.Inventory) *Visibility {
 	return &Visibility{sc: sc, inv: inv, hosts: map[string]bool{}}
 }
 
-// Shown reports whether a record of the kind is shown. A record of an unknown
-// kind is not.
-func (v *Visibility) Shown(kind string, r store.Record) bool {
-	k, ok := Get(kind)
+// Shown reports whether a record of the kind is shown.
+func (v *Visibility) Shown(kind Named, r store.Record) bool {
+	k, ok := Get(kind.Name())
 	return ok && v.shown(k, r)
 }
 
@@ -84,7 +83,9 @@ func webHost(hostAttr string, r store.Record) string {
 }
 
 // Printed reports whether a record seen for the first time is printed as a
-// found line: a printed kind, and for an entity only while it is in scope.
+// found line: a printed kind, and for an entity only while it is in scope. The
+// kind is given by name, as the store reports a new record. A record of an
+// unknown kind is not printed.
 func (v *Visibility) Printed(kind string, r store.Record) bool {
 	k, ok := Get(kind)
 	switch {
@@ -100,8 +101,8 @@ func (v *Visibility) Printed(kind string, r store.Record) bool {
 
 // Category is the summary category a record of the kind is counted under, or
 // "" if it is not counted (a kind without a category, or a hidden record).
-func (v *Visibility) Category(kind string, r store.Record) string {
-	k, ok := Get(kind)
+func (v *Visibility) Category(kind Named, r store.Record) string {
+	k, ok := Get(kind.Name())
 	if !ok || v == nil {
 		return ""
 	}

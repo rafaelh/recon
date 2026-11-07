@@ -121,9 +121,9 @@ func (*Ports) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 	}
 	switch r := res.(type) {
 	case egress.Open:
-		return []run.Observation{{Kind: "open_port", Key: c.Key, Attrs: map[string]any{
-			"ip": ap.Addr().String(), "port": int(ap.Port()), "banner": encodeBanner(r.Banner),
-		}}}, nil
+		return []run.Observation{kinds.OpenPort.Obs(c.Key, kinds.OpenPortAttrs{
+			IP: ap.Addr().String(), Port: int(ap.Port()), Banner: encodeBanner(r.Banner),
+		})}, nil
 	case egress.Closed, egress.Filtered:
 		return nil, nil
 	case egress.Refused:

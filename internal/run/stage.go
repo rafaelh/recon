@@ -220,7 +220,7 @@ func (v View) OpenPorts() []OpenPort {
 	var out []OpenPort
 	for _, rec := range v.Records(kinds.OpenPort) {
 		if ap, err := netip.ParseAddrPort(rec.Key); err == nil {
-			out = append(out, OpenPort{Addr: netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()), Banner: rec.Str("banner")})
+			out = append(out, OpenPort{Addr: netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()), Banner: kinds.OpenPort.Attrs(rec).Banner})
 		}
 	}
 	slices.SortFunc(out, func(a, b OpenPort) int { return strings.Compare(a.Addr.String(), b.Addr.String()) })

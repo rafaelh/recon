@@ -98,7 +98,7 @@ func (*Probe) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 		ports := v.Records(kinds.HTTPPort)
 		for _, rec := range ports {
 			if ap, err := netip.ParseAddrPort(rec.Key); err == nil {
-				reps[fmt.Sprintf("%s:%d", rec.Str("host"), ap.Port())] = true
+				reps[fmt.Sprintf("%s:%d", kinds.HTTPPort.Attrs(rec).Host, ap.Port())] = true
 			}
 		}
 		for _, rec := range ports {
@@ -107,7 +107,7 @@ func (*Probe) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error
 				continue
 			}
 			for _, h := range v.HostsFor(ap.Addr()) {
-				if !reps[fmt.Sprintf("%s:%d", h, ap.Port())] && !emit(fmt.Sprintf("%s:%d", h, ap.Port()), probeInput{host: h, port: int(ap.Port()), scheme: rec.Str("scheme")}) {
+				if !reps[fmt.Sprintf("%s:%d", h, ap.Port())] && !emit(fmt.Sprintf("%s:%d", h, ap.Port()), probeInput{host: h, port: int(ap.Port()), scheme: kinds.HTTPPort.Attrs(rec).Scheme}) {
 					return
 				}
 			}
@@ -140,7 +140,7 @@ func (p *Probe) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.O
 				return nil, fmt.Errorf("%s: %w", c.Key, err)
 			}
 			if in.detect {
-				obs = append(obs, run.Observation{Kind: "http_port", Key: in.addr.String(), Attrs: map[string]any{"scheme": scheme, "host": in.host}})
+				obs = append(obs, kinds.HTTPPort.Obs(in.addr.String(), kinds.HTTPPortAttrs{Scheme: scheme, Host: in.host}))
 			}
 			return obs, nil
 		case egress.NoService:
@@ -161,11 +161,15 @@ type obsSet struct {
 
 func newObsSet() *obsSet { return &obsSet{seen: map[string]bool{}} }
 
-func (s *obsSet) add(o run.Observation) {
+// add adds o unless the set has an observation of its record already, and
+// returns o's index in the list, or -1 if it was not added.
+func (s *obsSet) add(o run.Observation) int {
 	if k := o.Kind + "\x00" + o.Key; !s.seen[k] {
 		s.seen[k] = true
 		s.list = append(s.list, o)
+		return len(s.list) - 1
 	}
+	return -1
 }
 
 func isRedirect(status int) bool {
@@ -218,8 +222,8 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 			break
 		}
 		host := HostOfURL(target)
-		hopAttrs := map[string]any{"url": target, "host": host}
-		obs.add(run.Observation{Kind: "url", Key: target, Attrs: hopAttrs})
+		hop := kinds.URLAttrs{URL: target, Host: host}
+		hopAt := obs.add(kinds.URL.Obs(target, hop))
 		if d, ok := otherHost(host, in.host); ok {
 			obs.add(kinds.Hostname.Obs(d, kinds.HostnameAttrs{}))
 		}
@@ -245,24 +249,25 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		if !ok { // out of scope, excluded, unresolved or not answering: the chain stops here
 			break
 		}
-		hopAttrs["status"] = next.Status // D15: a fetched url carries its status
+		if hopAt >= 0 { // D15: a fetched url carries its status
+			hop.Status = next.Status
+			obs.list[hopAt] = kinds.URL.Obs(target, hop)
+		}
 		last = next
 	}
 
-	attrs := map[string]any{
-		"url": Origin(scheme, in.host, in.port), "host": in.host, "port": in.port, "scheme": scheme,
-		"status": first.Status, "server": last.HeaderValue("Server"),
-		"technologies": technologies(last.Header, last.Body),
-	}
-	if first.Location != "" {
-		attrs["redirect"] = first.Location
+	attrs := kinds.WebServiceAttrs{
+		URL: Origin(scheme, in.host, in.port), Host: in.host, Port: in.port, Scheme: scheme,
+		Status: first.Status, Server: last.HeaderValue("Server"),
+		Technologies: technologies(last.Header, last.Body),
+		Redirect:     first.Location,
 	}
 	if u, ok := NormaliseURL(last.URL()); ok {
-		attrs["final_url"] = u
+		attrs.FinalURL = u
 	}
 	if last.ContentType() == "text/html" {
 		if pg, ok := parsePage(last.Body); ok {
-			attrs["title"] = pg.title()
+			attrs.Title = pg.title()
 		}
 	}
 	if len(first.PeerCerts) > 0 {
@@ -271,19 +276,20 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		for _, ip := range leaf.IPAddresses {
 			sans = append(sans, ip.String())
 		}
-		attrs["tls_subject"] = leaf.Subject.String()
-		attrs["tls_sans"] = strings.Join(sans, ";")
-		attrs["tls_issuer"] = leaf.Issuer.String()
-		attrs["tls_expiry"] = leaf.NotAfter.UTC().Format("2006-01-02")
-		attrs["tls_error"] = first.CertVerifyErr
-		attrs["tls_self_signed"] = selfSigned(leaf)
+		isSelfSigned := selfSigned(leaf)
+		attrs.TLSSubject = leaf.Subject.String()
+		attrs.TLSSANs = strings.Join(sans, ";")
+		attrs.TLSIssuer = leaf.Issuer.String()
+		attrs.TLSExpiry = leaf.NotAfter.UTC().Format("2006-01-02")
+		attrs.TLSError = first.CertVerifyErr
+		attrs.TLSSelfSigned = &isSelfSigned
 		for _, name := range leaf.DNSNames {
 			if d, ok := sanHost(name); ok && d != strings.ToLower(in.host) {
 				obs.add(kinds.Hostname.Obs(d, kinds.HostnameAttrs{}))
 			}
 		}
 	}
-	return append([]run.Observation{{Kind: "web_service", Key: Origin(scheme, in.host, in.port), Attrs: attrs}}, obs.list...), nil
+	return append([]run.Observation{kinds.WebService.Obs(attrs.URL, attrs)}, obs.list...), nil
 }
 
 // sanHost turns a certificate DNS name into a hostname: a wildcard contributes

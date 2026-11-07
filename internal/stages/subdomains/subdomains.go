@@ -108,7 +108,7 @@ func (s *Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.O
 	}
 	sort.Slice(obs, func(i, j int) bool { return obs[i].Key < obs[j].Key })
 	for _, u := range pickURLs(res.urls, root, in.maxURLs) {
-		obs = append(obs, run.Observation{Kind: "url", Key: u.url, Attrs: map[string]any{"url": u.url, "host": u.host}})
+		obs = append(obs, kinds.URL.Obs(u.url, kinds.URLAttrs{URL: u.url, Host: u.host}))
 	}
 	return obs, nil
 }

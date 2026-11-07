@@ -287,11 +287,7 @@ func (c *crawler) setStatus(page string, status int) {
 func (c *crawler) observations() []run.Observation {
 	var out []run.Observation
 	for _, u := range c.urls {
-		attrs := map[string]any{"url": u.url, "host": u.host}
-		if u.status != 0 {
-			attrs["status"] = u.status
-		}
-		out = append(out, run.Observation{Kind: "url", Key: u.url, Attrs: attrs})
+		out = append(out, kinds.URL.Obs(u.url, kinds.URLAttrs{URL: u.url, Host: u.host, Status: u.status}))
 	}
 	for _, h := range slices.Sorted(maps.Keys(c.hosts)) {
 		out = append(out, kinds.Hostname.Obs(h, kinds.HostnameAttrs{}))
