@@ -27,7 +27,6 @@ import (
 	"github.com/rafaelh/recon/internal/engagement"
 	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/input"
-	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/output"
 	"github.com/rafaelh/recon/internal/report"
 	"github.com/rafaelh/recon/internal/run"
@@ -47,7 +46,6 @@ type Deps struct {
 	Stages        []run.Stage // in registry order
 	Files         []output.File
 	Egress        egress.Options
-	Kinds         *kinds.Registry
 	Stdin         io.Reader
 	Stdout        io.Writer
 	Stderr        io.Writer
@@ -62,7 +60,7 @@ type Deps struct {
 func DefaultDeps() Deps {
 	return Deps{
 		Version: versionString(debug.ReadBuildInfo()),
-		Stages:  defaultStages(), Files: output.Default(), Kinds: kinds.Default(),
+		Stages:  defaultStages(), Files: output.Default(),
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
 		StdinIsTTY:  func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
 		StdoutIsTTY: func() bool { return term.IsTerminal(int(os.Stdout.Fd())) },
@@ -98,9 +96,6 @@ const ackPrompt = "Confirm you are authorised to test this engagement's scope [y
 
 // Execute runs recon with args and returns the process exit code.
 func Execute(ctx context.Context, args []string, d Deps) int {
-	if d.Kinds == nil {
-		d.Kinds = kinds.Default()
-	}
 	if d.Version == "" {
 		d.Version = develVersion // cobra only adds --version when Version is set
 	}
@@ -330,7 +325,7 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 	eg := egress.New(eopts)
 	runner := run.New(run.Config{
 		Engagement: eng, Settings: settings, Stages: d.Stages, Egress: eg, Emitter: em,
-		Files: d.Files, Kinds: d.Kinds, Clock: d.Clock,
+		Files: d.Files, Clock: d.Clock,
 		Passive: o.passive, AllowLargeNetblocks: o.allowLarge, Verbose: o.verbose, Redo: o.redo,
 	})
 	code, err = runner.Run(ctx)

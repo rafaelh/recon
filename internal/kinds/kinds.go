@@ -1,8 +1,13 @@
-// Package kinds is the registry of record kinds: how each is counted,
-// printed and summarised. Later specs register their own kinds here.
+// Package kinds is the table of record kinds and the rules for showing their
+// records: whether a record is shown (counted in the summary, printed when
+// found, written to the files and used to derive findings), and which summary
+// category it is counted under. Later specs add their kinds to the table.
 package kinds
 
-import "sort"
+import (
+	"slices"
+	"strings"
+)
 
 // Kind describes a record kind.
 type Kind struct {
@@ -18,32 +23,15 @@ type Kind struct {
 	// Counted kinds are only counted, never printed (URLs).
 	Counted bool
 	// HostAttr names the attribute holding the host of a web record. Such a
-	// record is shown (counted, printed, written to a CSV) only while that host
-	// is in scope, which is decided when it is read.
+	// record is shown only while that host is in scope, decided when it is read.
 	HostAttr string
 	// PortKey kinds are keyed by a target address and port. Such a record is
 	// shown only while that address is port-eligible, decided when it is read.
 	PortKey bool
 }
 
-// Registry maps kind names to Kinds.
-type Registry struct{ m map[string]Kind }
-
-// Register adds or replaces a kind.
-func (r *Registry) Register(k Kind) { r.m[k.Name] = k }
-
-// Get returns a kind by name.
-func (r *Registry) Get(name string) (Kind, bool) { k, ok := r.m[name]; return k, ok }
-
-// All returns every kind sorted by name.
-func (r *Registry) All() []Kind {
-	out := make([]Kind, 0, len(r.m))
-	for _, k := range r.m {
-		out = append(out, k)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
-}
+// scoped reports whether showing a record of k depends on the scope.
+func (k Kind) scoped() bool { return k.Entity || k.HostAttr != "" || k.PortKey }
 
 // Summary categories of entity kinds.
 const (
@@ -53,10 +41,9 @@ const (
 	Excluded   = "excluded"
 )
 
-// Default returns the registry of the kinds registered so far.
-func Default() *Registry {
-	r := &Registry{m: map[string]Kind{}}
-	for _, k := range []Kind{
+// table is every kind, sorted by name.
+var table = func() []Kind {
+	t := []Kind{
 		{Name: "hostname", Singular: "host", Category: Hosts, Entity: true, Printed: true},
 		{Name: "root", Singular: "root", Category: Candidates, Entity: true},
 		{Name: "netblock", Singular: "netblock", Category: Netblocks, Entity: true},
@@ -81,8 +68,19 @@ func Default() *Registry {
 		{Name: "sensitive_hit"},
 		{Name: "email_posture"},
 		{Name: "url", Singular: "url", Category: "urls", Counted: true, HostAttr: "host"},
-	} {
-		r.Register(k)
 	}
-	return r
+	slices.SortFunc(t, func(a, b Kind) int { return strings.Compare(a.Name, b.Name) })
+	return t
+}()
+
+// Get returns a kind by name.
+func Get(name string) (Kind, bool) {
+	i, ok := slices.BinarySearchFunc(table, name, func(k Kind, n string) int { return strings.Compare(k.Name, n) })
+	if !ok {
+		return Kind{}, false
+	}
+	return table[i], true
 }
+
+// All returns every kind sorted by name.
+func All() []Kind { return slices.Clone(table) }

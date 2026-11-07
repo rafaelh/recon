@@ -8,7 +8,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/netip"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,6 +16,7 @@ import (
 	"unicode"
 
 	"github.com/rafaelh/recon/internal/fault"
+	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/inventory"
 	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/scope"
@@ -47,23 +47,13 @@ type Snapshot struct {
 	Inv     *inventory.Inventory
 	// ASNNetblocks maps an in-scope netblock to the "AS<n>" input it came from.
 	ASNNetblocks map[string]string
-	// Web decides WebVisible for Scope; Render makes one if it is nil. A caller
-	// that counts the same records passes its own, so each host is decided once.
-	Web *WebVisibility
-	// Storage maps a storage record key to whether a current reference attributes
-	// it and which scope inputs would have guessed its name (Spec 5 D9), as the
-	// findings package derives it.
-	Storage map[string]StorageAttr
-}
-
-// StorageAttr is the attribution of a storage record: whether a reference
-// attributes it, the inputs that would have guessed it, its public state ("yes",
-// "no" or "unknown") and, for an unattributed one, the severity it is listed with.
-type StorageAttr struct {
-	Attributed    bool
-	GeneratedFrom []string
-	Public        string
-	Severity      string
+	// Vis decides which records are shown, for Scope and Inv; Render makes one
+	// if it is nil. A caller that counts the same records passes its own, so
+	// the files and the totals agree and each host is decided once.
+	Vis *kinds.Visibility
+	// Storage is the storage Attribution derived with the findings, which the
+	// findings files are written from.
+	Storage map[string]findings.StorageAttr
 }
 
 // File is a registry entry. CSV files get the columns Columns followed by
@@ -77,8 +67,8 @@ type File struct {
 
 // Render writes every file via .recon/tmp and renames it into dir.
 func Render(dir string, files []File, snap Snapshot) error {
-	if snap.Web == nil {
-		snap.Web = NewWebVisibility(snap.Scope)
+	if snap.Vis == nil {
+		snap.Vis = kinds.NewVisibility(snap.Scope, snap.Inv)
 	}
 	tmp := filepath.Join(dir, ".recon", "tmp")
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
@@ -201,10 +191,10 @@ func csvSafe(s string) string {
 }
 
 // Default returns the registered files: Spec 1's scope, candidates and excluded,
-// then Spec 2's DNS files (D27), Spec 3's web files, Spec 4's open-ports.csv and
-// Spec 5's email, storage and risk files.
+// then Spec 2's DNS files (D27), Spec 3's web files, Spec 4's open-ports.csv,
+// Spec 5's email-posture.csv and the findings files.
 func Default() []File {
-	return []File{
+	files := []File{
 		{Name: "scope.csv", Format: CSV, Columns: []string{"type", "value", "source"}, Rows: scopeRows},
 		{Name: "candidates.csv", Format: CSV, Columns: []string{"type", "value", "found_by"}, Rows: candidateRows},
 		{Name: "excluded.csv", Format: CSV, Columns: []string{"value", "reason"}, Rows: excludedRows},
@@ -218,65 +208,23 @@ func Default() []File {
 		{Name: "urls.csv", Format: CSV, Columns: []string{"url", "host", "status", "found_by"}, Rows: urlRows},
 		{Name: "open-ports.csv", Format: CSV, Columns: []string{"ip", "port", "banner", "hostnames"}, Rows: openPortRows},
 		{Name: "email-posture.csv", Format: CSV, Columns: emailPostureColumns, Rows: emailPostureRows},
-		{Name: "storage-unattributed.csv", Format: CSV, Columns: storageUnattributedColumns, Rows: storageUnattributedRows},
-		riskFile("risk-takeover.csv", "takeover", []string{"severity", "target", "type", "service", "cname", "detail"}),
-		riskFile("risk-storage.csv", "storage", []string{"severity", "provider", "name", "url", "exists", "public", "listable", "object_count", "first_keys", "referenced_by"}),
-		riskFile("risk-sensitive-paths.csv", "sensitive-paths", []string{"severity", "url", "path", "status", "size", "signature"}),
-		riskFile("risk-email.csv", "email", []string{"severity", "root", "type", "detail"}),
-		riskFile("risk-ports.csv", "ports", []string{"severity", "ip", "port", "banner", "hostnames"}),
-		riskFile("risk-certificates.csv", "certificates", []string{"severity", "url", "type", "tls_subject", "tls_issuer", "tls_expiry"}),
 	}
+	for _, f := range findings.Files() {
+		files = append(files, findingsFile(f))
+	}
+	return files
 }
 
 var webServiceColumns = []string{"url", "host", "port", "scheme", "status", "title", "server", "technologies", "redirect",
 	"final_url", "tls_subject", "tls_sans", "tls_issuer", "tls_expiry", "tls_error", "tls_self_signed"}
 
-// WebVisible reports whether a web record (a kind with a host attribute) is
-// shown. The summary counts and the web CSVs both call it, so their totals
-// agree, and it is evaluated on read: an exclusion added later hides records
-// found earlier. A record without the attribute takes its host from its key.
-func WebVisible(sc *scope.Scope, hostAttr string, r store.Record) bool {
-	return sc.WebHostInScope(webHost(hostAttr, r))
-}
-
-func webHost(hostAttr string, r store.Record) string {
-	host := r.Str(hostAttr)
-	if host == "" {
-		if u, err := url.Parse(r.Key); err == nil {
-			host = u.Hostname()
-		}
+// vis is the snapshot's Visibility. Render always sets one; a file's Rows
+// called on its own (in a test) gets a new one.
+func (s Snapshot) vis() *kinds.Visibility {
+	if s.Vis != nil {
+		return s.Vis
 	}
-	return host
-}
-
-// WebVisibility is WebVisible for one scope, deciding each host once. Web
-// records share few hosts, so a render need not classify every record. It is
-// not safe for concurrent use.
-type WebVisibility struct {
-	sc    *scope.Scope
-	hosts map[string]bool
-}
-
-func NewWebVisibility(sc *scope.Scope) *WebVisibility {
-	return &WebVisibility{sc: sc, hosts: map[string]bool{}}
-}
-
-// Visible is WebVisible(sc, hostAttr, r) for the scope w was made with.
-func (w *WebVisibility) Visible(hostAttr string, r store.Record) bool {
-	host := webHost(hostAttr, r)
-	v, ok := w.hosts[host]
-	if !ok {
-		v = w.sc.WebHostInScope(host)
-		w.hosts[host] = v
-	}
-	return v
-}
-
-func (s Snapshot) webVisible(r store.Record) bool {
-	if s.Web == nil {
-		return WebVisible(s.Scope, "host", r)
-	}
-	return s.Web.Visible("host", r)
+	return kinds.NewVisibility(s.Scope, s.Inv)
 }
 
 // attrCell renders an attribute for a CSV cell. Numbers come back from the
@@ -295,8 +243,9 @@ func attrCell(r store.Record, k string) string {
 
 func webServiceRows(s Snapshot) []Row {
 	var rows []Row
+	vis := s.vis()
 	for _, r := range s.Records["web_service"] {
-		if !s.webVisible(r) {
+		if !vis.Shown("web_service", r) {
 			continue
 		}
 		cells := []string{r.Key}
@@ -310,58 +259,30 @@ func webServiceRows(s Snapshot) []Row {
 
 func urlRows(s Snapshot) []Row {
 	var rows []Row
+	vis := s.vis()
 	for _, r := range s.Records["url"] {
-		if s.webVisible(r) {
+		if vis.Shown("url", r) {
 			rows = append(rows, recordRow(r, r.Key, attrCell(r, "host"), attrCell(r, "status"), strings.Join(r.Stages, ",")))
 		}
 	}
 	return rows
 }
 
-// Visible reports whether a record of a non-entity kind is shown: counted,
-// printed and written. A web record (HostAttr) is shown while its host is in
-// scope (Spec 3 D17), an address-and-port record (PortKey) while its address is
-// port-eligible (Spec 4 D9). web, the WebVisibility of sc, may be nil.
-func Visible(k kinds.Kind, r store.Record, sc *scope.Scope, inv *inventory.Inventory, web *WebVisibility) bool {
-	switch {
-	case k.PortKey:
-		return PortVisible(sc, inv, r)
-	case k.HostAttr == "":
-		return true
-	case web != nil:
-		return web.Visible(k.HostAttr, r)
-	}
-	return WebVisible(sc, k.HostAttr, r)
-}
-
-// PortVisible reports whether an open_port record is shown: only while its
-// address is port-eligible, so a reassigned cloud IP or an address excluded
-// later is not reported as the target's (Spec 1 D16). The record's key is
-// authoritative for the address and port. The summary counts and the open-ports
-// file both call it; so must anything that reports on open ports.
-func PortVisible(sc *scope.Scope, inv *inventory.Inventory, r store.Record) bool {
-	_, ok := visiblePort(sc, inv, r)
-	return ok
-}
-
-// visiblePort is PortVisible that also returns the address and port of the key.
-func visiblePort(sc *scope.Scope, inv *inventory.Inventory, r store.Record) (netip.AddrPort, bool) {
-	ap, err := netip.ParseAddrPort(r.Key)
-	return ap, err == nil && inv.PortEligible(ap.Addr(), sc)
-}
-
+// openPortRows lists the shown open ports. The record's key is authoritative
+// for the address and port.
 func openPortRows(s Snapshot) []Row {
 	recs := s.Records["open_port"]
 	if len(recs) == 0 {
 		return nil
 	}
 	hostnames := s.Inv.HostnamesByIP(s.Scope)
+	vis := s.vis()
 	var rows []Row
 	for _, r := range recs {
-		ap, ok := visiblePort(s.Scope, s.Inv, r)
-		if !ok {
+		if !vis.Shown("open_port", r) {
 			continue
 		}
+		ap := netip.MustParseAddrPort(r.Key) // shown, so it parsed
 		addr := ap.Addr().Unmap()
 		rows = append(rows, recordRow(r, addr.String(), strconv.Itoa(int(ap.Port())), r.Str("banner"), strings.Join(hostnames[addr], ";")))
 	}

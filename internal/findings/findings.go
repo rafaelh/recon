@@ -17,19 +17,20 @@ import (
 	"github.com/rafaelh/recon/internal/cloudstorage"
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/inventory"
-	"github.com/rafaelh/recon/internal/output"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/store"
 )
 
-// Input is everything Derive reads. Records are the current records by kind;
-// Roots and Orgs are the engagement's stored scope inputs.
+// Input is everything Derive reads. Records returns the records of a kind
+// (derivation uses only the current ones), and is called only for the kinds
+// derivation needs. Roots and Orgs are the engagement's stored scope inputs.
 type Input struct {
 	Scope       *scope.Scope
 	Inv         *inventory.Inventory
 	Settings    config.Settings
 	Today       string // YYYY-MM-DD
-	Records     map[string][]store.Record
+	Records     func(kind string) []store.Record
 	Roots, Orgs []string
 }
 
@@ -41,15 +42,6 @@ type Finding struct {
 	Attrs                                    map[string]any
 }
 
-// Key is the finding's record key: one per hostname for takeovers, otherwise
-// category, type and target.
-func (f Finding) Key() string {
-	if f.Category == Takeover {
-		return f.Category + "|" + f.Target
-	}
-	return f.Category + "|" + f.Type + "|" + f.Target
-}
-
 func newFinding(category, typ, severity, target, detail string, attrs map[string]any) Finding {
 	a := map[string]any{"category": category, "type": typ, "severity": severity, "target": target, "detail": detail}
 	for k, v := range attrs {
@@ -58,16 +50,12 @@ func newFinding(category, typ, severity, target, detail string, attrs map[string
 	return Finding{Category: category, Type: typ, Severity: severity, Target: target, Detail: detail, Attrs: a}
 }
 
-// Kinds are the record kinds Derive and Attribution read; Input.Records needs them.
-var Kinds = []string{"resolution", "unresolved", "storage_ref", "storage", "storage_account", "storage_object",
-	"takeover_http", "sensitive_hit", "email_posture", "open_port", "web_service"}
-
 // Derive computes every finding, sorted by key.
 func Derive(in Input) []Finding { return newDeriver(in).findings() }
 
 // DeriveAll computes the findings and the storage Attribution together, so the
 // references, guesses and public states they share are computed once.
-func DeriveAll(in Input) ([]Finding, map[string]output.StorageAttr) {
+func DeriveAll(in Input) ([]Finding, map[string]StorageAttr) {
 	d := newDeriver(in)
 	return d.findings(), d.attribution()
 }
@@ -92,7 +80,7 @@ func (d *deriver) findings() []Finding {
 
 type deriver struct {
 	in   Input
-	web  *output.WebVisibility
+	vis  *kinds.Visibility
 	refs []cloudstorage.Reference // see references
 	svcs map[string]store.Record  // see services
 
@@ -101,13 +89,13 @@ type deriver struct {
 }
 
 func newDeriver(in Input) *deriver {
-	return &deriver{in: in, web: output.NewWebVisibility(in.Scope)}
+	return &deriver{in: in, vis: kinds.NewVisibility(in.Scope, in.Inv)}
 }
 
 // current is the current records of a kind.
 func (d *deriver) current(kind string) []store.Record {
 	var out []store.Record
-	for _, r := range d.in.Records[kind] {
+	for _, r := range d.in.Records(kind) {
 		if r.Current {
 			out = append(out, r)
 		}
@@ -122,7 +110,7 @@ func (d *deriver) services() map[string]store.Record {
 	}
 	d.svcs = map[string]store.Record{}
 	for _, r := range d.current("web_service") {
-		if d.web.Visible("host", r) {
+		if d.vis.Shown("web_service", r) {
 			d.svcs[r.Key] = r
 		}
 	}
@@ -236,7 +224,7 @@ func (d *deriver) ports() []Finding {
 	var out []Finding
 	for _, r := range d.current("open_port") {
 		ap, err := netip.ParseAddrPort(r.Key)
-		if err != nil || !risky[int(ap.Port())] || !output.PortVisible(d.in.Scope, d.in.Inv, r) {
+		if err != nil || !risky[int(ap.Port())] || !d.vis.Shown("open_port", r) {
 			continue
 		}
 		if hostnames == nil {
@@ -259,7 +247,7 @@ func (d *deriver) certificates() []Finding {
 	horizon := today.AddDate(0, 0, d.in.Settings.CertExpiryDays).Format(time.DateOnly)
 	var out []Finding
 	for _, r := range d.current("web_service") {
-		if !d.web.Visible("host", r) {
+		if !d.vis.Shown("web_service", r) {
 			continue
 		}
 		var types []string

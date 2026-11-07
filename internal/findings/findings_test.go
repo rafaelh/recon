@@ -68,7 +68,9 @@ func (f *fixture) input(t *testing.T) findings.Input {
 		Roots: []string{"example.com"}, Netblocks: []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
 		Exclusions: xs, Resolutions: inv.Addrs(), WildcardOnly: inv.WildcardOnly(),
 	})
-	return findings.Input{Scope: sc, Inv: inv, Settings: f.set, Today: f.today, Records: f.recs, Roots: []string{"example.com"}}
+	recs := f.recs
+	return findings.Input{Scope: sc, Inv: inv, Settings: f.set, Today: f.today, Roots: []string{"example.com"},
+		Records: func(kind string) []store.Record { return recs[kind] }}
 }
 
 func (f *fixture) derive(t *testing.T) []findings.Finding { return findings.Derive(f.input(t)) }

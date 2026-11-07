@@ -200,9 +200,7 @@ func (v View) SaaSServed(host string) bool { return v.inv.SaaSServed(host) }
 // StorageRefs are the buckets and containers in-scope names and pages point at,
 // sorted. A bucket with a reference is attributed.
 func (v View) StorageRefs() []cloudstorage.Reference {
-	return findings.References(findings.Input{Scope: v.sc, Inv: v.inv, Records: map[string][]store.Record{
-		"resolution": v.Records("resolution"), "storage_ref": v.Records("storage_ref"),
-	}})
+	return findings.References(findings.Input{Scope: v.sc, Inv: v.inv, Records: v.Records})
 }
 
 // Seeds are the hostnames the generator stage derives names from (D14): never

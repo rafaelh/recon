@@ -11,7 +11,6 @@ import (
 	"net/netip"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -56,7 +55,6 @@ type Config struct {
 	Egress              *egress.Egress
 	Emitter             report.Emitter
 	Files               []output.File
-	Kinds               *kinds.Registry
 	Clock               func() time.Time
 	Passive             bool
 	AllowLargeNetblocks bool
@@ -73,6 +71,7 @@ type Runner struct {
 	inputs input.Parsed
 	sc     atomic.Pointer[scope.Scope]
 	inv    atomic.Pointer[inventory.Inventory]
+	vis    atomic.Pointer[kinds.Visibility] // of sc and inv, for the found lines
 
 	// ranges caches the indexed provider_range records (thousands of rows) as
 	// of store KindVersion rangesVer; buildScope runs after every stage.
@@ -89,9 +88,9 @@ type Runner struct {
 
 	guarded sync.Map // value+"\x00"+reason already sent to the guard pseudo-stage
 
-	derivedSig  string                        // what the findings were last derived from (see deriveFindings)
-	attribution map[string]output.StorageAttr // the storage attribution of that derivation
-	evidence    map[string]evidenceCache      // the records Derive read, by kind
+	derivedSig  string                          // what the findings were last derived from (see deriveFindings)
+	attribution map[string]findings.StorageAttr // the storage attribution of that derivation
+	evidence    map[string]evidenceCache        // the records Derive read, by kind
 }
 
 // evidenceCache holds the records of a kind as of store KindVersion ver.
@@ -111,9 +110,6 @@ func New(cfg Config) *Runner {
 	}
 	for _, s := range cfg.Stages {
 		r.order = append(r.order, s.Name())
-	}
-	if cfg.Kinds == nil {
-		r.cfg.Kinds = kinds.Default()
 	}
 	if cfg.Clock == nil {
 		r.cfg.Clock = time.Now
@@ -267,6 +263,7 @@ func (r *Runner) buildScope() error {
 	sc := scope.New(scope.Config{Roots: in.Roots, Netblocks: blocks, Exclusions: excl, Resolutions: res, WildcardOnly: inv.WildcardOnly()})
 	r.sc.Store(sc)
 	r.inv.Store(inv)
+	r.vis.Store(kinds.NewVisibility(sc, inv))
 
 	cands := map[string]bool{}
 	roots, err := r.currentRecords("root")
@@ -589,65 +586,11 @@ func toStoreObs(obs []Observation) []store.Obs {
 	return out
 }
 
-// categoryOf returns the summary category of a record ("" if it is not counted).
-// web is the WebVisibility of sc.
-func categoryOf(k kinds.Kind, rec store.Record, sc *scope.Scope, inv *inventory.Inventory, web *output.WebVisibility) string {
-	if !k.Entity {
-		if !output.Visible(k, rec, sc, inv, web) {
-			return ""
-		}
-		return k.Category
-	}
-	switch k.Name {
-	case "excluded":
-		return kinds.Excluded
-	case "hostname", "root":
-		switch sc.ClassifyHost(rec.Key).Class {
-		case scope.InScope:
-			if k.Name == "hostname" {
-				return kinds.Hosts
-			}
-			return ""
-		case scope.Candidate:
-			return kinds.Candidates
-		default:
-			return kinds.Excluded
-		}
-	case "netblock":
-		if sc != nil && sc.HasNetblock(rec.Key) {
-			return kinds.Netblocks
-		}
-		return kinds.Candidates
-	}
-	return k.Category
-}
-
-// totals counts the current records by category, from the snapshot render
-// wrote the files from, so the totals match the files' rows (Spec 3 D17).
-func (r *Runner) totals(snap output.Snapshot) map[string]int {
-	sc, read := snap.Scope, snap.Records
-	totals := map[string]int{kinds.Hosts: 0}
-	for _, k := range r.cfg.Kinds.All() {
-		if k.Category == "" {
-			continue
-		}
-		if !k.Entity {
-			totals[k.Category] += 0 // listed even when empty
-		}
-		for _, rec := range read[k.Name] {
-			if !rec.Current {
-				continue
-			}
-			if cat := categoryOf(k, rec, sc, snap.Inv, snap.Web); cat != "" {
-				totals[cat]++
-			}
-		}
-	}
-	return totals
-}
-
+// emitCounts emits the category counts that changed. They are counted from the
+// snapshot render wrote the files from, with its Visibility, so the totals match
+// the files' rows (Spec 3 D17).
 func (r *Runner) emitCounts(snap output.Snapshot) {
-	totals := r.totals(snap)
+	totals := snap.Vis.Totals(snap.Records)
 	r.lastTot = totals
 	for _, k := range slices.Sorted(maps.Keys(totals)) {
 		if r.counts[k] != totals[k] {
@@ -666,54 +609,26 @@ func (r *Runner) emitSummary() {
 		}
 	}
 	r.mu.Unlock()
-	var findings []map[string]any
 	recs, _ := r.st.Records("finding", r.order)
-	for _, rec := range recs {
-		sev, _ := rec.Attrs["severity"].(string)
-		if !rec.Current || (sev != "high" && sev != "medium") {
-			continue
-		}
-		findings = append(findings, map[string]any{
-			"category": rec.Attrs["category"], "severity": sev, "target": rec.Attrs["target"], "detail": rec.Attrs["detail"],
-		})
+	listed := []map[string]any{}
+	for _, f := range findings.Headline(recs) {
+		listed = append(listed, map[string]any{"category": f.Category, "severity": f.Severity, "target": f.Target, "detail": f.Detail})
 	}
-	sort.SliceStable(findings, func(i, j int) bool {
-		si, sj := findings[i]["severity"].(string), findings[j]["severity"].(string)
-		if si != sj {
-			return si == "high"
-		}
-		return fmt.Sprint(findings[i]["target"]) < fmt.Sprint(findings[j]["target"])
-	})
-	if findings == nil {
-		findings = []map[string]any{}
-	}
-	r.emit("summary", map[string]any{"totals": r.lastTot, "failed": failed, "findings": findings})
+	r.emit("summary", map[string]any{"totals": r.lastTot, "failed": failed, "findings": listed})
 }
 
 // onNewRecord prints records of Printed kinds the first time the engagement sees them.
 func (r *Runner) onNewRecord(kind, key string, attrs map[string]any) {
-	k, ok := r.cfg.Kinds.Get(kind)
-	if !ok || !k.Printed {
+	if !r.vis.Load().Printed(kind, store.Record{Key: key, Attrs: attrs}) {
 		return
 	}
-	if k.Entity || k.HostAttr != "" || k.PortKey {
-		sc, inv := r.sc.Load(), r.inv.Load()
-		if sc == nil || inv == nil {
-			return
-		}
-		if k.Entity && sc.ClassifyHost(key).Class != scope.InScope ||
-			!k.Entity && !output.Visible(k, store.Record{Key: key, Attrs: attrs}, sc, inv, nil) {
-			return
-		}
-	}
+	k, _ := kinds.Get(kind)
 	f := map[string]any{"category": k.Singular, "value": key}
-	if sev, ok := attrs["severity"].(string); ok && sev != "" {
-		f["severity"] = sev
-		if t, ok := attrs["target"].(string); ok && t != "" {
-			f["value"] = t
-		}
-		if c, ok := attrs["category"].(string); ok && c != "" {
-			f["category"] = k.Singular + " " + c
+	if kind == "finding" {
+		fd := findings.FromRecord(store.Record{Key: key, Attrs: attrs})
+		f["category"], f["value"] = k.Singular+" "+fd.Category, fd.Target
+		if fd.Severity != "" {
+			f["severity"] = fd.Severity
 		}
 	}
 	r.emit("found", f)
@@ -737,7 +652,7 @@ func (r *Runner) render() (output.Snapshot, error) {
 		return output.Snapshot{}, err
 	}
 	snap := output.Snapshot{Today: r.today(), Inputs: inputs, Records: map[string][]store.Record{}, Scope: r.sc.Load(), Inv: r.inv.Load()}
-	for _, k := range r.cfg.Kinds.All() {
+	for _, k := range kinds.All() {
 		recs, err := r.st.Records(k.Name, r.order)
 		if err != nil {
 			return output.Snapshot{}, err
@@ -751,22 +666,11 @@ func (r *Runner) render() (output.Snapshot, error) {
 	if snap.Inv == nil {
 		snap.Inv = inventory.New(inventory.Data{}, provider.Default())
 	}
-	snap.Web = output.NewWebVisibility(snap.Scope)
+	snap.Vis = kinds.NewVisibility(snap.Scope, snap.Inv)
 	if snap.ASNNetblocks, err = r.asnNetblocks(r.inputs); err != nil {
 		return output.Snapshot{}, err
 	}
 	return snap, output.Render(eng.Dir(), r.cfg.Files, snap)
-}
-
-// findingsInput is what findings are derived from, with records read from
-// recs (by kind), or nil if the scope has not been built yet.
-func (r *Runner) findingsInput(recs map[string][]store.Record) *findings.Input {
-	sc, inv := r.sc.Load(), r.inv.Load()
-	if sc == nil || inv == nil {
-		return nil
-	}
-	return &findings.Input{Scope: sc, Inv: inv, Settings: r.cfg.Settings, Today: r.today(),
-		Records: recs, Roots: r.inputs.Roots, Orgs: r.inputs.Orgs}
 }
 
 // deriveFindings derives the findings from the evidence and stores them as
@@ -778,29 +682,24 @@ func (r *Runner) deriveFindings() error {
 	// Nothing Derive reads has changed since the last derivation (a derivation
 	// bumps only "finding"), so the findings are already current.
 	sig := r.derivationSignature()
-	if r.sc.Load() == nil || sig == r.derivedSig {
+	sc, inv := r.sc.Load(), r.inv.Load()
+	if sc == nil || inv == nil || sig == r.derivedSig {
 		return nil
 	}
-	// Only the kinds that changed since the last derivation are read again. The
-	// version is read first, so a commit racing the read is re-read next time.
-	if r.evidence == nil {
-		r.evidence = map[string]evidenceCache{}
-	}
-	recs := map[string][]store.Record{}
-	for _, kind := range findings.Kinds {
-		ver := r.st.KindVersion(kind)
-		c, ok := r.evidence[kind]
-		if !ok || c.ver != ver {
-			list, err := r.st.Records(kind, r.order)
-			if err != nil {
-				return err
+	var readErr error
+	in := findings.Input{Scope: sc, Inv: inv, Settings: r.cfg.Settings, Today: r.today(),
+		Records: func(kind string) []store.Record {
+			recs, err := r.evidenceRecords(kind)
+			if err != nil && readErr == nil {
+				readErr = err
 			}
-			c = evidenceCache{ver: ver, recs: list}
-			r.evidence[kind] = c
-		}
-		recs[kind] = c.recs
+			return recs
+		},
+		Roots: r.inputs.Roots, Orgs: r.inputs.Orgs}
+	fs, attribution := findings.DeriveAll(in)
+	if readErr != nil {
+		return readErr
 	}
-	fs, attribution := findings.DeriveAll(*r.findingsInput(recs))
 	obs := make([]store.Obs, len(fs))
 	for i, f := range fs {
 		obs[i] = store.Obs{Kind: "finding", Key: f.Key(), Attrs: f.Attrs}
@@ -813,12 +712,31 @@ func (r *Runner) deriveFindings() error {
 	return nil
 }
 
+// evidenceRecords returns every record of a kind for derivation, read again
+// only when the kind has changed since the last read. The version is read
+// first, so a commit racing the read is re-read next time.
+func (r *Runner) evidenceRecords(kind string) ([]store.Record, error) {
+	if r.evidence == nil {
+		r.evidence = map[string]evidenceCache{}
+	}
+	ver := r.st.KindVersion(kind)
+	if c, ok := r.evidence[kind]; ok && c.ver == ver {
+		return c.recs, nil
+	}
+	recs, err := r.st.Records(kind, r.order)
+	if err != nil {
+		return nil, err
+	}
+	r.evidence[kind] = evidenceCache{ver: ver, recs: recs}
+	return recs, nil
+}
+
 // derivationSignature changes whenever a record of any kind but "finding", the
 // date or the engagement's inputs change. The Scope and Inventory are built
 // from nothing else, and the settings are fixed for the Runner's life.
 func (r *Runner) derivationSignature() string {
 	var b strings.Builder
-	for _, k := range r.cfg.Kinds.All() {
+	for _, k := range kinds.All() {
 		if k.Name != "finding" {
 			fmt.Fprintf(&b, "%s=%d;", k.Name, r.st.KindVersion(k.Name))
 		}

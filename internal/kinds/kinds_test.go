@@ -8,7 +8,6 @@ import (
 
 // D26: the new kinds and which of them are counted.
 func TestSpec2Kinds(t *testing.T) {
-	r := kinds.Default()
 	want := map[string]struct {
 		category string
 		counted  bool
@@ -18,7 +17,7 @@ func TestSpec2Kinds(t *testing.T) {
 		"resolution": {"", false},
 	}
 	for name, w := range want {
-		k, ok := r.Get(name)
+		k, ok := kinds.Get(name)
 		if !ok {
 			t.Errorf("kind %s not registered", name)
 			continue
@@ -27,7 +26,7 @@ func TestSpec2Kinds(t *testing.T) {
 			t.Errorf("%s = %+v, want category %q counted %v, not printed, not an entity", name, k, w.category, w.counted)
 		}
 	}
-	if k, _ := r.Get("hostname"); !k.Printed {
+	if k, _ := kinds.Get("hostname"); !k.Printed {
 		t.Error("hostname still prints")
 	}
 }

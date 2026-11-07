@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/rafaelh/recon/internal/cloudstorage"
-	"github.com/rafaelh/recon/internal/output"
 	"github.com/rafaelh/recon/internal/scope"
 )
 
@@ -57,16 +56,26 @@ func refCompare(a, b cloudstorage.Reference) int {
 		cmp.Compare(a.Object, b.Object), cmp.Compare(a.Via, b.Via), cmp.Compare(a.From, b.From))
 }
 
-// Attribution maps each storage record key to its attribution, public state
-// and, for an unattributed bucket, the severity it is listed with.
-func Attribution(in Input) map[string]output.StorageAttr { return newDeriver(in).attribution() }
+// StorageAttr is the attribution of a storage record (Spec 5 D9): whether a
+// reference attributes it, the inputs that would have guessed it, its public
+// state ("yes", "no" or "unknown") and, for an unattributed one, the severity
+// storage-unattributed.csv lists it with.
+type StorageAttr struct {
+	Attributed    bool
+	GeneratedFrom []string
+	Public        string
+	Severity      string
+}
 
-func (d *deriver) attribution() map[string]output.StorageAttr {
+// Attribution maps each storage record key, current or not, to its StorageAttr.
+func Attribution(in Input) map[string]StorageAttr { return newDeriver(in).attribution() }
+
+func (d *deriver) attribution() map[string]StorageAttr {
 	attributed, guessed, public := attributedSet(d.references()), d.guessed(), d.publicStates()
-	out := map[string]output.StorageAttr{}
-	for _, r := range d.in.Records["storage"] {
+	out := map[string]StorageAttr{}
+	for _, r := range d.in.Records("storage") {
 		k := bucketKey(r.Str("provider"), r.Str("name"))
-		a := output.StorageAttr{Attributed: attributed[k], GeneratedFrom: guessed[k], Public: cloudstorage.PublicState(public[r.Key])}
+		a := StorageAttr{Attributed: attributed[k], GeneratedFrom: guessed[k], Public: cloudstorage.PublicState(public[r.Key])}
 		if typ := storageType(flag(r, "listable"), a.Public, a.Attributed); typ != "" && !a.Attributed {
 			a.Severity = Severity(StorageUnattributed, typ)
 		}
