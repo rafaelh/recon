@@ -237,20 +237,6 @@ func (s Snapshot) vis() *kinds.Visibility {
 	return kinds.NewVisibility(s.Scope, s.Inv)
 }
 
-// attrCell renders an attribute for a CSV cell. Numbers come back from the
-// store as float64.
-func attrCell(r store.Record, k string) string {
-	switch v := r.Attrs[k].(type) {
-	case string:
-		return v
-	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
-	case bool:
-		return strconv.FormatBool(v)
-	}
-	return ""
-}
-
 func webServiceRows(s Snapshot) []Row {
 	var rows []Row
 	vis := s.vis()

@@ -12,6 +12,7 @@ import (
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/scope"
 )
@@ -82,7 +83,7 @@ func withPrefix(records []string, prefix string) []string {
 // not exist or has no single SPF record makes the SPF invalid.
 func (*Email) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
 	root := c.Input.(string)
-	attrs := map[string]any{}
+	var attrs kinds.EmailPostureAttrs
 
 	mx, err := e.DNS.Query(ctx, root, egress.TypeMX)
 	if err != nil {
@@ -101,32 +102,30 @@ func (*Email) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 		}
 	}
 	slices.Sort(hosts)
-	attrs["mx"] = strings.Join(hosts, ";")
+	attrs.MX = strings.Join(hosts, ";")
 
 	rootTXT, err := txt(ctx, e, root)
 	if err != nil {
 		return nil, err
 	}
 	spfs := withPrefix(rootTXT, "v=spf1")
-	attrs["spf_records"] = len(spfs)
-	attrs["spf"], attrs["spf_all"], attrs["spf_lookups"], attrs["spf_error"] = "", "", 0, ""
+	attrs.SPFRecords = len(spfs)
 	if len(spfs) > 0 {
-		attrs["spf"] = spfs[0]
+		attrs.SPF = spfs[0]
 	}
 	switch {
 	case len(spfs) > 1:
-		attrs["spf_error"] = fmt.Sprintf("%d v=spf1 records", len(spfs))
+		attrs.SPFError = fmt.Sprintf("%d v=spf1 records", len(spfs))
 	case len(spfs) == 1:
 		ev := &spfEval{ctx: ctx, e: e}
 		all := ev.walk(spfs[0], map[string]bool{root: true})
 		if ev.tempErr != nil {
 			return nil, ev.tempErr
 		}
-		attrs["spf_all"], attrs["spf_lookups"], attrs["spf_error"] = all, ev.lookups, ev.err
+		attrs.SPFAll, attrs.SPFLookups, attrs.SPFError = all, ev.lookups, ev.err
 	}
 
 	// DMARC: the root's own record, else the organisational domain's.
-	attrs["dmarc"], attrs["dmarc_policy"], attrs["dmarc_source"] = "", "", ""
 	rec, err := dmarc(ctx, e, "_dmarc."+root)
 	if err != nil {
 		return nil, err
@@ -147,7 +146,7 @@ func (*Email) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 		if sub && source == "org" && tags["sp"] != "" {
 			policy = tags["sp"]
 		}
-		attrs["dmarc"], attrs["dmarc_policy"], attrs["dmarc_source"] = rec, strings.ToLower(policy), source
+		attrs.DMARC, attrs.DMARCPolicy, attrs.DMARCSource = rec, strings.ToLower(policy), source
 	}
 
 	// The selectors are independent lookups, so they are asked at once (egress
@@ -178,8 +177,8 @@ func (*Email) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Obs
 			found = append(found, sel)
 		}
 	}
-	attrs["dkim_selectors"], attrs["dkim_errors"] = strings.Join(found, ";"), strings.Join(failed, ";")
-	return []run.Observation{{Kind: "email_posture", Key: root, Attrs: attrs}}, nil
+	attrs.DKIMSelectors, attrs.DKIMErrors = strings.Join(found, ";"), strings.Join(failed, ";")
+	return []run.Observation{kinds.EmailPosture.Obs(root, attrs)}, nil
 }
 
 func dmarc(ctx context.Context, e egress.Clients, name string) (string, error) {

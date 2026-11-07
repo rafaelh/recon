@@ -324,8 +324,8 @@ func originOf(abs string) string {
 // storageObservation is the storage_ref observation of a reference, keyed by
 // the page and the URL it references.
 func storageObservation(r storageRef) run.Observation {
-	return run.Observation{Kind: "storage_ref", Key: r.page + "|" + r.url, Attrs: map[string]any{
-		"provider": r.ref.Provider, "name": r.ref.Name, "container": r.ref.Container, "object": r.ref.Object,
-		"url": r.url, "page": r.page, "page_host": HostOfURL(r.page), "via": r.via,
-	}}
+	return kinds.StorageRef.Obs(r.page+"|"+r.url, kinds.StorageRefAttrs{
+		Provider: r.ref.Provider, Name: r.ref.Name, Container: r.ref.Container, Object: r.ref.Object,
+		URL: r.url, Page: r.page, PageHost: HostOfURL(r.page), Via: r.via,
+	})
 }

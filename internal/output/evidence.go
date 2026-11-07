@@ -1,12 +1,11 @@
 package output
 
 import (
-	"strings"
+	"strconv"
 
 	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/scope"
-	"github.com/rafaelh/recon/internal/store"
 )
 
 // findingsFile writes a findings file like the other CSV files. The findings
@@ -21,20 +20,6 @@ func findingsFile(f findings.File) File {
 	}}
 }
 
-// listCell is an attribute as a cell: a list is joined with ";".
-func listCell(r store.Record, k string) string {
-	if v, ok := r.Attrs[k].([]any); ok {
-		var parts []string
-		for _, x := range v {
-			if s, ok := x.(string); ok {
-				parts = append(parts, s)
-			}
-		}
-		return strings.Join(parts, ";")
-	}
-	return attrCell(r, k)
-}
-
 var emailPostureColumns = []string{"root", "mx", "spf", "spf_lookups", "dmarc", "dmarc_policy", "dkim_selectors"}
 
 // emailPostureRows lists the email posture evidence of each in-scope root.
@@ -44,11 +29,8 @@ func emailPostureRows(s Snapshot) []Row {
 		if s.Scope.ClassifyHost(r.Key).Class != scope.InScope {
 			continue
 		}
-		cells := []string{r.Key}
-		for _, c := range emailPostureColumns[1:] {
-			cells = append(cells, listCell(r, c))
-		}
-		rows = append(rows, recordRow(r, cells...))
+		a := kinds.EmailPosture.Attrs(r)
+		rows = append(rows, recordRow(r, r.Key, a.MX, a.SPF, strconv.Itoa(a.SPFLookups), a.DMARC, a.DMARCPolicy, a.DKIMSelectors))
 	}
 	return rows
 }

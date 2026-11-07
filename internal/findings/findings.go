@@ -117,38 +117,8 @@ func (d *deriver) services() map[string]store.Record {
 	return d.svcs
 }
 
-func num(r store.Record, k string) int {
-	switch v := r.Attrs[k].(type) {
-	case float64:
-		return int(v)
-	case int:
-		return v
-	}
-	return 0
-}
-
-func flag(r store.Record, k string) bool { b, _ := r.Attrs[k].(bool); return b }
-
-// strs reads a list attribute (a JSON array) or a ";"-joined string.
-func strs(r store.Record, k string) []string {
-	switch v := r.Attrs[k].(type) {
-	case []any:
-		var out []string
-		for _, x := range v {
-			if s, ok := x.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	case []string:
-		return v
-	case string:
-		if v != "" {
-			return strings.Split(v, ";")
-		}
-	}
-	return nil
-}
+// isTrue reads an attribute that may be unknown: only a known true is true.
+func isTrue(b *bool) bool { return b != nil && *b }
 
 func (d *deriver) sensitivePaths() []Finding {
 	svcs := d.services()
@@ -160,15 +130,14 @@ func (d *deriver) sensitivePaths() []Finding {
 	}
 	var out []Finding
 	for _, r := range d.current(kinds.SensitiveHit) {
-		if _, ok := svcs[r.Str("service")]; !ok {
+		a := kinds.SensitiveHit.Attrs(r)
+		if _, ok := svcs[a.Service]; !ok {
 			continue
 		}
-		path := r.Str("path")
-		sev := cmp.Or(severity[path+"|"+r.Str("hash")], Medium)
-		url := r.Str("url")
-		out = append(out, newFinding(SensitivePaths, path, sev, url,
-			fmt.Sprintf("%s answered %d with %q", url, num(r, "status"), r.Str("signature")),
-			map[string]any{"url": url, "path": path, "status": r.Attrs["status"], "size": r.Attrs["size"], "signature": r.Str("signature")}))
+		sev := cmp.Or(severity[a.Path+"|"+a.Hash], Medium)
+		out = append(out, newFinding(SensitivePaths, a.Path, sev, a.URL,
+			fmt.Sprintf("%s answered %d with %q", a.URL, a.Status, a.Signature),
+			map[string]any{"url": a.URL, "path": a.Path, "status": a.Status, "size": a.Size, "signature": a.Signature}))
 	}
 	return out
 }
@@ -183,32 +152,33 @@ func (d *deriver) email() []Finding {
 		add := func(typ, detail string) {
 			out = append(out, newFinding(Email, typ, Severity(Email, typ), root, detail, map[string]any{"root": root}))
 		}
-		spf := r.Str("spf")
-		invalid := r.Str("spf_error") != "" || num(r, "spf_records") > 1
+		a := kinds.EmailPosture.Attrs(r)
+		spf := a.SPF
+		invalid := a.SPFError != "" || a.SPFRecords > 1
 		switch {
 		case invalid:
-			add("spf-invalid", "SPF is invalid: "+r.Str("spf_error"))
+			add("spf-invalid", "SPF is invalid: "+a.SPFError)
 		case spf == "":
 			add("spf-missing", "no SPF record")
 		default:
-			if n := num(r, "spf_lookups"); n > 10 {
+			if n := a.SPFLookups; n > 10 {
 				add("spf-lookups", fmt.Sprintf("SPF needs %d DNS lookups (the limit is 10)", n))
 			}
 		}
 		// The record's own "all" is reported even when an include made it invalid:
 		// a +all says so whatever the rest of the record does.
-		switch r.Str("spf_all") {
+		switch a.SPFAll {
 		case "+all":
 			add("spf-all-plus", "SPF allows anyone to send: "+spf)
 		case "?all":
 			add("spf-all-neutral", "SPF ends in ?all: "+spf)
 		}
-		if r.Str("dmarc") == "" {
+		if a.DMARC == "" {
 			add("dmarc-missing", "no DMARC record")
-		} else if r.Str("dmarc_policy") == "none" {
-			add("dmarc-none", "the applicable DMARC policy is none: "+r.Str("dmarc"))
+		} else if a.DMARCPolicy == "none" {
+			add("dmarc-none", "the applicable DMARC policy is none: "+a.DMARC)
 		}
-		if r.Str("mx") == "" && !strings.EqualFold(strings.Join(strings.Fields(spf), " "), "v=spf1 -all") {
+		if a.MX == "" && !strings.EqualFold(strings.Join(strings.Fields(spf), " "), "v=spf1 -all") {
 			add("no-mx-spf", "no MX record, and the domain does not say it sends no mail (v=spf1 -all)")
 		}
 	}

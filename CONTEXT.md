@@ -41,7 +41,7 @@ Everything observed under one kind and key, merged across checks; current while 
 _Avoid_: row, entry, result
 
 **Record kind**:
-The type of a record (hostname, web_service, open_port, finding, ...), which fixes how its records are shown.
+The type of a record (hostname, web_service, open_port, finding, ...), which fixes its attributes and how its records are shown.
 _Avoid_: type, category (a category is a summary heading or a finding category)
 
 **Shown**:
@@ -86,4 +86,4 @@ Whether something in scope references a storage bucket; an unattributed bucket w
 
 - "risk" names the files (`risk-*.csv`), the evidence stages (`internal/stages/risk`) and, loosely, findings. Resolved: the concept is **Finding**; `risk-` is only the file prefix, and the stage package keeps its name for now.
 - "visible" was used for the showing rules (`output.Visible`, `WebVisibility`). Resolved: the term is **Shown**, and the rules live with the **Record kind** table in `internal/kinds`.
-- "kinds" the package is more than a lookup table: it is the **Record kind** table plus the rules for showing records.
+- "kinds" the package is more than a lookup table: it defines every **Record kind**, the attributes its **Observations** carry, and the rules for showing its records.

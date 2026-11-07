@@ -82,13 +82,13 @@ func (d *deriver) dnsTakeovers(ev evidenceSet) {
 func (d *deriver) httpTakeovers(ev evidenceSet) {
 	svcs := d.services()
 	for _, r := range d.current(kinds.TakeoverHTTP) {
-		if _, ok := svcs[r.Str("service")]; !ok {
+		a := kinds.TakeoverHTTP.Attrs(r)
+		if _, ok := svcs[a.Service]; !ok {
 			continue
 		}
-		host := r.Str("host")
-		ev.add(host, "http-fingerprint",
-			fmt.Sprintf("%s serves the page of an unclaimed %s resource (HTTP %d)", r.Str("service"), r.Str("provider_service"), num(r, "status")),
-			map[string]any{"service": r.Str("provider_service"), "cname": r.Str("cname"), "provider": r.Str("provider")})
+		ev.add(a.Host, "http-fingerprint",
+			fmt.Sprintf("%s serves the page of an unclaimed %s resource (HTTP %d)", a.Service, a.ProviderService, a.Status),
+			map[string]any{"service": a.ProviderService, "cname": a.CNAME, "provider": a.Provider})
 	}
 }
 
@@ -156,12 +156,12 @@ func refKey(ref cloudstorage.Reference) string {
 func (d *deriver) missingResources() map[string]bool {
 	out := map[string]bool{}
 	for _, r := range d.current(kinds.Storage) {
-		if b, ok := r.Attrs["exists"].(bool); ok && !b {
+		if e := kinds.Storage.Attrs(r).Exists; e != nil && !*e { // known not to exist, not merely unknown
 			out[r.Key] = true
 		}
 	}
 	for _, r := range d.current(kinds.StorageAccount) {
-		if b, ok := r.Attrs["exists"].(bool); ok && !b {
+		if !kinds.StorageAccount.Attrs(r).Exists {
 			out[cloudstorage.AccountKey(r.Key)] = true
 		}
 	}

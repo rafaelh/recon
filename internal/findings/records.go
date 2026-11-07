@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rafaelh/recon/internal/cloudstorage"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/store"
 )
 
@@ -135,7 +136,7 @@ func Files() []File {
 func riskFile(category string, columns []string, fromKey func(typ, target string) map[string]string) File {
 	return File{Name: "risk-" + category + ".csv", Columns: columns, Rows: func(l Listing) []FileRow {
 		var rows []FileRow
-		for _, r := range l.Records["finding"] {
+		for _, r := range l.Records[kinds.Finding.Name()] {
 			cat, typ, target := ParseKey(r.Key)
 			if cat != category {
 				continue
@@ -165,14 +166,18 @@ var storageUnattributedColumns = []string{"provider", "name", "url", "exists", "
 // A public or listable one is a low finding; a private one is listed, not reported.
 func storageUnattributedRows(l Listing) []FileRow {
 	var rows []FileRow
-	for _, r := range l.Records["storage"] {
+	for _, r := range l.Records[kinds.Storage.Name()] {
+		a := kinds.Storage.Attrs(r)
 		attr, known := l.Storage[r.Key]
-		if !flag(r, "exists") || !known || attr.Attributed || len(attr.GeneratedFrom) == 0 {
+		if !isTrue(a.Exists) || !known || attr.Attributed || len(attr.GeneratedFrom) == 0 {
 			continue
 		}
-		provider, name, container := r.Str("provider"), r.Str("name"), r.Str("container")
-		rows = append(rows, FileRow{Record: r, Cells: []string{provider, name, cloudstorage.URL(provider, name, container), "true", attr.Public,
-			cell(r, "listable"), r.Str("object_count"), cell(r, "first_keys"), strings.Join(attr.GeneratedFrom, ";"), attr.Severity}})
+		listable := ""
+		if a.Listable != nil {
+			listable = strconv.FormatBool(*a.Listable)
+		}
+		rows = append(rows, FileRow{Record: r, Cells: []string{a.Provider, a.Name, cloudstorage.URL(a.Provider, a.Name, a.Container), "true", attr.Public,
+			listable, a.ObjectCount, strings.Join(a.FirstKeys, ";"), strings.Join(attr.GeneratedFrom, ";"), attr.Severity}})
 	}
 	return rows
 }

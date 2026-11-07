@@ -97,7 +97,7 @@ func (*Storage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 		// Containers of Azure accounts known to exist: the fixed list, and every one a reference names.
 		var accounts []string
 		for _, rec := range v.Records(kinds.StorageAccount) {
-			if ok, _ := rec.Attrs["exists"].(bool); ok {
+			if kinds.StorageAccount.Attrs(rec).Exists {
 				accounts = append(accounts, rec.Key)
 			}
 		}
@@ -119,16 +119,15 @@ func (*Storage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 		existing := map[string]storageInput{} // object inputs without the object
 		objs := map[string]storageInput{}
 		for _, rec := range v.Records(kinds.Storage) {
-			if ok, _ := rec.Attrs["exists"].(bool); !ok {
+			a := kinds.Storage.Attrs(rec)
+			if a.Exists == nil || !*a.Exists {
 				continue
 			}
-			b := storageInput{kind: "object", provider: rec.Str("provider"), name: rec.Str("name"), container: rec.Str("container"), region: rec.Str("region")}
+			b := storageInput{kind: "object", provider: a.Provider, name: a.Name, container: a.Container, region: a.Region}
 			existing[rec.Key] = b
-			if keys, _ := rec.Attrs["first_keys"].([]any); len(keys) > 0 {
-				if k, _ := keys[0].(string); k != "" {
-					b.object = k
-					objs[rec.Key+"/"+k] = b
-				}
+			if len(a.FirstKeys) > 0 && a.FirstKeys[0] != "" {
+				b.object = a.FirstKeys[0]
+				objs[rec.Key+"/"+b.object] = b
 			}
 		}
 		for _, r := range refs {
@@ -179,7 +178,7 @@ func account(ctx context.Context, e egress.Clients, in storageInput) ([]run.Obse
 	default:
 		return nil, fmt.Errorf("DNS rcode %d", res.RCode)
 	}
-	return []run.Observation{{Kind: "storage_account", Key: in.name, Attrs: map[string]any{"exists": exists}}}, nil
+	return []run.Observation{kinds.StorageAccount.Obs(in.name, kinds.StorageAccountAttrs{Exists: exists})}, nil
 }
 
 // escapePath escapes each segment of an object key.
@@ -288,7 +287,8 @@ func list(ctx context.Context, e egress.Clients, in storageInput) ([]run.Observa
 	if resp.Truncated {
 		return nil, fmt.Errorf("listing larger than the 10 MiB limit")
 	}
-	attrs := map[string]any{"provider": in.provider, "name": in.name, "container": in.container}
+	attrs := kinds.StorageAttrs{Provider: in.provider, Name: in.name, Container: in.container}
+	yes, no := true, false
 	body := string(resp.Body)
 	switch {
 	case resp.Status == 200:
@@ -301,29 +301,23 @@ func list(ctx context.Context, e egress.Clients, in storageInput) ([]run.Observa
 		if strings.EqualFold(l.Truncated, "true") || l.NextMarker != "" {
 			count += "+"
 		}
-		first := make([]any, 0, 5)
-		for _, k := range keys[:min(5, len(keys))] {
-			first = append(first, k)
-		}
-		attrs["exists"], attrs["listable"], attrs["object_count"], attrs["first_keys"] = true, true, count, first
+		attrs.Exists, attrs.Listable, attrs.ObjectCount, attrs.FirstKeys = &yes, &yes, count, slices.Clone(keys[:min(5, len(keys))])
 	case resp.Status == 404 && (strings.Contains(body, "NoSuchBucket") || strings.Contains(body, "ContainerNotFound")):
-		attrs["exists"] = false
+		attrs.Exists = &no
 	case resp.Status == 401 || resp.Status == 403:
-		attrs["exists"], attrs["listable"] = true, false
+		attrs.Exists, attrs.Listable = &yes, &no
 	case in.provider == cloudstorage.Azure && (resp.Status == 404 && strings.Contains(body, "ResourceNotFound") ||
 		resp.Status == 409 && strings.Contains(body, "PublicAccessNotPermitted")):
 		// Azure answers an anonymous request this way for a private container and
 		// for a missing one alike (and 409 for every container once the account
 		// disallows public access), so whether it exists is unknown: it is not
 		// listable, and is neither reported as existing nor as claimable.
-		attrs["listable"] = false
+		attrs.Listable = &no
 	default:
 		return nil, fmt.Errorf("HTTP %d", resp.Status)
 	}
-	if region != "" {
-		attrs["region"] = region
-	}
-	return []run.Observation{{Kind: "storage", Key: cloudstorage.Key(in.provider, in.name, in.container), Attrs: attrs}}, nil
+	attrs.Region = region
+	return []run.Observation{kinds.Storage.Obs(cloudstorage.Key(in.provider, in.name, in.container), attrs)}, nil
 }
 
 // object sends one anonymous HEAD for an object: it is public if that succeeds.
@@ -341,8 +335,8 @@ func object(ctx context.Context, e egress.Clients, in storageInput) ([]run.Obser
 		return nil, fmt.Errorf("HTTP %d", resp.Status)
 	}
 	bucket := cloudstorage.Key(in.provider, in.name, in.container)
-	return []run.Observation{{Kind: "storage_object", Key: bucket + "/" + in.object, Attrs: map[string]any{
-		"bucket": bucket, "provider": in.provider, "name": in.name, "container": in.container, "object": in.object,
-		"public": public, "url": objectURL(in, in.region),
-	}}}, nil
+	return []run.Observation{kinds.StorageObject.Obs(bucket+"/"+in.object, kinds.StorageObjectAttrs{
+		Bucket: bucket, Provider: in.provider, Name: in.name, Container: in.container, Object: in.object,
+		Public: public, URL: objectURL(in, in.region),
+	})}, nil
 }

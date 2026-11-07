@@ -75,8 +75,8 @@ func (*Takeover) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.
 	if !ok || !in.ph.Entry.BodyMatches(r.Body) {
 		return nil, nil
 	}
-	return []run.Observation{{Kind: "takeover_http", Key: in.service, Attrs: map[string]any{
-		"host": in.svc.Host, "url": in.service + "/", "status": r.Status, "service": in.service,
-		"provider": in.ph.Provider, "provider_service": in.ph.Service, "cname": in.ph.CNAME,
-	}}}, nil
+	return []run.Observation{kinds.TakeoverHTTP.Obs(in.service, kinds.TakeoverHTTPAttrs{
+		Host: in.svc.Host, URL: in.service + "/", Status: r.Status, Service: in.service,
+		Provider: in.ph.Provider, ProviderService: in.ph.Service, CNAME: in.ph.CNAME,
+	})}, nil
 }

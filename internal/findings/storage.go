@@ -40,12 +40,13 @@ func (d *deriver) references() []cloudstorage.Reference {
 		}
 	}
 	for _, r := range d.current(kinds.StorageRef) {
-		if !d.in.Scope.WebHostInScope(r.Str("page_host")) {
+		a := kinds.StorageRef.Attrs(r)
+		if !d.in.Scope.WebHostInScope(a.PageHost) {
 			continue
 		}
 		out = append(out, cloudstorage.Reference{
-			Ref: cloudstorage.Ref{Provider: r.Str("provider"), Name: r.Str("name"), Container: r.Str("container"), Object: r.Str("object")},
-			Via: r.Str("via"), From: r.Str("page"),
+			Ref: cloudstorage.Ref{Provider: a.Provider, Name: a.Name, Container: a.Container, Object: a.Object},
+			Via: a.Via, From: a.Page,
 		})
 	}
 	slices.SortFunc(out, refCompare)
@@ -76,9 +77,10 @@ func (d *deriver) attribution() map[string]StorageAttr {
 	attributed, guessed, public := attributedSet(d.references()), d.guessed(), d.publicStates()
 	out := map[string]StorageAttr{}
 	for _, r := range d.in.Records(kinds.Storage) {
-		k := bucketKey(r.Str("provider"), r.Str("name"))
+		sa := kinds.Storage.Attrs(r)
+		k := bucketKey(sa.Provider, sa.Name)
 		a := StorageAttr{Attributed: attributed[k], GeneratedFrom: guessed[k], Public: cloudstorage.PublicState(public[r.Key])}
-		if typ := storageType(flag(r, "listable"), a.Public, a.Attributed); typ != "" && !a.Attributed {
+		if typ := storageType(isTrue(sa.Listable), a.Public, a.Attributed); typ != "" && !a.Attributed {
 			a.Severity = Severity(StorageUnattributed, typ)
 		}
 		out[r.Key] = a
@@ -132,8 +134,8 @@ func (d *deriver) publicStates() map[string][]bool {
 	}
 	d.public = map[string][]bool{}
 	for _, r := range d.current(kinds.StorageObject) {
-		b := r.Str("bucket")
-		d.public[b] = append(d.public[b], flag(r, "public"))
+		a := kinds.StorageObject.Attrs(r)
+		d.public[a.Bucket] = append(d.public[a.Bucket], a.Public)
 	}
 	return d.public
 }
@@ -167,11 +169,12 @@ func (d *deriver) storage() []Finding {
 	}
 	var out []Finding
 	for _, r := range d.current(kinds.Storage) {
-		if !flag(r, "exists") {
+		a := kinds.Storage.Attrs(r)
+		if !isTrue(a.Exists) {
 			continue
 		}
-		provider, name, container := r.Str("provider"), r.Str("name"), r.Str("container")
-		listable := flag(r, "listable")
+		provider, name, container := a.Provider, a.Name, a.Container
+		listable := isTrue(a.Listable)
 		pub := cloudstorage.PublicState(public[r.Key])
 		attr := attributed[bucketKey(provider, name)]
 		typ := storageType(listable, pub, attr)
@@ -187,12 +190,11 @@ func (d *deriver) storage() []Finding {
 		if len(by) > 5 {
 			by = by[:5]
 		}
-		keys := strs(r, "first_keys")
 		out = append(out, newFinding(category, typ, Severity(category, typ), url,
 			fmt.Sprintf("%s bucket %s is %s", provider, url, typ),
 			map[string]any{
 				"provider": provider, "name": name, "url": url, "exists": "true", "public": pub, "listable": fmt.Sprint(listable),
-				"object_count": r.Str("object_count"), "first_keys": strings.Join(keys, ";"), "referenced_by": strings.Join(by, ";"),
+				"object_count": a.ObjectCount, "first_keys": strings.Join(a.FirstKeys, ";"), "referenced_by": strings.Join(by, ";"),
 			}))
 	}
 	return out

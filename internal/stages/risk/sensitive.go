@@ -78,23 +78,23 @@ func (*SensitivePaths) Run(ctx context.Context, c run.Check, e egress.Clients) (
 		return nil, nil
 	}
 	hash := in.entry.Hash()
-	return []run.Observation{{Kind: "sensitive_hit", Key: in.service + "|" + in.entry.Path + "|" + hash, Attrs: map[string]any{
-		"service": in.service, "host": in.svc.Host, "url": in.service + in.entry.Path, "path": in.entry.Path,
-		"status": r.Status, "size": bodySize(r), "signature": sig, "hash": hash,
-	}}}, nil
+	return []run.Observation{kinds.SensitiveHit.Obs(in.service+"|"+in.entry.Path+"|"+hash, kinds.SensitiveHitAttrs{
+		Service: in.service, Host: in.svc.Host, URL: in.service + in.entry.Path, Path: in.entry.Path,
+		Status: r.Status, Size: bodySize(r), Signature: sig, Hash: hash,
+	})}, nil
 }
 
 // bodySize is the size of the response: its Content-Length when the body may
 // have been cut at egress.MaxTargetBody, else the body's length. A cut body
 // without a usable Content-Length is "<cap>+".
-func bodySize(r egress.Response) any {
+func bodySize(r egress.Response) kinds.Size {
 	if len(r.Body) < egress.MaxTargetBody {
-		return len(r.Body)
+		return kinds.SizeOf(int64(len(r.Body)))
 	}
 	if vals := r.Header["Content-Length"]; len(vals) > 0 {
 		if n, err := strconv.ParseInt(vals[0], 10, 64); err == nil && n >= int64(len(r.Body)) {
-			return n
+			return kinds.SizeOf(n)
 		}
 	}
-	return fmt.Sprintf("%d+", len(r.Body))
+	return kinds.Size(fmt.Sprintf("%d+", len(r.Body)))
 }
