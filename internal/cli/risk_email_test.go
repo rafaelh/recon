@@ -27,7 +27,7 @@ func (m mail) apply(d *egresstest.DNS, root string) {
 	for _, x := range m.mx {
 		var pref int
 		var host string
-		fmt.Sscanf(x, "%d %s", &pref, &host)
+		_, _ = fmt.Sscanf(x, "%d %s", &pref, &host)
 		d.MX(root, pref, host)
 	}
 	for _, s := range m.spf {

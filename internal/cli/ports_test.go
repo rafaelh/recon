@@ -104,7 +104,7 @@ func (p *pworld) listenOn(bind, key, banner string, delay time.Duration) *portSr
 					return
 				}
 				time.Sleep(delay)
-				c.Write([]byte(banner))
+				_, _ = c.Write([]byte(banner))
 				n, _ := io.Copy(io.Discard, c) // until the client hangs up
 				s.bytes.Add(n)
 			}()

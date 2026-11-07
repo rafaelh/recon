@@ -224,8 +224,8 @@ func TestRiskPlumbing_FilesWrittenSortedAndSafe(t *testing.T) {
 	x.names("a.example.com", "b.example.com")
 	x.host("a.example.com", "203.0.113.5")
 	x.host("b.example.com", "203.0.113.6")
-	x.plain("203.0.113.5", 80, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("=SECRET")) })
-	x.plain("203.0.113.6", 80, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("=SECRET")) })
+	x.plain("203.0.113.5", 80, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("=SECRET")) })
+	x.plain("203.0.113.6", 80, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("=SECRET")) })
 	file := x.pathsFile("- path: /z\n  signature: '=SECRET'\n- path: /a\n  signature: '=SECRET'\n")
 	x.mustRun("--crawl-pages", "0", "--sensitive-paths", file)
 	for _, f := range []string{"storage-unattributed.csv", "risk-takeover.csv", "risk-storage.csv", "risk-ports.csv", "risk-certificates.csv"} {

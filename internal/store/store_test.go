@@ -206,10 +206,14 @@ func TestRedoFailedCheckKeepsObservations(t *testing.T) {
 	s, _ := open(t, c, nil)
 	s.Complete("st", "k", []store.Obs{{Kind: "x", Key: "a"}})
 	mustFlush(t, s)
-	s.Redo("st")
+	if err := s.Redo("st"); err != nil {
+		t.Fatal(err)
+	}
 	s.Fail("st", "k", "boom")
 	mustFlush(t, s)
-	s.FinishRedo("st", map[string]struct{}{"k": {}})
+	if err := s.FinishRedo("st", map[string]struct{}{"k": {}}); err != nil {
+		t.Fatal(err)
+	}
 	if !rec(t, s, "x", "a").Current {
 		t.Error("a failed check keeps its old observations")
 	}
@@ -353,7 +357,9 @@ func TestInputsAndMeta(t *testing.T) {
 	if added, _ = s.AddInput("root", "example.com"); added {
 		t.Error("duplicate should not be added")
 	}
-	s.AddInput("cidr", "10.0.0.0/8")
+	if _, err := s.AddInput("cidr", "10.0.0.0/8"); err != nil {
+		t.Fatal(err)
+	}
 	in, _ := s.Inputs()
 	if len(in) != 2 || in[0].Kind != "cidr" || in[1].Value != "example.com" || in[1].AddedAt != "2026-11-01" {
 		t.Errorf("inputs = %+v", in)
@@ -361,7 +367,9 @@ func TestInputsAndMeta(t *testing.T) {
 	if _, ok := s.Meta("ack_at"); ok {
 		t.Error("meta should be unset")
 	}
-	s.SetMeta("ack_at", "2026-11-01")
+	if err := s.SetMeta("ack_at", "2026-11-01"); err != nil {
+		t.Fatal(err)
+	}
 	if v, ok := s.Meta("ack_at"); !ok || v != "2026-11-01" {
 		t.Errorf("meta = %q %v", v, ok)
 	}

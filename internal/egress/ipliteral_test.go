@@ -50,7 +50,7 @@ func newIPFixture(t *testing.T, tlsServer bool, blocks []string, excl []string, 
 			w.WriteHeader(http.StatusFound)
 			return
 		}
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 	f.srv = httptest.NewUnstartedServer(h)
 	if tlsServer {

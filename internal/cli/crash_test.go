@@ -85,19 +85,19 @@ func startChild(t *testing.T, out string, o childOpts) *child {
 	if err := c.cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.cmd.Process.Kill(); c.cmd.Wait() })
+	t.Cleanup(func() { _ = c.cmd.Process.Kill(); _ = c.cmd.Wait() })
 	return c
 }
 
 // wait returns the exit code (-1 if killed by a signal).
 func (c *child) wait() int {
 	c.t.Helper()
-	done := make(chan error, 1)
-	go func() { done <- c.cmd.Wait() }()
+	done := make(chan struct{})
+	go func() { _ = c.cmd.Wait(); close(done) }() // ProcessState carries the outcome
 	select {
 	case <-done:
 	case <-time.After(60 * time.Second):
-		c.cmd.Process.Kill()
+		_ = c.cmd.Process.Kill()
 		c.t.Fatal("child did not exit")
 	}
 	return c.cmd.ProcessState.ExitCode()
@@ -137,7 +137,7 @@ func (c *child) waitFault(file string) string {
 	return strings.TrimSpace(string(b))
 }
 
-func (c *child) kill(sig syscall.Signal) { c.cmd.Process.Signal(sig) }
+func (c *child) kill(sig syscall.Signal) { _ = c.cmd.Process.Signal(sig) }
 
 const nChecks = 40
 

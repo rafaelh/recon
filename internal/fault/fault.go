@@ -28,7 +28,7 @@ func PointDetail(name, detail string) {
 	if file != "" {
 		tmp := file + ".tmp"
 		if err := os.WriteFile(tmp, []byte(name+" "+detail+"\n"), 0o600); err == nil {
-			os.Rename(tmp, file)
+			_ = os.Rename(tmp, file) // best effort: the process hangs next regardless
 		}
 	}
 	select {}

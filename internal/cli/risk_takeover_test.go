@@ -50,7 +50,7 @@ func TestRiskB2_HTTPTakeover(t *testing.T) {
 	x.host("fine.herokuapp.com", "203.0.113.8")
 	unclaimed := x.plain("203.0.113.7", 80, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
-		w.Write([]byte("<html><title>No such app</title></html>"))
+		_, _ = w.Write([]byte("<html><title>No such app</title></html>"))
 	})
 	claimed := x.plain("203.0.113.8", 80, page("<html>Welcome to our product</html>"))
 	x.mustRun("--crawl-pages", "0")
@@ -95,7 +95,7 @@ func TestRiskB2_MissingS3BucketOneFinding(t *testing.T) {
 	x.host("lost-bucket.s3.amazonaws.com", "203.0.113.30")
 	x.plain("203.0.113.30", 80, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
-		w.Write([]byte(noSuchBucketXML))
+		_, _ = w.Write([]byte(noSuchBucketXML))
 	})
 	x.mustRun("--crawl-pages", "0", "--storage-max-names", "1")
 

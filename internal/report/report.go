@@ -86,7 +86,7 @@ func (j *JSONEmitter) Emit(ev Event) {
 	}
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	j.w.Write(append(b, '\n'))
+	_, _ = j.w.Write(append(b, '\n')) // Emit cannot report a write failure
 }
 
 type redacting struct {

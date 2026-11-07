@@ -36,7 +36,7 @@ func TestContract(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	c, uri := clients(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":"ok","data":{"prefixes":[{"prefix":"1.1.1.0/24"},{"prefix":"2606:4700::/32"}]}}`))
+		_, _ = w.Write([]byte(`{"status":"ok","data":{"prefixes":[{"prefix":"1.1.1.0/24"},{"prefix":"2606:4700::/32"}]}}`))
 	})
 	obs, err := asn.New().Run(context.Background(), run.Check{Key: "AS13335", Input: "AS13335"}, c)
 	if err != nil {
@@ -55,10 +55,10 @@ func TestRun(t *testing.T) {
 // D7: a non-ok body status is a transient failure (an error), not an empty result.
 func TestRunErrors(t *testing.T) {
 	for name, h := range map[string]http.HandlerFunc{
-		"status":   func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"status":"error","data":{}}`)) },
+		"status":   func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{"status":"error","data":{}}`)) },
 		"http 500": func(w http.ResponseWriter, r *http.Request) { http.Error(w, "x", 500) },
-		"bad json": func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`<html>`)) },
-		"http 429": func(w http.ResponseWriter, r *http.Request) { http.Error(w, "slow down", 429) },
+		"bad json": func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`<html>`)) },
+		"http 429": func(w http.ResponseWriter, r *http.Request) { http.Error(w, "slow down", http.StatusTooManyRequests) },
 	} {
 		c, _ := clients(t, h)
 		if obs, err := asn.New().Run(context.Background(), run.Check{Key: "AS1", Input: "AS1"}, c); err == nil {
@@ -69,7 +69,7 @@ func TestRunErrors(t *testing.T) {
 
 func TestZeroPrefixesIsAResult(t *testing.T) {
 	c, _ := clients(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"status":"ok","data":{"prefixes":[]}}`))
+		_, _ = w.Write([]byte(`{"status":"ok","data":{"prefixes":[]}}`))
 	})
 	obs, err := asn.New().Run(context.Background(), run.Check{Key: "AS1", Input: "AS1"}, c)
 	if err != nil || len(obs) != 0 {

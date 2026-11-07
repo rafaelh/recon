@@ -82,7 +82,7 @@ func eligible(ctx context.Context, v run.View) []netip.Addr {
 			continue
 		}
 		// IPv4 netblock addresses were all decided above.
-		if a = a.Unmap(); !(a.Is4() && sc.InScopeIP(a)) {
+		if a = a.Unmap(); !a.Is4() || !sc.InScopeIP(a) {
 			found = append(found, a)
 		}
 	}

@@ -428,7 +428,7 @@ func TestWebB3_TitleIsTrimmedAndCapped(t *testing.T) {
 		c := c
 		x.plain(ip, 80, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", c.ctype)
-			w.Write([]byte(c.body))
+			_, _ = w.Write([]byte(c.body))
 		})
 	}
 	x.names(names...)
@@ -459,7 +459,7 @@ func TestWebB3_AnyStatusIsALiveService(t *testing.T) {
 	x.plain("203.0.113.5", 80, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(404)
-		w.Write([]byte("<title>Not Found</title>"))
+		_, _ = w.Write([]byte("<title>Not Found</title>"))
 	})
 	x.plain("203.0.113.6", 80, func(w http.ResponseWriter, r *http.Request) { http.Error(w, "boom", 500) })
 	x.mustRun()

@@ -29,14 +29,14 @@ func (x *risk) pathsFile(body string) string {
 func leaky(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/.git/config":
-		w.Write([]byte("[core]\n\trepositoryformatversion = 0\n"))
+		_, _ = w.Write([]byte("[core]\n\trepositoryformatversion = 0\n"))
 	case "/.env":
-		w.Write([]byte(secretBody))
+		_, _ = w.Write([]byte(secretBody))
 	case "/backup.gz":
-		w.Write([]byte{0x1f, 0x8b, 0x08, 0x00, 0x01, 0x02})
+		_, _ = w.Write([]byte{0x1f, 0x8b, 0x08, 0x00, 0x01, 0x02})
 	default:
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte("<html>Welcome. Everything here returns 200.</html>"))
+		_, _ = w.Write([]byte("<html>Welcome. Everything here returns 200.</html>"))
 	}
 }
 
@@ -49,7 +49,7 @@ func TestRiskB5_RequestedOnceAndMatched(t *testing.T) {
 	x.host("plain.example.com", "203.0.113.6")
 	www := x.plain("203.0.113.5", 80, leaky)
 	plain := x.plain("203.0.113.6", 80, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("<html>catch-all</html>")) // 200 for every path, matching nothing
+		_, _ = w.Write([]byte("<html>catch-all</html>")) // 200 for every path, matching nothing
 	})
 	x.mustRun("--crawl-pages", "0", "--sensitive-paths", x.pathsFile(pathsYAML))
 
@@ -109,7 +109,7 @@ func TestRiskB5_TransientFailureRetried(t *testing.T) {
 	s := x.plain("203.0.113.5", 80, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.env" && broken.Load() {
 			w.Header().Set("Content-Length", "100")
-			w.Write([]byte("SECRET_KEY=")) // the connection drops before the declared length
+			_, _ = w.Write([]byte("SECRET_KEY=")) // the connection drops before the declared length
 			w.(http.Flusher).Flush()
 			panic(http.ErrAbortHandler)
 		}
@@ -255,11 +255,11 @@ func TestRiskB5_LargeBodySize(t *testing.T) {
 		switch r.URL.Path {
 		case "/backup.gz":
 			w.Header().Set("Content-Length", strconv.Itoa(len(big)))
-			w.Write(big)
+			_, _ = w.Write(big)
 		case "/.git/config":
-			w.Write([]byte("[core]\n"))
+			_, _ = w.Write([]byte("[core]\n"))
 			w.(http.Flusher).Flush() // chunked: no Content-Length
-			w.Write(make([]byte, 2<<20))
+			_, _ = w.Write(make([]byte, 2<<20))
 		default:
 			leaky(w, r)
 		}

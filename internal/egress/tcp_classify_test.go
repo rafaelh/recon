@@ -69,7 +69,7 @@ func TestClassifyDial(t *testing.T) {
 func TestClassifyDialLooksUpTheSameAddress(t *testing.T) {
 	a := netip.MustParseAddr("2001:db8::5")
 	var got netip.Addr
-	egress.ClassifyDial(dialError(syscall.ENETUNREACH), a, func(x netip.Addr) error { got = x; return nil })
+	_, _ = egress.ClassifyDial(dialError(syscall.ENETUNREACH), a, func(x netip.Addr) error { got = x; return nil })
 	if got != a {
 		t.Errorf("route lookup for %v, want %v", got, a)
 	}

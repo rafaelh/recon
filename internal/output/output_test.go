@@ -31,7 +31,9 @@ func read(t *testing.T, dir, name string) string {
 
 func newDir(t *testing.T) string {
 	d := t.TempDir()
-	os.MkdirAll(filepath.Join(d, ".recon"), 0o700)
+	if err := os.MkdirAll(filepath.Join(d, ".recon"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	return d
 }
 
@@ -84,7 +86,9 @@ func TestEmptyFilesNotWritten(t *testing.T) {
 		{Name: "e.csv", Format: output.CSV, Columns: []string{"a"}, Rows: rows()},
 	}
 	for _, f := range files {
-		os.WriteFile(filepath.Join(dir, f.Name), []byte("old\n"), 0o644)
+		if err := os.WriteFile(filepath.Join(dir, f.Name), []byte("old\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := output.Render(dir, files, output.Snapshot{}); err != nil {
 		t.Fatal(err)
@@ -145,9 +149,13 @@ func TestAtomicRenderAndSweep(t *testing.T) {
 		t.Errorf("temp files left behind: %v", entries)
 	}
 	// A stale partial file from a crash.
-	os.MkdirAll(filepath.Join(dir, ".recon", "tmp"), 0o700)
+	if err := os.MkdirAll(filepath.Join(dir, ".recon", "tmp"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	stale := filepath.Join(dir, ".recon", "tmp", "a.txt")
-	os.WriteFile(stale, []byte("partial"), 0o600)
+	if err := os.WriteFile(stale, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := output.Sweep(dir); err != nil {
 		t.Fatal(err)
 	}

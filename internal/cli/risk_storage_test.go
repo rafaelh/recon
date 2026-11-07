@@ -184,7 +184,7 @@ func TestRiskB3_NewObjectReference(t *testing.T) {
 	html.Store(`<html><script src="https://s3.amazonaws.com/acme-assets/old.js"></script></html>`)
 	x.plain("203.0.113.5", 80, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(html.Load().(string)))
+		_, _ = w.Write([]byte(html.Load().(string)))
 	})
 	objs := map[string]int{"k1": 403, "old.js": 403, "new.png": 200}
 	x.handle("s3.amazonaws.com", bucketHandler(map[string]bucket{"acme-assets": {list: 200, keys: []string{"k1"}, objs: objs}}))
@@ -358,11 +358,11 @@ func TestRiskB3_AzureUnknownContainersComplete(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 		if strings.HasPrefix(r.URL.Path, "/media") {
 			w.WriteHeader(409)
-			w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><Error><Code>PublicAccessNotPermitted</Code></Error>`))
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><Error><Code>PublicAccessNotPermitted</Code></Error>`))
 			return
 		}
 		w.WriteHeader(404)
-		w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><Error><Code>ResourceNotFound</Code></Error>`))
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><Error><Code>ResourceNotFound</Code></Error>`))
 	})
 	x.mustRun("--storage-max-names", "1", "--crawl-pages", "0")
 	if st := x.state("storage"); st.num("failed") != 0 {
@@ -393,7 +393,7 @@ func TestRiskB3_RegionFromLocation(t *testing.T) {
 	x.handle("s3.amazonaws.com", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "https://acme-new.s3-eu-west-1.amazonaws.com/?list-type=2")
 		w.WriteHeader(307)
-		w.Write([]byte(`<Error><Code>TemporaryRedirect</Code><Endpoint>acme-new.s3-eu-west-1.amazonaws.com</Endpoint></Error>`))
+		_, _ = w.Write([]byte(`<Error><Code>TemporaryRedirect</Code><Endpoint>acme-new.s3-eu-west-1.amazonaws.com</Endpoint></Error>`))
 	})
 	eu := x.serve("s3.eu-west-1.amazonaws.com", bucketHandler(map[string]bucket{"acme-new": {list: 200, keys: []string{"a"}}}))
 	x.mustRun("--storage-max-names", "1")

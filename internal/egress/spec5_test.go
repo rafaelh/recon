@@ -156,7 +156,7 @@ func TestResolverMX(t *testing.T) {
 		case "null.example.com.":
 			m.Answer = append(m.Answer, &mdns.MX{Hdr: hdr, Preference: 0, Mx: "."})
 		}
-		w.WriteMsg(m)
+		_ = w.WriteMsg(m)
 	})
 	eg := egress.New(egress.Options{ResolverAddrs: []string{srv}, DNSTimeout: 300 * time.Millisecond, RateDNS: 1000})
 	dnsc := eg.Clients("email", false, nil).DNS

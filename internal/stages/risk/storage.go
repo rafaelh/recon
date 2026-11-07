@@ -332,10 +332,10 @@ func object(ctx context.Context, e egress.Clients, in storageInput) ([]run.Obser
 		return nil, err
 	}
 	var public bool
-	switch {
-	case resp.Status == 200:
+	switch resp.Status {
+	case 200:
 		public = true
-	case resp.Status == 401 || resp.Status == 403 || resp.Status == 404:
+	case 401, 403, 404:
 	default:
 		return nil, fmt.Errorf("HTTP %d", resp.Status)
 	}

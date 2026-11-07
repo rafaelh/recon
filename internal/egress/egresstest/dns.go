@@ -55,9 +55,9 @@ func NewDNS(t testing.TB) *DNS {
 	srv := &mdns.Server{PacketConn: pc, Handler: mdns.HandlerFunc(d.serve)}
 	started := make(chan struct{})
 	srv.NotifyStartedFunc = func() { close(started) }
-	go srv.ActivateAndServe()
+	go func() { _ = srv.ActivateAndServe() }()
 	<-started
-	t.Cleanup(func() { srv.Shutdown() })
+	t.Cleanup(func() { _ = srv.Shutdown() })
 	d.Addr = pc.LocalAddr().String()
 	return d
 }
@@ -216,7 +216,7 @@ func (d *DNS) serve(w mdns.ResponseWriter, r *mdns.Msg) {
 	if dropped {
 		return
 	}
-	w.WriteMsg(m)
+	_ = w.WriteMsg(m)
 }
 
 // answer fills m. The caller holds d.mu.

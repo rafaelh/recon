@@ -151,7 +151,7 @@ func initDB(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }() // a no-op after Commit
 		if _, err := tx.Exec(schema); err != nil {
 			return err
 		}
@@ -320,7 +320,7 @@ func (s *Store) commitOps(batch []op) []newRec {
 		s.setErr(err)
 		return nil
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op after Commit
 	today := s.today()
 	var news []newRec
 	kinds := map[string]bool{}
@@ -386,11 +386,11 @@ func (s *Store) applyComplete(tx *sql.Tx, o op, today string, kinds map[string]b
 		}
 		var one int
 		err = tx.QueryRow("SELECT 1 FROM records WHERE kind=? AND key=?", k.kind, k.key).Scan(&one)
-		switch {
-		case err == sql.ErrNoRows:
+		switch err {
+		case sql.ErrNoRows:
 			news = append(news, newRec{k.kind, k.key, attrs})
 			_, err = tx.Exec("INSERT INTO records(kind,key,first_seen,last_seen,current) VALUES(?,?,?,?,1)", k.kind, k.key, today, today)
-		case err == nil:
+		case nil:
 			_, err = tx.Exec("UPDATE records SET last_seen=? WHERE kind=? AND key=?", today, k.kind, k.key)
 		}
 		if err != nil {
@@ -638,7 +638,7 @@ func (s *Store) Redo(stage string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op after Commit
 	if _, err := tx.Exec("DELETE FROM checks WHERE stage=?", stage); err != nil {
 		return err
 	}
@@ -677,7 +677,7 @@ func (s *Store) FinishRedo(stage string, valid map[string]struct{}) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op after Commit
 	kinds, err := sweepObservations(tx, stage, valid)
 	if err != nil {
 		return err
@@ -705,7 +705,7 @@ func (s *Store) Retire(stage string, valid map[string]struct{}) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // a no-op after Commit
 	kinds, err := sweepObservations(tx, stage, valid)
 	if err != nil {
 		return err

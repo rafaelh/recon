@@ -197,8 +197,12 @@ func TestPromotedCandidate(t *testing.T) {
 func TestNonEngagementDirRefused(t *testing.T) {
 	h := newHarness(t, noop())
 	legacy := h.eng("legacy")
-	os.MkdirAll(legacy, 0o755)
-	os.WriteFile(filepath.Join(legacy, "subdomains.txt"), []byte("old\n"), 0o644)
+	if err := os.MkdirAll(legacy, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, "subdomains.txt"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if code := h.exec("-e", "legacy", "a.com"); code != 1 || !strings.Contains(h.stderr.String(), legacy) {
 		t.Errorf("exit %d stderr %q", code, h.stderr.String())
 	}
@@ -206,12 +210,18 @@ func TestNonEngagementDirRefused(t *testing.T) {
 		t.Error("must not write into a foreign directory")
 	}
 
-	os.MkdirAll(h.eng("empty"), 0o755)
+	if err := os.MkdirAll(h.eng("empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if code := h.exec("-e", "empty", "a.com"); code != 0 {
 		t.Errorf("empty dir should be adopted: %d %s", code, h.stderr.String())
 	}
-	os.MkdirAll(filepath.Join(h.eng("half"), ".recon"), 0o755)
-	os.WriteFile(filepath.Join(h.eng("half"), ".recon", "lock"), nil, 0o600)
+	if err := os.MkdirAll(filepath.Join(h.eng("half"), ".recon"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.eng("half"), ".recon", "lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if code := h.exec("-e", "half", "a.com"); code != 0 {
 		t.Errorf("interrupted creation should be adopted: %d %s", code, h.stderr.String())
 	}
@@ -399,7 +409,9 @@ func currentOf(t *testing.T, h *harness, kind string) map[string]string {
 	for rows.Next() {
 		var k string
 		var c int
-		rows.Scan(&k, &c)
+		if err := rows.Scan(&k, &c); err != nil {
+			t.Fatal(err)
+		}
 		m[k] = fmt.Sprint(c)
 	}
 	return m
@@ -1006,8 +1018,12 @@ func TestExitCodes(t *testing.T) {
 	}
 
 	// A corrupt store is a fatal runtime error.
-	os.MkdirAll(filepath.Join(h.eng("bad"), ".recon"), 0o755)
-	os.WriteFile(filepath.Join(h.eng("bad"), ".recon", "state.db"), []byte("this is not a sqlite database, just some text padding padding padding padding"), 0o600)
+	if err := os.MkdirAll(filepath.Join(h.eng("bad"), ".recon"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.eng("bad"), ".recon", "state.db"), []byte("this is not a sqlite database, just some text padding padding padding padding"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if code = h.exec("-e", "bad", "a.com"); code != 1 {
 		t.Errorf("corrupt store: exit %d", code)
 	}
@@ -1086,7 +1102,7 @@ func TestSecretsNeverLeak(t *testing.T) {
 		}
 		scan("stdout", h.stdout.Bytes())
 		scan("stderr", h.stderr.Bytes())
-		filepath.WalkDir(h.eng("a.com"), func(p string, d os.DirEntry, err error) error {
+		_ = filepath.WalkDir(h.eng("a.com"), func(p string, d os.DirEntry, err error) error {
 			if err == nil && !d.IsDir() {
 				if b, rerr := os.ReadFile(p); rerr == nil {
 					scan(p, b)

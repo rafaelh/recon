@@ -81,27 +81,27 @@ func TestB1_KeyedSources(t *testing.T) {
 	}
 	w.handle("www.virustotal.com", func(rw http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("x-apikey") != "vt-SECRET-1" {
-			http.Error(rw, "bad key", 401)
+			http.Error(rw, "bad key", http.StatusUnauthorized)
 			return
 		}
-		rw.Write([]byte(`{"data":[{"id":"vt.example.com"}],"meta":{}}`))
+		_, _ = rw.Write([]byte(`{"data":[{"id":"vt.example.com"}],"meta":{}}`))
 	})
 	w.handle("api.securitytrails.com", func(rw http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("APIKEY") != "st-SECRET-2" {
-			http.Error(rw, "bad key", 403)
+			http.Error(rw, "bad key", http.StatusForbidden)
 			return
 		}
-		rw.Write([]byte(`{"subdomains":["st","mail"]}`))
+		_, _ = rw.Write([]byte(`{"subdomains":["st","mail"]}`))
 	})
 	w.handle("api.shodan.io", func(rw http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("key") != "sh-SECRET-3" {
-			http.Error(rw, "bad key", 401)
+			http.Error(rw, "bad key", http.StatusUnauthorized)
 			return
 		}
-		rw.Write([]byte(`{"matches":[],"total":0}`))
+		_, _ = rw.Write([]byte(`{"matches":[],"total":0}`))
 	})
 	w.handle("reverse-whois.whoisxmlapi.com", func(rw http.ResponseWriter, r *http.Request) {
-		rw.Write([]byte(`{"domainsCount":0,"domainsList":[]}`))
+		_, _ = rw.Write([]byte(`{"domainsCount":0,"domainsList":[]}`))
 	})
 	for _, n := range []string{"vt", "st", "mail"} {
 		w.dns.A(n+".example.com", "203.0.113.5")
@@ -177,13 +177,13 @@ func TestB1_NotFoundIsNoData(t *testing.T) {
 		q := r.URL.Query()
 		switch {
 		case strings.HasSuffix(r.URL.Path, "collinfo.json"):
-			rw.Write([]byte(`[{"id":"CC-MAIN-2026-01"}]`))
+			_, _ = rw.Write([]byte(`[{"id":"CC-MAIN-2026-01"}]`))
 		case q.Get("showNumPages") == "true":
-			rw.Write([]byte(`{"pages":2}`))
+			_, _ = rw.Write([]byte(`{"pages":2}`))
 		case q.Get("page") == "0":
 			http.Error(rw, "No Captures found for: *.example.com", 404)
 		default:
-			rw.Write([]byte(`{"url":"https://cc.example.com/"}` + "\n"))
+			_, _ = rw.Write([]byte(`{"url":"https://cc.example.com/"}` + "\n"))
 		}
 	})
 	w.dns.A("cc.example.com", "203.0.113.5")
@@ -206,9 +206,9 @@ func TestB1_NotFoundIsNoData(t *testing.T) {
 func TestB1_TruncatedBodyIsAnError(t *testing.T) {
 	w := newWorld(t)
 	w.handle("crt.sh", func(rw http.ResponseWriter, r *http.Request) {
-		rw.Write([]byte(`[{"name_value":"a.example.com"}`))
-		rw.Write([]byte(strings.Repeat(" ", 10<<20+1000)))
-		rw.Write([]byte(`]`))
+		_, _ = rw.Write([]byte(`[{"name_value":"a.example.com"}`))
+		_, _ = rw.Write([]byte(strings.Repeat(" ", 10<<20+1000)))
+		_, _ = rw.Write([]byte(`]`))
 	})
 	w.run("--passive", "example.com")
 	if st, _ := stateOf(w, "crtsh"); st != "failed" {
@@ -228,7 +228,7 @@ func TestB1_TruncatedBodyIsAnError(t *testing.T) {
 func TestB1_UnreadableWaybackPageCountIsAnError(t *testing.T) {
 	w := newWorld(t)
 	w.handle("web.archive.org", func(rw http.ResponseWriter, r *http.Request) {
-		rw.Write([]byte("<html>Service Unavailable</html>"))
+		_, _ = rw.Write([]byte("<html>Service Unavailable</html>"))
 	})
 	w.run("--passive", "example.com")
 	if st, _ := stateOf(w, "wayback"); st != "failed" {
@@ -245,7 +245,7 @@ func TestB1_CrtshHasALongerTimeout(t *testing.T) {
 	slow := func(body string) http.HandlerFunc {
 		return func(rw http.ResponseWriter, r *http.Request) {
 			time.Sleep(450 * time.Millisecond)
-			rw.Write([]byte(body))
+			_, _ = rw.Write([]byte(body))
 		}
 	}
 	w.handle("crt.sh", slow(`[{"name_value":"slow.example.com"}]`))
@@ -379,7 +379,9 @@ func TestB2_CapAndSettingsChangeChecks(t *testing.T) {
 	if len(afterCap) <= len(before) {
 		t.Errorf("changing the cap must create new seed checks: %d -> %d", len(before), len(afterCap))
 	}
-	os.WriteFile(wl, []byte("dev\nboth\nstaging\nextra\n"), 0o600)
+	if err := os.WriteFile(wl, []byte("dev\nboth\nstaging\nextra\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	w.run("--passive", "--wordlist", wl, "--permutations-max", "6", "example.com")
 	afterWL := w.h.completed(eng, "permutations")
 	if len(afterWL) <= len(afterCap) {
@@ -748,10 +750,10 @@ func TestB7_ReverseDNSAndShodan(t *testing.T) {
 	w.owner("203.0.113.99", 64500, "ACME-NET")
 	w.handle("api.shodan.io", func(rw http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "" && r.URL.Query().Get("page") != "1" {
-			rw.Write([]byte(`{"matches":[],"total":1}`))
+			_, _ = rw.Write([]byte(`{"matches":[],"total":1}`))
 			return
 		}
-		rw.Write([]byte(`{"matches":[{"ip_str":"198.51.100.3","hostnames":["shodan.other.org"]}],"total":1}`))
+		_, _ = rw.Write([]byte(`{"matches":[{"ip_str":"198.51.100.3","hostnames":["shodan.other.org"]}],"total":1}`))
 	})
 	if code := w.run("--passive", "--cidr", "198.51.100.0/30", "example.com"); code != 0 {
 		t.Fatalf("exit %d", code)

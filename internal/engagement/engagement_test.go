@@ -41,7 +41,9 @@ func TestOpenCreatesAndAdopts(t *testing.T) {
 
 func TestRefusesNonEngagement(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "subdomains.txt"), []byte("a.example.com\n"), 0o600)
+	if err := os.WriteFile(filepath.Join(dir, "subdomains.txt"), []byte("a.example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	_, err := open(t, dir)
 	var ne *engagement.NotEngagementError
 	if !errors.As(err, &ne) || ne.Dir != dir {
@@ -55,8 +57,12 @@ func TestRefusesNonEngagement(t *testing.T) {
 // B4/B7: .recon with a lock but no DB (crash during creation) is adopted.
 func TestAdoptsInterruptedCreation(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".recon"), 0o700)
-	os.WriteFile(filepath.Join(dir, ".recon", "lock"), nil, 0o600)
+	if err := os.MkdirAll(filepath.Join(dir, ".recon"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".recon", "lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	e, err := open(t, dir)
 	if err != nil {
 		t.Fatalf("should adopt: %v", err)
@@ -98,11 +104,15 @@ func TestLock(t *testing.T) {
 func TestMergeInputs(t *testing.T) {
 	dir := t.TempDir()
 	e, _ := open(t, dir)
-	e.MergeInputs(input.Parsed{Roots: []string{"a.com"}, ASNs: []string{"AS1"}, Exclusions: []string{"x.a.com"}})
+	if err := e.MergeInputs(input.Parsed{Roots: []string{"a.com"}, ASNs: []string{"AS1"}, Exclusions: []string{"x.a.com"}}); err != nil {
+		t.Fatal(err)
+	}
 	e.Close()
 
 	e, _ = open(t, dir)
-	e.MergeInputs(input.Parsed{Roots: []string{"b.com"}, CIDRs: []string{"10.0.0.0/8"}, Exclusions: []string{"y.a.com"}})
+	if err := e.MergeInputs(input.Parsed{Roots: []string{"b.com"}, CIDRs: []string{"10.0.0.0/8"}, Exclusions: []string{"y.a.com"}}); err != nil {
+		t.Fatal(err)
+	}
 	got, err := e.Inputs()
 	if err != nil {
 		t.Fatal(err)
@@ -120,8 +130,12 @@ func TestAckAndApproval(t *testing.T) {
 	if e.Acked() || e.NetblockApproved() != 0 {
 		t.Fatal("fresh engagement")
 	}
-	e.SetAck()
-	e.SetNetblockApproved(9999)
+	if err := e.SetAck(); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.SetNetblockApproved(9999); err != nil {
+		t.Fatal(err)
+	}
 	if !e.Acked() || e.NetblockApproved() != 9999 {
 		t.Error("not stored")
 	}

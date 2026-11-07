@@ -1,0 +1,8 @@
+version: "2"
+
+linters:
+  exclusions:
+    # Skip errcheck on Close, Flush, fmt.Print* and os.(Un)Setenv, where the
+    # error is idiomatically ignored.
+    presets:
+      - std-error-handling

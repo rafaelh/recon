@@ -79,7 +79,9 @@ func (e *Egress) dialAndRead(ctx context.Context, addr netip.Addr, port int) (TC
 	}
 	defer conn.Close()
 	buf := make([]byte, 1024)
-	conn.SetReadDeadline(time.Now().Add(e.opts.BannerWait))
+	if err := conn.SetReadDeadline(time.Now().Add(e.opts.BannerWait)); err != nil {
+		return Open{}, nil // the port is open; without a deadline the read could block forever
+	}
 	n, _ := conn.Read(buf)
 	return Open{Banner: append([]byte(nil), buf[:n]...)}, nil
 }

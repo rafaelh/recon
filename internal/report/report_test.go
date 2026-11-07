@@ -14,7 +14,7 @@ import (
 var clk = func() time.Time { return time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC) }
 
 func TestSanitize(t *testing.T) {
-	in := "ok\x1b[31m red\x1b]0;title\x07 \x00bell\x07 tab\there ‮ bidi"
+	in := "ok\x1b[31m red\x1b]0;title\x07 \x00bell\x07 tab\there \u202e bidi"
 	got := report.Sanitize(in)
 	for _, bad := range []string{"\x1b", "\x07", "\x00"} {
 		if strings.Contains(got, bad) {

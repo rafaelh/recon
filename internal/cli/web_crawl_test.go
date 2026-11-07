@@ -187,7 +187,7 @@ func TestWebB7_Errors(t *testing.T) {
 			// Request 1 is the probe; request 2 is the crawl's root, which dies mid-body.
 			if n.Add(1) >= 2 && fail.Load() {
 				w.Header().Set("Content-Length", "1000")
-				w.Write([]byte("short"))
+				_, _ = w.Write([]byte("short"))
 				w.(http.Flusher).Flush()
 				panic(http.ErrAbortHandler)
 			}
@@ -249,7 +249,7 @@ func TestWebB7_SameOriginRedirectsAreFollowedAndOnlyHTMLIsParsed(t *testing.T) {
 		"/newer":      page("newer"),
 		"/notes": func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain")
-			w.Write([]byte(`<a href="/hidden">h</a>`))
+			_, _ = w.Write([]byte(`<a href="/hidden">h</a>`))
 		},
 		"/hidden": page("hidden"),
 	}))

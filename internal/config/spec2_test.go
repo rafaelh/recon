@@ -53,8 +53,12 @@ func TestWordlistContentAndHash(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.txt")
 	b := filepath.Join(dir, "b.txt")
-	os.WriteFile(a, []byte("# comment\nalpha\nbeta\n"), 0o600)
-	os.WriteFile(b, []byte("alpha\nbeta\ngamma\n"), 0o600)
+	if err := os.WriteFile(a, []byte("# comment\nalpha\nbeta\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b, []byte("alpha\nbeta\ngamma\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	sa, err := load(t, "", "--wordlist", a)
 	if err != nil {
 		t.Fatal(err)

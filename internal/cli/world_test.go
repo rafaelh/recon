@@ -44,7 +44,7 @@ func missingStorage(pattern string) http.HandlerFunc {
 		rw.Header().Set("Content-Type", "application/xml")
 		rw.WriteHeader(404)
 		if r.Method != http.MethodHead {
-			rw.Write([]byte(body))
+			_, _ = rw.Write([]byte(body))
 		}
 	}
 }
@@ -199,7 +199,7 @@ func (w *world) owner(addr string, asn int, holder string) {
 }
 
 func jsonBody(s string) http.HandlerFunc {
-	return func(rw http.ResponseWriter, r *http.Request) { rw.Write([]byte(s)) }
+	return func(rw http.ResponseWriter, r *http.Request) { _, _ = rw.Write([]byte(s)) }
 }
 
 func status(code int) http.HandlerFunc {
@@ -229,7 +229,7 @@ func (w *world) crtsh(byRoot, byOrg map[string][]string) {
 				rows = append(rows, row{NameValue: n})
 			}
 		}
-		json.NewEncoder(rw).Encode(rows)
+		_ = json.NewEncoder(rw).Encode(rows)
 	})
 }
 
@@ -243,12 +243,12 @@ func (w *world) waybackURLs(urls ...string) {
 			return
 		}
 		var p int
-		fmt.Sscan(q.Get("page"), &p)
+		_, _ = fmt.Sscan(q.Get("page"), &p)
 		out := [][]string{{"original"}}
 		for i := p * 2; i < len(urls) && i < p*2+2; i++ {
 			out = append(out, []string{urls[i]})
 		}
-		json.NewEncoder(rw).Encode(out)
+		_ = json.NewEncoder(rw).Encode(out)
 	})
 }
 
@@ -259,7 +259,7 @@ func (w *world) commonCrawl(id string, urls ...string) {
 		case strings.HasSuffix(r.URL.Path, "collinfo.json"):
 			fmt.Fprintf(rw, `[{"id":%q,"cdx-api":"https://index.commoncrawl.org/%s-index"}]`, id, id)
 		case r.URL.Query().Get("showNumPages") == "true":
-			rw.Write([]byte(`{"pages":1,"pageSize":5,"blocks":1}`))
+			_, _ = rw.Write([]byte(`{"pages":1,"pageSize":5,"blocks":1}`))
 		default:
 			for _, u := range urls {
 				fmt.Fprintf(rw, "{\"url\":%q}\n", u)
@@ -319,7 +319,9 @@ func (w *world) obsAttrs(eng, kind string) map[string]string {
 	out := map[string]string{}
 	for rows.Next() {
 		var k, a string
-		rows.Scan(&k, &a)
+		if err := rows.Scan(&k, &a); err != nil {
+			w.t.Fatal(err)
+		}
 		out[k] = a
 	}
 	return out
@@ -328,7 +330,7 @@ func (w *world) obsAttrs(eng, kind string) map[string]string {
 // anywhere reports every file under the engagement and the captured output that contains s.
 func (w *world) anywhere(eng, s string) []string {
 	var hits []string
-	filepath.WalkDir(w.h.eng(eng), func(p string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(w.h.eng(eng), func(p string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			if b, _ := os.ReadFile(p); strings.Contains(string(b), s) {
 				hits = append(hits, p)

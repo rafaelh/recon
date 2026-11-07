@@ -145,7 +145,7 @@ func ParseExclusion(s string) (Exclusion, error) {
 		name, wild = rest, true
 	}
 	if name == "" || strings.Contains(name, "*") {
-		return Exclusion{}, fmt.Errorf("invalid exclusion %q: wildcards are only allowed as a leading *.", s)
+		return Exclusion{}, fmt.Errorf("invalid exclusion %q: wildcards are only allowed as a leading \"*.\"", s)
 	}
 	for _, label := range strings.Split(name, ".") {
 		if len(label) > 63 || label == "" || strings.ContainsAny(label, " /:@") || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {

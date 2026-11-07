@@ -139,14 +139,18 @@ func renderFile(dir, tmp string, f File, snap Snapshot) error {
 		}
 	case CSV:
 		w := csv.NewWriter(&buf)
-		w.Write(append(append([]string(nil), f.Columns...), "current", "first_seen", "last_seen"))
+		if err := w.Write(append(append([]string(nil), f.Columns...), "current", "first_seen", "last_seen")); err != nil {
+			return err
+		}
 		for _, r := range rows {
 			rec := make([]string, 0, len(r.Cells)+3)
 			for _, c := range r.Cells {
 				rec = append(rec, csvSafe(c))
 			}
 			rec = append(rec, fmt.Sprint(r.Current), r.FirstSeen, r.LastSeen)
-			w.Write(rec)
+			if err := w.Write(rec); err != nil {
+				return err
+			}
 		}
 		w.Flush()
 		if err := w.Error(); err != nil {

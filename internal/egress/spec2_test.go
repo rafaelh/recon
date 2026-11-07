@@ -78,10 +78,10 @@ func TestThirdPartyTruncated(t *testing.T) {
 	big := bytes.Repeat([]byte("x"), 10<<20+500)
 	c := thirdPartyServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/small" {
-			w.Write([]byte("ok"))
+			_, _ = w.Write([]byte("ok"))
 			return
 		}
-		w.Write(big)
+		_, _ = w.Write(big)
 	}, egress.Options{})
 	resp, err := c.Do(context.Background(), egress.ThirdPartyRequest{Method: "GET", URL: "https://api.example.net/big"})
 	if err != nil || !resp.Truncated || len(resp.Body) != 10<<20 {
@@ -97,7 +97,7 @@ func TestThirdPartyTruncated(t *testing.T) {
 func TestThirdPartyTimeout(t *testing.T) {
 	c := thirdPartyServer(t, func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(300 * time.Millisecond)
-		w.Write([]byte("slow"))
+		_, _ = w.Write([]byte("slow"))
 	}, egress.Options{HTTPTimeout: 100 * time.Millisecond})
 	if _, err := c.Do(context.Background(), egress.ThirdPartyRequest{Method: "GET", URL: "https://api.example.net/"}); err == nil {
 		t.Error("the default timeout should apply")
@@ -113,7 +113,9 @@ func TestThirdPartyKeyBodyField(t *testing.T) {
 	var got map[string]any
 	c := thirdPartyServer(t, func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
-		json.Unmarshal(b, &got)
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatal(err)
+		}
 	}, egress.Options{})
 	_, err := c.Do(context.Background(), egress.ThirdPartyRequest{
 		Method: "POST", URL: "https://api.example.net/api/v2", ContentType: "application/json",
@@ -134,10 +136,9 @@ func TestThirdPartyKeyBodyField(t *testing.T) {
 // --- TCP eligibility (B9, B16, D18, D20) ---
 
 type tcpEnv struct {
-	t        *testing.T
-	port     int
-	tcp      egress.TargetTCP
-	accepted chan struct{}
+	t    *testing.T
+	port int
+	tcp  egress.TargetTCP
 }
 
 // newTCPEnv builds a policy for example.com with the given scope pieces and a
@@ -248,7 +249,7 @@ func TestTCPExcludedHostOnSharedInfra(t *testing.T) {
 // Fail-closed owner status must not widen HTTP: only true shared infrastructure
 // lets an excluded host's address through.
 func TestHTTPUnknownOwnerIsNotShared(t *testing.T) {
-	f := newHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
+	f := newHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })
 	res := map[string][]netip.Addr{"www.example.com": {addr("127.0.0.1")}, "admin.example.com": {addr("127.0.0.1")}}
 	f.pol.Scope = scope.New(scope.Config{Roots: []string{"example.com"}, Exclusions: mustExcl(t, "admin.example.com"), Resolutions: res})
 	f.pol.Resolutions = res

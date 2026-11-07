@@ -22,7 +22,7 @@ func TestWebB4_InScopeRedirectChain(t *testing.T) {
 			"/login": func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Server", "Caddy")
 				w.Header().Set("Content-Type", "text/html")
-				w.Write([]byte("<title>Login</title>"))
+				_, _ = w.Write([]byte("<title>Login</title>"))
 			},
 		}))
 	x.mustRun("--crawl-pages", "0")
@@ -59,7 +59,7 @@ func TestWebB4_OutOfScopeRedirectIsACandidateAndNotRequested(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Header().Set("Location", "http://evil.example.net/x")
 		w.WriteHeader(302)
-		w.Write([]byte("<title>Moved</title>"))
+		_, _ = w.Write([]byte("<title>Moved</title>"))
 	})
 	evil := x.plain("203.0.113.99", 80, page("<title>evil</title>"))
 	x.dns.A("evil.example.net", "203.0.113.99")

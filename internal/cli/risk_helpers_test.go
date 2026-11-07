@@ -127,16 +127,16 @@ func bucketHandler(bs map[string]bucket) http.HandlerFunc {
 		if b.redirect != "" {
 			w.Header().Set("x-amz-bucket-region", b.redirect)
 			w.WriteHeader(301)
-			w.Write([]byte(`<Error><Code>PermanentRedirect</Code></Error>`))
+			_, _ = w.Write([]byte(`<Error><Code>PermanentRedirect</Code></Error>`))
 			return
 		}
 		switch b.list {
 		case 200:
 			w.Header().Set("Content-Type", "application/xml")
-			w.Write([]byte(xmlList(b.keys, b.truncated)))
+			_, _ = w.Write([]byte(xmlList(b.keys, b.truncated)))
 		default:
 			w.WriteHeader(b.list)
-			w.Write([]byte(`<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>`))
+			_, _ = w.Write([]byte(`<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>`))
 		}
 	}
 }
@@ -161,11 +161,11 @@ func containerHandler(cs map[string]bucket) http.HandlerFunc {
 		}
 		if c.list == 200 {
 			w.Header().Set("Content-Type", "application/xml")
-			w.Write([]byte(azureList(c.keys)))
+			_, _ = w.Write([]byte(azureList(c.keys)))
 			return
 		}
 		w.WriteHeader(c.list)
-		w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><Error><Code>PublicAccessNotPermitted</Code></Error>`))
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><Error><Code>PublicAccessNotPermitted</Code></Error>`))
 	}
 }
 

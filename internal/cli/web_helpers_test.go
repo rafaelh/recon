@@ -18,7 +18,6 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -419,7 +418,7 @@ func (x *web) fussy(ip string, port int, mode string, h http.HandlerFunc) *site 
 	srv.Listener = newFilterListener(real, func(c net.Conn) {
 		s.hellos.Add(1)
 		if mode == "reset" {
-			c.(*net.TCPConn).SetLinger(0)
+			_ = c.(*net.TCPConn).SetLinger(0)
 			c.Close()
 			return
 		}
@@ -528,7 +527,7 @@ func (x *web) observedBy(kind, stage string) []string {
 func page(body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	}
 }
 
@@ -549,8 +548,6 @@ func redirectTo(code int, loc string) http.HandlerFunc {
 		w.WriteHeader(code)
 	}
 }
-
-func joinLines(s ...string) string { return strings.Join(s, "\n") }
 
 // defaultStageList is the production stage registry.
 func defaultStageList() []run.Stage { return cli.DefaultDeps().Stages }
