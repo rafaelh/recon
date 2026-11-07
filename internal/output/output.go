@@ -378,10 +378,10 @@ func resolutionRows(s Snapshot) []Row {
 }
 
 // derivedRows builds rows computed from the inventory. Each is dated by the
-// record of kind whose key is the row's first cell, or today if there is none.
-func derivedRows(s Snapshot, kind string, cells [][]string) []Row {
+// record of kind k whose key is the row's first cell, or today if there is none.
+func derivedRows(s Snapshot, k kinds.Named, cells [][]string) []Row {
 	seen := map[string]store.Record{}
-	for _, r := range s.Records[kind] {
+	for _, r := range s.of(k) {
 		seen[r.Key] = r
 	}
 	rows := make([]Row, 0, len(cells))
@@ -405,7 +405,7 @@ func ipRows(s Snapshot) []Row {
 		cells = append(cells, []string{ir.IP.String(), asn, ir.Owner, ir.Provider, ir.Service,
 			fmt.Sprint(ir.InScope), fmt.Sprint(ir.PortEligible), strings.Join(ir.Hostnames, ";")})
 	}
-	return derivedRows(s, "ip", cells)
+	return derivedRows(s, kinds.IP, cells)
 }
 
 func providerHostRows(s Snapshot) []Row {
@@ -413,5 +413,5 @@ func providerHostRows(s Snapshot) []Row {
 	for _, ph := range s.Inv.ProviderHosts(s.Scope) {
 		cells = append(cells, []string{ph.Hostname, ph.Provider, ph.Service, ph.Evidence, ph.CNAME, fmt.Sprint(ph.Resolves)})
 	}
-	return derivedRows(s, "hostname", cells)
+	return derivedRows(s, kinds.Hostname, cells)
 }

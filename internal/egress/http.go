@@ -46,14 +46,24 @@ type HTTPResult interface{ httpResult() }
 
 // Response is an HTTP response. Redirects are never followed automatically.
 type Response struct {
-	Status        int
-	Header        map[string][]string
-	Body          []byte // capped at 1 MiB; empty for HEAD
-	Location      string
-	PeerCerts     []*x509.Certificate
-	CertVerifyErr string // non-empty if the chain did not verify (expired, self-signed, ...)
+	Status    int
+	Header    map[string][]string
+	Body      []byte // capped at 1 MiB; empty for HEAD
+	Location  string
+	PeerCerts []*x509.Certificate
 
+	tlsAt  time.Time // when a TLS response arrived; zero for plain HTTP
 	origin *origin
+}
+
+// CertVerifyErr is non-empty if the presented chain did not verify (expired,
+// self-signed, ...), as of when the response arrived; "" for plain HTTP. It is
+// computed on each call: most callers never ask.
+func (r Response) CertVerifyErr() string {
+	if r.tlsAt.IsZero() {
+		return ""
+	}
+	return verifyChain(r.origin.host, r.PeerCerts, r.tlsAt)
 }
 
 // NoService means nothing answered HTTP at that address and port.
@@ -115,16 +125,6 @@ func (r Response) ContentType() string {
 		return mt
 	}
 	return strings.ToLower(strings.TrimSpace(strings.SplitN(v, ";", 2)[0]))
-}
-
-// ipLiteral parses host as an IP address. A zoned address is not a literal
-// egress will dial, and a bracketed form is a URL authority, not a host.
-func ipLiteral(host string) (netip.Addr, bool) {
-	a, err := netip.ParseAddr(host)
-	if err != nil || a.Zone() != "" {
-		return netip.Addr{}, false
-	}
-	return a.Unmap(), true
 }
 
 // Service identifies a web service for SensitivePath requests.
@@ -257,7 +257,7 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 		return r, nil
 	}
 	host := input.NormaliseHost(tg.host)
-	lit, isIP := ipLiteral(host)
+	lit, isIP := input.IPLiteral(host)
 	switch {
 	case tg.scheme != "http" && tg.scheme != "https":
 		return Refused{"scheme " + strconv.Quote(tg.scheme) + " is not http or https"}, nil
@@ -382,8 +382,7 @@ func (t *targetHTTP) do(ctx context.Context, method string, r Request) (HTTPResu
 		origin:   &origin{scheme: tg.scheme, host: host, port: tg.port, uri: uri},
 	}
 	if resp.TLS != nil {
-		out.PeerCerts = resp.TLS.PeerCertificates
-		out.CertVerifyErr = verifyChain(host, out.PeerCerts, e.opts.Now())
+		out.PeerCerts, out.tlsAt = resp.TLS.PeerCertificates, e.opts.Now()
 	}
 	return out, nil
 }

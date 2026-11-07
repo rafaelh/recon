@@ -4,13 +4,13 @@
 package web
 
 import (
-	"net/netip"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
 
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/input"
 )
 
 // NormaliseURL returns the canonical form of an absolute http or https URL
@@ -28,8 +28,8 @@ func NormaliseURL(raw string) (string, bool) {
 	if (scheme != "http" && scheme != "https") || host == "" {
 		return "", false
 	}
-	if a, err := netip.ParseAddr(host); err == nil && a.Zone() == "" {
-		host = a.Unmap().String()
+	if a, ok := input.IPLiteral(host); ok {
+		host = a.String()
 	}
 	port := u.Port()
 	if port != "" {

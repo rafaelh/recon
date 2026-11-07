@@ -14,9 +14,16 @@ func TestSpec5Kinds(t *testing.T) {
 			t.Errorf("kind %s not registered", name)
 			continue
 		}
-		if k.Category != "" || k.Printed || k.Counted || k.Entity || k.HostAttr != "" || k.PortKey {
+		if k.Category != "" || k.Printed || k.Counted || k.Entity {
 			t.Errorf("%s = %+v, want an internal kind with no category", name, k)
 		}
+	}
+	// Evidence keyed by a page or a root is shown only while that is in scope.
+	if k, _ := kinds.Get("storage_ref"); k.HostAttr != "page_host" {
+		t.Errorf("storage_ref = %+v, want HostAttr \"page_host\"", k)
+	}
+	if k, _ := kinds.Get("email_posture"); !k.HostKey {
+		t.Errorf("email_posture = %+v, want HostKey", k)
 	}
 	if k, _ := kinds.Get("finding"); !k.Printed || k.Category != "findings" {
 		t.Errorf("finding = %+v", k)

@@ -40,16 +40,24 @@ func reverse(a netip.Addr) string {
 	return strings.Join(parts, ".")
 }
 
+// Normalise trims, lowercases and drops the trailing dot of a hostname.
+func Normalise(h string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".")
+}
+
+// Under reports whether name is zone or a name below it. Both must be normalised.
+func Under(name, zone string) bool { return name == zone || strings.HasSuffix(name, "."+zone) }
+
 // ETLDPlusOne is the registrable domain of name.
 func ETLDPlusOne(name string) (string, bool) {
-	d, err := publicsuffix.EffectiveTLDPlusOne(strings.ToLower(strings.TrimSuffix(name, ".")))
+	d, err := publicsuffix.EffectiveTLDPlusOne(Normalise(name))
 	return d, err == nil
 }
 
 // Parents returns the ancestors of name, nearest first, down to and including
 // its registrable domain. A registrable domain (or a public suffix) has none.
 func Parents(name string) []string {
-	name = strings.ToLower(strings.TrimSuffix(name, "."))
+	name = Normalise(name)
 	reg, ok := ETLDPlusOne(name)
 	if !ok {
 		return nil

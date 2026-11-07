@@ -275,7 +275,7 @@ var spfDomain = regexp.MustCompile(`^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?(?:\
 
 // follow fetches and evaluates the SPF record of an included or redirected domain.
 func (s *spfEval) follow(domain string, path map[string]bool) string {
-	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+	domain = dnsname.Normalise(domain)
 	switch {
 	case s.tempErr != nil:
 		return ""

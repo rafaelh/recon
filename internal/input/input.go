@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rafaelh/recon/internal/dnsname"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 )
@@ -44,11 +45,17 @@ func (p Parsed) Empty() bool {
 	return len(p.Roots)+len(p.Orgs)+len(p.ASNs)+len(p.CIDRs) == 0
 }
 
-var ldh = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-
 // NormaliseHost trims, lowercases and drops the trailing dot of a hostname.
-func NormaliseHost(h string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".")
+func NormaliseHost(h string) string { return dnsname.Normalise(h) }
+
+// IPLiteral parses host as an IP address, unmapped. A zoned address is not a
+// literal egress will dial, and a bracketed form is a URL authority, not a host.
+func IPLiteral(host string) (netip.Addr, bool) {
+	a, err := netip.ParseAddr(host)
+	if err != nil || a.Zone() != "" {
+		return netip.Addr{}, false
+	}
+	return a.Unmap(), true
 }
 
 // ParseDomain lowercases, converts to punycode and validates a root domain.
@@ -73,7 +80,7 @@ func ParseDomain(s string) (string, error) {
 		return "", fmt.Errorf("invalid domain %q: too long", orig)
 	}
 	for _, label := range strings.Split(ascii, ".") {
-		if len(label) > 63 || !ldh.MatchString(label) {
+		if !dnsname.ValidLabel(label) {
 			return "", fmt.Errorf("invalid domain %q: bad label %q", orig, label)
 		}
 	}

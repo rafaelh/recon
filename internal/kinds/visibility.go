@@ -17,6 +17,7 @@ import (
 //   - a web record (a kind with HostAttr) is shown while its host is in scope (Spec 3 D17);
 //   - a port record (PortKey) is shown while its address is port-eligible, so a
 //     reassigned cloud address is not reported as the target's (Spec 4 D9);
+//   - a record keyed by a hostname (HostKey) is shown while that name is in scope;
 //   - an entity record is never hidden: it is classified as in scope, a
 //     candidate or excluded, which decides its summary category;
 //   - a record of any other kind is always shown.
@@ -39,10 +40,7 @@ func NewVisibility(sc *scope.Scope, inv *inventory.Inventory) *Visibility {
 }
 
 // Shown reports whether a record of the kind is shown.
-func (v *Visibility) Shown(kind Named, r store.Record) bool {
-	k, ok := Get(kind.Name())
-	return ok && v.shown(k, r)
-}
+func (v *Visibility) Shown(kind Named, r store.Record) bool { return v.shown(kind.kind(), r) }
 
 func (v *Visibility) shown(k Kind, r store.Record) bool {
 	switch {
@@ -55,6 +53,8 @@ func (v *Visibility) shown(k Kind, r store.Record) bool {
 		return err == nil && v.inv.PortEligible(ap.Addr(), v.sc)
 	case k.HostAttr != "":
 		return v.webHostInScope(webHost(k.HostAttr, r))
+	case k.HostKey:
+		return v.sc.ClassifyHost(r.Key).Class == scope.InScope
 	}
 	return true
 }
@@ -102,11 +102,10 @@ func (v *Visibility) Printed(kind string, r store.Record) bool {
 // Category is the summary category a record of the kind is counted under, or
 // "" if it is not counted (a kind without a category, or a hidden record).
 func (v *Visibility) Category(kind Named, r store.Record) string {
-	k, ok := Get(kind.Name())
-	if !ok || v == nil {
+	if v == nil {
 		return ""
 	}
-	return v.category(k, r)
+	return v.category(kind.kind(), r)
 }
 
 func (v *Visibility) category(k Kind, r store.Record) string {
@@ -117,8 +116,6 @@ func (v *Visibility) category(k Kind, r store.Record) string {
 		return k.Category
 	}
 	switch k.Name {
-	case "excluded":
-		return Excluded
 	case "hostname", "root":
 		switch v.sc.ClassifyHost(r.Key).Class {
 		case scope.InScope:

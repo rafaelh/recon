@@ -760,8 +760,8 @@ func TestHTTPSCertVerifyErrReported(t *testing.T) {
 	if err != nil || !ok || string(resp.Body) != "secure" {
 		t.Fatalf("%#v %v", r, err)
 	}
-	if len(resp.PeerCerts) == 0 || resp.CertVerifyErr == "" {
-		t.Errorf("self-signed certificate must be fetched and flagged: certs=%d verifyErr=%q", len(resp.PeerCerts), resp.CertVerifyErr)
+	if len(resp.PeerCerts) == 0 || resp.CertVerifyErr() == "" {
+		t.Errorf("self-signed certificate must be fetched and flagged: certs=%d verifyErr=%q", len(resp.PeerCerts), resp.CertVerifyErr())
 	}
 	// A non-TLS port spoken to as https is NoService, not an error.
 	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))

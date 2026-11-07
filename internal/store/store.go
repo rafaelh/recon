@@ -62,8 +62,8 @@ type Record struct {
 // Str returns the string attribute k, or "" if it is absent or not a string.
 func (r Record) Str(k string) string { s, _ := r.Attrs[k].(string); return s }
 
-// ObsRow is one stored observation.
-type ObsRow struct{ Kind, Key, Stage, CheckKey string }
+// ObsRow is the record key and check key of one stored observation.
+type ObsRow struct{ Key, CheckKey string }
 
 // Input is a stored scope input or exclusion.
 type Input struct{ Kind, Value, AddedAt string }
@@ -568,7 +568,7 @@ func (s *Store) Records(kind string, order []string) ([]Record, error) {
 
 // Observations lists the observations of a kind made by a stage.
 func (s *Store) Observations(kind, stage string) ([]ObsRow, error) {
-	rows, err := s.db.Query("SELECT kind,key,stage,check_key FROM observations WHERE kind=? AND stage=? ORDER BY key,check_key", kind, stage)
+	rows, err := s.db.Query("SELECT key,check_key FROM observations WHERE kind=? AND stage=? ORDER BY key,check_key", kind, stage)
 	if err != nil {
 		return nil, err
 	}
@@ -576,7 +576,7 @@ func (s *Store) Observations(kind, stage string) ([]ObsRow, error) {
 	var out []ObsRow
 	for rows.Next() {
 		var r ObsRow
-		if err := rows.Scan(&r.Kind, &r.Key, &r.Stage, &r.CheckKey); err != nil {
+		if err := rows.Scan(&r.Key, &r.CheckKey); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -631,6 +631,18 @@ func (s *Store) Inputs() ([]Input, error) {
 
 // Redo forgets every completed check of a stage and marks the redo as pending.
 func (s *Store) Redo(stage string) error {
+	return s.update(func(tx *sql.Tx) (map[string]bool, error) {
+		if _, err := tx.Exec("DELETE FROM checks WHERE stage=?", stage); err != nil {
+			return nil, err
+		}
+		_, err := tx.Exec(setMetaSQL, "redo:"+stage, s.today())
+		return nil, err
+	})
+}
+
+// update flushes the queued writes, runs fn in a transaction and, once it
+// commits, bumps the version of every kind fn reports changing.
+func (s *Store) update(fn func(*sql.Tx) (map[string]bool, error)) error {
 	if err := s.Flush(); err != nil {
 		return err
 	}
@@ -639,13 +651,15 @@ func (s *Store) Redo(stage string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }() // a no-op after Commit
-	if _, err := tx.Exec("DELETE FROM checks WHERE stage=?", stage); err != nil {
+	kinds, err := fn(tx)
+	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(setMetaSQL, "redo:"+stage, s.today()); err != nil {
+	if err := tx.Commit(); err != nil {
 		return err
 	}
-	return tx.Commit()
+	s.bump(kinds)
+	return nil
 }
 
 // PendingRedo lists stages whose redo has not finished.
@@ -670,26 +684,14 @@ func (s *Store) PendingRedo() ([]string, error) {
 // produced (valid holds the CheckKey form of the keys it still produces) and
 // clears the marker. valid must be the stage's complete set of checks.
 func (s *Store) FinishRedo(stage string, valid map[string]struct{}) error {
-	if err := s.Flush(); err != nil {
-		return err
-	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }() // a no-op after Commit
-	kinds, err := sweepObservations(tx, stage, valid)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Exec("DELETE FROM meta WHERE key=?", "redo:"+stage); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	s.bump(kinds)
-	return nil
+	return s.update(func(tx *sql.Tx) (map[string]bool, error) {
+		kinds, err := sweepObservations(tx, stage, valid)
+		if err != nil {
+			return nil, err
+		}
+		_, err = tx.Exec("DELETE FROM meta WHERE key=?", "redo:"+stage)
+		return kinds, err
+	})
 }
 
 // Retire forgets the completed checks of a stage that are not in valid (the
@@ -698,48 +700,46 @@ func (s *Store) FinishRedo(stage string, valid map[string]struct{}) error {
 // of an entry that has since changed, so stops being current, and a check
 // yielded again later is run again. valid must be the stage's complete set of checks.
 func (s *Store) Retire(stage string, valid map[string]struct{}) error {
-	if err := s.Flush(); err != nil {
-		return err
-	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }() // a no-op after Commit
-	kinds, err := sweepObservations(tx, stage, valid)
-	if err != nil {
-		return err
-	}
-	for _, table := range []string{"checks", "failures"} {
-		rows, err := tx.Query("SELECT key FROM "+table+" WHERE stage=?", stage)
+	return s.update(func(tx *sql.Tx) (map[string]bool, error) {
+		kinds, err := sweepObservations(tx, stage, valid)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		var gone []string
-		for rows.Next() {
-			var k string
-			if err := rows.Scan(&k); err != nil {
-				rows.Close()
-				return err
-			}
-			if _, ok := valid[k]; !ok {
-				gone = append(gone, k)
+		for _, table := range []string{"checks", "failures"} {
+			if err := retireKeys(tx, table, stage, valid); err != nil {
+				return nil, err
 			}
 		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		for _, k := range gone {
-			if _, err := tx.Exec("DELETE FROM "+table+" WHERE stage=? AND key=?", stage, k); err != nil {
-				return err
-			}
-		}
-	}
-	if err := tx.Commit(); err != nil {
+		return kinds, nil
+	})
+}
+
+// retireKeys deletes the stage's rows of table whose key is not in valid.
+func retireKeys(tx *sql.Tx, table, stage string, valid map[string]struct{}) error {
+	rows, err := tx.Query("SELECT key FROM "+table+" WHERE stage=?", stage)
+	if err != nil {
 		return err
 	}
-	s.bump(kinds)
+	var gone []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			rows.Close()
+			return err
+		}
+		if _, ok := valid[k]; !ok {
+			gone = append(gone, k)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, k := range gone {
+		if _, err := tx.Exec("DELETE FROM "+table+" WHERE stage=? AND key=?", stage, k); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

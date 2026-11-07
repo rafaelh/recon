@@ -135,25 +135,39 @@ func (v View) Inputs() input.Parsed { return v.r.inputs }
 // Records returns the current records of a kind; decode them with its handle.
 func (v View) Records(k kinds.Named) []store.Record {
 	kind := k.Name()
-	if v.cache != nil {
-		v.cache.mu.Lock()
-		defer v.cache.mu.Unlock()
-		if recs, ok := v.cache.m[kind]; ok {
-			return recs
-		}
+	v.cache.mu.Lock()
+	defer v.cache.mu.Unlock()
+	if recs, ok := v.cache.m[kind]; ok {
+		return recs
 	}
 	out, err := v.r.currentRecords(k)
 	if err != nil {
 		v.r.warn("reading %s records: %v", kind, err)
 		return nil
 	}
-	if v.cache != nil {
-		v.cache.m[kind] = out
+	v.cache.m[kind] = out
+	return out
+}
+
+// WebService is a current web_service record whose host is in scope.
+type WebService struct {
+	Key string
+	Svc egress.Service
+}
+
+// WebServices returns the current web_service records whose host is in scope,
+// in key order. A record whose key is not a service URL is skipped.
+func (v View) WebServices() []WebService {
+	var out []WebService
+	for _, rec := range v.Records(kinds.WebService) {
+		if svc, ok := egress.ParseService(rec.Key); ok && v.sc.WebHostInScope(svc.Host) {
+			out = append(out, WebService{Key: rec.Key, Svc: svc})
+		}
 	}
 	return out
 }
 
-// InScopeHostnames returns the current in-scope hostname records, sorted. It is
+// InScopeHostnames returns the current in-scope hostname records, in key order. It is
 // not wildcard-aware: use ProbeHostnames for anything that contacts a name.
 func (v View) InScopeHostnames() []string {
 	var out []string
@@ -236,7 +250,9 @@ func (v View) OwnerKnown(a netip.Addr) bool { return v.inv.OwnerKnown(a, v.sc) }
 
 // HostsFor returns the ProbeHostnames that resolve to the address, sorted.
 func (v View) HostsFor(a netip.Addr) []string {
-	build := func() map[netip.Addr][]string {
+	v.cache.mu.Lock()
+	defer v.cache.mu.Unlock()
+	if v.cache.hosts == nil {
 		idx := map[netip.Addr][]string{}
 		for _, name := range v.ProbeHostnames() {
 			for _, addr := range v.inv.Addrs()[name] {
@@ -245,15 +261,7 @@ func (v View) HostsFor(a netip.Addr) []string {
 				}
 			}
 		}
-		return idx
-	}
-	if v.cache == nil {
-		return build()[a.Unmap()]
-	}
-	v.cache.mu.Lock()
-	defer v.cache.mu.Unlock()
-	if v.cache.hosts == nil {
-		v.cache.hosts = build()
+		v.cache.hosts = idx
 	}
 	return v.cache.hosts[a.Unmap()]
 }

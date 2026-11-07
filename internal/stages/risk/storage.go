@@ -73,23 +73,9 @@ func (*Storage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 				return
 			}
 		}
-		capN := v.Settings().Storage.MaxNames
-		guess := func(bases []string) bool {
-			for _, g := range cloudstorage.Guesses(bases, capN) {
-				if !bucket(g.Provider, g.Name) {
-					return false
-				}
-			}
-			return true
-		}
 		in := v.Inputs()
-		for _, root := range in.Roots {
-			if !guess(cloudstorage.RootBases(root)) {
-				return
-			}
-		}
-		for _, org := range in.Orgs {
-			if !guess(cloudstorage.OrgBases(org)) {
+		for _, g := range cloudstorage.InputGuesses(in.Roots, in.Orgs, v.Settings().Storage.MaxNames) {
+			if !bucket(g.Provider, g.Name) {
 				return
 			}
 		}
@@ -109,7 +95,7 @@ func (*Storage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 				}
 			}
 			for _, c := range containers {
-				if safeContainer.MatchString(c) && !emit("azure|"+acct+"/"+c, storageInput{kind: "container", provider: cloudstorage.Azure, name: acct, container: c}) {
+				if safeContainer.MatchString(c) && !emit(cloudstorage.Key(cloudstorage.Azure, acct, c), storageInput{kind: "container", provider: cloudstorage.Azure, name: acct, container: c}) {
 					return
 				}
 			}

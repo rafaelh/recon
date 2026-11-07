@@ -47,14 +47,10 @@ func (*Takeover) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, er
 		if len(byHost) == 0 {
 			return
 		}
-		for _, rec := range v.Records(kinds.WebService) {
-			svc, ok := egress.ParseService(rec.Key)
-			if !ok || !v.Scope().WebHostInScope(svc.Host) {
-				continue
-			}
-			for _, ph := range byHost[svc.Host] {
-				in := takeoverInput{service: rec.Key, svc: svc, ph: ph}
-				if !yield(run.Check{Key: fmt.Sprintf("%s|fp=%s", rec.Key, ph.Entry.Hash()), Input: in}, nil) {
+		for _, ws := range v.WebServices() {
+			for _, ph := range byHost[ws.Svc.Host] {
+				in := takeoverInput{service: ws.Key, svc: ws.Svc, ph: ph}
+				if !yield(run.Check{Key: fmt.Sprintf("%s|fp=%s", ws.Key, ph.Entry.Hash()), Input: in}, nil) {
 					return
 				}
 			}

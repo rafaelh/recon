@@ -151,9 +151,9 @@ var (
 	Storage        = define[StorageAttrs](Kind{Name: "storage"})
 	StorageAccount = define[StorageAccountAttrs](Kind{Name: "storage_account"})
 	StorageObject  = define[StorageObjectAttrs](Kind{Name: "storage_object"})
-	StorageRef     = define[StorageRefAttrs](Kind{Name: "storage_ref"})
+	StorageRef     = define[StorageRefAttrs](Kind{Name: "storage_ref", HostAttr: "page_host"})
 	SensitiveHit   = define[SensitiveHitAttrs](Kind{Name: "sensitive_hit"})
-	EmailPosture   = define[EmailPostureAttrs](Kind{Name: "email_posture"})
+	EmailPosture   = define[EmailPostureAttrs](Kind{Name: "email_posture", HostKey: true})
 )
 
 // TakeoverHTTPAttrs: a provider-hosted service whose root serves the page of

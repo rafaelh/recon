@@ -281,7 +281,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		attrs.TLSSANs = strings.Join(sans, ";")
 		attrs.TLSIssuer = leaf.Issuer.String()
 		attrs.TLSExpiry = leaf.NotAfter.UTC().Format("2006-01-02")
-		attrs.TLSError = first.CertVerifyErr
+		attrs.TLSError = first.CertVerifyErr()
 		attrs.TLSSelfSigned = &isSelfSigned
 		for _, name := range leaf.DNSNames {
 			if d, ok := sanHost(name); ok && d != strings.ToLower(in.host) {

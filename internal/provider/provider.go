@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rafaelh/recon/internal/dnsname"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -202,9 +203,9 @@ func (db *DB) CNAME(target string) (Match, bool) {
 
 // CNAMEEntry is CNAME with the whole matched entry.
 func (db *DB) CNAMEEntry(target string) (Entry, bool) {
-	t := strings.ToLower(strings.TrimSuffix(target, "."))
+	t := dnsname.Normalise(target)
 	for _, c := range db.cnames {
-		if t == c.Suffix || strings.HasSuffix(t, "."+c.Suffix) {
+		if dnsname.Under(t, c.Suffix) {
 			return c, true
 		}
 	}

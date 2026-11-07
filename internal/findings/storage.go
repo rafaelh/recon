@@ -40,10 +40,10 @@ func (d *deriver) references() []cloudstorage.Reference {
 		}
 	}
 	for _, r := range d.current(kinds.StorageRef) {
-		a := kinds.StorageRef.Attrs(r)
-		if !d.in.Scope.WebHostInScope(a.PageHost) {
+		if !d.vis.Shown(kinds.StorageRef, r) {
 			continue
 		}
+		a := kinds.StorageRef.Attrs(r)
 		out = append(out, cloudstorage.Reference{
 			Ref: cloudstorage.Ref{Provider: a.Provider, Name: a.Name, Container: a.Container, Object: a.Object},
 			Via: a.Via, From: a.Page,
@@ -103,26 +103,13 @@ func attributedSet(refs []cloudstorage.Reference) map[string]bool {
 
 // guessed lists, per guessed bucketKey, the inputs that generate it.
 func (d *deriver) guessed() map[string][]string {
-	if d.guesses != nil {
-		return d.guesses
-	}
 	out := map[string][]string{}
-	capN := d.in.Settings.Storage.MaxNames
-	add := func(input string, bases []string) {
-		for _, g := range cloudstorage.Guesses(bases, capN) {
-			k := bucketKey(g.Provider, g.Name)
-			if !slices.Contains(out[k], input) {
-				out[k] = append(out[k], input)
-			}
+	for input, g := range cloudstorage.InputGuesses(d.in.Roots, d.in.Orgs, d.in.Settings.Storage.MaxNames) {
+		k := bucketKey(g.Provider, g.Name)
+		if !slices.Contains(out[k], input) {
+			out[k] = append(out[k], input)
 		}
 	}
-	for _, root := range d.in.Roots {
-		add(root, cloudstorage.RootBases(root))
-	}
-	for _, org := range d.in.Orgs {
-		add(org, cloudstorage.OrgBases(org))
-	}
-	d.guesses = out
 	return out
 }
 

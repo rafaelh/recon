@@ -8,8 +8,8 @@ import (
 	"net/netip"
 	"slices"
 	"sort"
-	"strings"
 
+	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/input"
 )
 
@@ -126,7 +126,7 @@ func (s *Scope) ClassifyHost(host string) Classification {
 		}
 	}
 	for _, r := range s.roots {
-		if h == r || strings.HasSuffix(h, "."+r) {
+		if dnsname.Under(h, r) {
 			return Classification{InScope, ""}
 		}
 	}

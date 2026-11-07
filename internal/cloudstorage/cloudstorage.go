@@ -5,6 +5,7 @@
 package cloudstorage
 
 import (
+	"iter"
 	"net/url"
 	"regexp"
 	"strings"
@@ -107,7 +108,7 @@ func ParseRef(s string) (Ref, bool) {
 // The c.storage.googleapis.com target names no bucket; the bucket is the alias.
 func ParseCNAME(alias, target string) (Ref, bool) {
 	if strings.EqualFold(strings.TrimSuffix(target, "."), "c.storage.googleapis.com") {
-		return Ref{Provider: GCS, Name: strings.ToLower(strings.TrimSuffix(alias, "."))}, true
+		return Ref{Provider: GCS, Name: dnsname.Normalise(alias)}, true
 	}
 	return ParseRef(strings.TrimSuffix(target, "."))
 }
@@ -115,7 +116,7 @@ func ParseCNAME(alias, target string) (Ref, bool) {
 // RootBases are the names guessed from a root: its registrable label, the root
 // with dots as dashes, and the root itself.
 func RootBases(root string) []string {
-	root = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(root), "."))
+	root = dnsname.Normalise(root)
 	var label string
 	if reg, ok := dnsname.ETLDPlusOne(root); ok {
 		label, _, _ = strings.Cut(reg, ".")
@@ -175,6 +176,25 @@ func Guess(bases []string, cap int) []string {
 // Guesses are Guess's names turned into every provider's form, each name in
 // Providers order, skipping the ones a provider cannot use. Name is the bucket
 // (S3, GCS) or the account (Azure).
+// InputGuesses yields the guessed buckets of each root and then each
+// organisation, with the input that generates it.
+func InputGuesses(roots, orgs []string, cap int) iter.Seq2[string, Ref] {
+	return func(yield func(string, Ref) bool) {
+		for _, set := range []struct {
+			inputs []string
+			bases  func(string) []string
+		}{{roots, RootBases}, {orgs, OrgBases}} {
+			for _, in := range set.inputs {
+				for _, g := range Guesses(set.bases(in), cap) {
+					if !yield(in, g) {
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
 func Guesses(bases []string, cap int) []Ref {
 	var out []Ref
 	for _, n := range Guess(bases, cap) {

@@ -10,7 +10,7 @@ import (
 	"cmp"
 	"fmt"
 	"net/netip"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -68,14 +68,8 @@ func (d *deriver) findings() []Finding {
 	out = append(out, d.email()...)
 	out = append(out, d.ports()...)
 	out = append(out, d.certificates()...)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Key() < out[j].Key() })
-	uniq := out[:0]
-	for i, f := range out {
-		if i == 0 || f.Key() != out[i-1].Key() {
-			uniq = append(uniq, f)
-		}
-	}
-	return uniq
+	slices.SortStableFunc(out, func(a, b Finding) int { return strings.Compare(a.Key(), b.Key()) })
+	return slices.CompactFunc(out, func(a, b Finding) bool { return a.Key() == b.Key() })
 }
 
 type deriver struct {
@@ -84,8 +78,7 @@ type deriver struct {
 	refs []cloudstorage.Reference // see references
 	svcs map[string]store.Record  // see services
 
-	guesses map[string][]string // see guessed
-	public  map[string][]bool   // see publicStates
+	public map[string][]bool // see publicStates
 }
 
 func newDeriver(in Input) *deriver {
@@ -145,10 +138,10 @@ func (d *deriver) sensitivePaths() []Finding {
 func (d *deriver) email() []Finding {
 	var out []Finding
 	for _, r := range d.current(kinds.EmailPosture) {
-		root := r.Key
-		if d.in.Scope.ClassifyHost(root).Class != scope.InScope {
+		if !d.vis.Shown(kinds.EmailPosture, r) {
 			continue
 		}
+		root := r.Key
 		add := func(typ, detail string) {
 			out = append(out, newFinding(Email, typ, Severity(Email, typ), root, detail, map[string]any{"root": root}))
 		}
@@ -230,7 +223,7 @@ func (d *deriver) certificates() []Finding {
 		case expiry < horizon:
 			types = append(types, "expiring")
 		}
-		if a.TLSSelfSigned != nil && *a.TLSSelfSigned {
+		if isTrue(a.TLSSelfSigned) {
 			types = append(types, "self-signed")
 		}
 		if len(types) == 0 {

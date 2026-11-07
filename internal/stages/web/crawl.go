@@ -53,14 +53,11 @@ type crawlInput struct {
 func (*Crawl) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		set := v.Settings().Crawl
-		for _, rec := range v.Records(kinds.WebService) { // in key order
-			svc, ok := egress.ParseService(rec.Key)
-			if !ok || !v.Scope().WebHostInScope(svc.Host) {
-				continue
-			}
-			in := crawlInput{sc: v.Scope(), host: svc.Host, scheme: svc.Scheme, port: svc.Port, depth: set.MaxDepth, pages: set.MaxPages, origin: rec.Key}
-			in.start, _ = NormaliseURL(rec.Key + "/")
-			key := fmt.Sprintf("%s|depth=%d|pages=%d", rec.Key, set.MaxDepth, set.MaxPages)
+		for _, ws := range v.WebServices() { // in key order
+			svc := ws.Svc
+			in := crawlInput{sc: v.Scope(), host: svc.Host, scheme: svc.Scheme, port: svc.Port, depth: set.MaxDepth, pages: set.MaxPages, origin: ws.Key}
+			in.start, _ = NormaliseURL(ws.Key + "/")
+			key := fmt.Sprintf("%s|depth=%d|pages=%d", ws.Key, set.MaxDepth, set.MaxPages)
 			if !yield(run.Check{Key: key, Input: in}, nil) {
 				return
 			}

@@ -77,6 +77,10 @@ type Runner struct {
 	// of store KindVersion rangesVer; buildScope runs after every stage.
 	ranges    *provider.Ranges
 	rangesVer uint64
+	scopeSig  string // what the Scope was last built from (see buildScope)
+
+	recMu sync.Mutex
+	recs  map[string]recordsCache // the records of each kind read so far (see records)
 
 	mu      sync.Mutex
 	failed  map[string]map[string]bool // stage -> check key, failed this run
@@ -88,15 +92,16 @@ type Runner struct {
 
 	guarded sync.Map // value+"\x00"+reason already sent to the guard pseudo-stage
 
-	derivedSig  string                          // what the findings were last derived from (see deriveFindings)
-	attribution map[string]findings.StorageAttr // the storage attribution of that derivation
-	evidence    map[string]evidenceCache        // the records Derive read, by kind
+	derivedSig     string                          // what the findings were last derived from (see deriveFindings)
+	attribution    map[string]findings.StorageAttr // the storage attribution of that derivation
+	storedFindings string                          // the date and findings last stored (see deriveFindings)
 }
 
-// evidenceCache holds the records of a kind as of store KindVersion ver.
-type evidenceCache struct {
-	ver  uint64
-	recs []store.Record
+// recordsCache holds the records of a kind, and the current ones among them,
+// as of store KindVersion ver.
+type recordsCache struct {
+	ver       uint64
+	all, curr []store.Record
 }
 
 type stageStats struct{ attempted, failed int }
@@ -107,6 +112,7 @@ func New(cfg Config) *Runner {
 		cfg: cfg, st: cfg.Engagement.Store(),
 		failed: map[string]map[string]bool{}, stats: map[string]*stageStats{},
 		last: map[string]string{}, counts: map[string]int{}, aborted: map[string]bool{},
+		recs: map[string]recordsCache{},
 	}
 	for _, s := range cfg.Stages {
 		r.order = append(r.order, s.Name())
@@ -220,8 +226,13 @@ func exitFor(err error) int {
 	return ExitFatal
 }
 
+// scopeKinds are the kinds buildScope reads.
+var scopeKinds = []kinds.Named{kinds.Hostname, kinds.Root, kinds.Netblock, kinds.Resolution, kinds.Wildcard,
+	kinds.IP, kinds.IPOwner, kinds.IPHostname, kinds.ProviderRange}
+
 // buildScope builds the Scope and the egress Policy from stored inputs and
-// observations, then applies the netblock guard (B15).
+// observations, then applies the netblock guard (B15). It does nothing when
+// none of them has changed since the last build.
 func (r *Runner) buildScope() error {
 	eng := r.cfg.Engagement
 	in, err := eng.Inputs()
@@ -229,6 +240,15 @@ func (r *Runner) buildScope() error {
 		return err
 	}
 	r.inputs = in
+	var b strings.Builder
+	for _, k := range scopeKinds {
+		fmt.Fprintf(&b, "%s=%d;", k.Name(), r.st.KindVersion(k.Name()))
+	}
+	fmt.Fprintf(&b, "%v;%v", eng.Acked(), in)
+	sig := b.String()
+	if sig == r.scopeSig {
+		return nil
+	}
 	var excl []input.Exclusion
 	for _, e := range in.Exclusions {
 		x, err := input.ParseExclusion(e)
@@ -304,8 +324,11 @@ func (r *Runner) buildScope() error {
 		if !r.cfg.AllowLargeNetblocks {
 			return &NetblockLimitError{Count: count, Limit: limit}
 		}
-		return eng.SetNetblockApproved(int(count))
+		if err := eng.SetNetblockApproved(int(count)); err != nil {
+			return err
+		}
 	}
+	r.scopeSig = sig
 	return nil
 }
 
@@ -397,10 +420,7 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 		r.setState(name, "not-configured", reason, 0, 0)
 		return 0, nil
 	}
-	r.mu.Lock()
-	aborted := r.aborted[name]
-	r.mu.Unlock()
-	if aborted {
+	if r.isAborted(name) {
 		return 0, nil
 	}
 	done, err := r.st.Completed(name)
@@ -434,10 +454,7 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 				if ctx.Err() != nil {
 					continue
 				}
-				r.mu.Lock()
-				ab := r.aborted[name]
-				r.mu.Unlock()
-				if ab {
+				if r.isAborted(name) {
 					r.failCheck(name, c.Key, "stage aborted earlier in this run")
 					attempted.Add(1)
 					continue
@@ -462,9 +479,14 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 		}()
 	}
 
-	all := map[string]struct{}{} // in stored (redacted) form, like done
+	// all holds the keys yielded, in stored (redacted) form like done, to skip a
+	// key a stage yields more than once. Only a redo or a retire needs every
+	// key; otherwise a completed key is skipped by done and is not kept.
+	_, retiring := s.(Retiring)
+	keepAll := redoPending || retiring
+	all := map[string]struct{}{}
 	enumFailed := false
-	pending := 0
+	running := false // whether the stage has been shown as running
 produce:
 	for c, cerr := range s.Checks(ctx, view) {
 		if cerr != nil {
@@ -483,27 +505,29 @@ produce:
 		if _, dup := all[stored]; dup { // a stage may yield a key more than once
 			continue
 		}
-		all[stored] = struct{}{}
 		if _, ok := done[stored]; ok {
+			if keepAll {
+				all[stored] = struct{}{}
+			}
 			continue
 		}
+		all[stored] = struct{}{}
 		r.mu.Lock()
 		skip := failedSet[c.Key]
-		ab := r.aborted[name]
 		r.mu.Unlock()
 		if skip {
 			continue
 		}
-		if ab {
-			pending++
+		if r.isAborted(name) {
+			running = true
 			attempted.Add(1)
 			r.failCheck(name, c.Key, "stage aborted earlier in this run")
 			continue
 		}
-		if pending == 0 {
+		if !running {
 			r.setState(name, "running", "", 0, 0)
+			running = true
 		}
-		pending++
 		select {
 		case work <- c:
 		case <-ctx.Done():
@@ -551,7 +575,7 @@ produce:
 	}
 	// Only completed checks have observations, so there is nothing to retire
 	// unless one of them was not yielded this pass.
-	if _, ok := s.(Retiring); ok && !enumFailed {
+	if retiring && !enumFailed {
 		unlisted := false
 		for k := range done {
 			if _, ok := all[k]; !ok {
@@ -566,6 +590,12 @@ produce:
 		}
 	}
 	return n, nil
+}
+
+func (r *Runner) isAborted(stage string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.aborted[stage]
 }
 
 // failCheck records a transient failure: not a completion, not retried this run.
@@ -645,7 +675,7 @@ func (r *Runner) render() (output.Snapshot, error) {
 	}
 	snap := output.Snapshot{Today: r.today(), Inputs: inputs, Records: map[string][]store.Record{}, Scope: r.sc.Load(), Inv: r.inv.Load()}
 	for _, k := range kinds.All() {
-		recs, err := r.st.Records(k.Name, r.order)
+		recs, err := r.records(k.Name)
 		if err != nil {
 			return output.Snapshot{}, err
 		}
@@ -681,7 +711,7 @@ func (r *Runner) deriveFindings() error {
 	var readErr error
 	in := findings.Input{Scope: sc, Inv: inv, Settings: r.cfg.Settings, Today: r.today(),
 		Records: func(k kinds.Named) []store.Record {
-			recs, err := r.evidenceRecords(k.Name())
+			recs, err := r.records(k.Name())
 			if err != nil && readErr == nil {
 				readErr = err
 			}
@@ -696,31 +726,50 @@ func (r *Runner) deriveFindings() error {
 	for i, f := range fs {
 		obs[i] = kinds.Finding.Obs(f.Key(), f.Attrs)
 	}
-	r.st.Complete("findings", "derived", obs)
-	if err := r.st.Flush(); err != nil {
-		return err
+	// Storing the same findings again on the same day changes nothing.
+	stored := fmt.Sprint(r.today(), obs)
+	if stored != r.storedFindings {
+		r.st.Complete("findings", "derived", obs)
+		if err := r.st.Flush(); err != nil {
+			return err
+		}
+		r.storedFindings = stored
 	}
 	r.derivedSig, r.attribution = sig, attribution
 	return nil
 }
 
-// evidenceRecords returns every record of a kind for derivation, read again
-// only when the kind has changed since the last read. The version is read
-// first, so a commit racing the read is re-read next time.
-func (r *Runner) evidenceRecords(kind string) ([]store.Record, error) {
-	if r.evidence == nil {
-		r.evidence = map[string]evidenceCache{}
-	}
+// records returns every record of a kind, current or not, read again only
+// when the kind has changed since the last read. The version is read first, so
+// a commit racing the read is re-read next time. Callers must not modify the
+// returned slice.
+func (r *Runner) records(kind string) ([]store.Record, error) {
+	c, err := r.cached(kind)
+	return c.all, err
+}
+
+func (r *Runner) cached(kind string) (recordsCache, error) {
 	ver := r.st.KindVersion(kind)
-	if c, ok := r.evidence[kind]; ok && c.ver == ver {
-		return c.recs, nil
+	r.recMu.Lock()
+	c, ok := r.recs[kind]
+	r.recMu.Unlock()
+	if ok && c.ver == ver {
+		return c, nil
 	}
-	recs, err := r.st.Records(kind, r.order)
+	all, err := r.st.Records(kind, r.order)
 	if err != nil {
-		return nil, err
+		return recordsCache{}, err
 	}
-	r.evidence[kind] = evidenceCache{ver: ver, recs: recs}
-	return recs, nil
+	c = recordsCache{ver: ver, all: all}
+	for _, rec := range all {
+		if rec.Current {
+			c.curr = append(c.curr, rec)
+		}
+	}
+	r.recMu.Lock()
+	r.recs[kind] = c
+	r.recMu.Unlock()
+	return c, nil
 }
 
 // derivationSignature changes whenever a record of any kind but "finding", the
@@ -737,19 +786,11 @@ func (r *Runner) derivationSignature() string {
 	return b.String()
 }
 
-// currentRecords returns the current records of a kind.
+// currentRecords returns the current records of a kind. Callers must not
+// modify the returned slice.
 func (r *Runner) currentRecords(k kinds.Named) ([]store.Record, error) {
-	recs, err := r.st.Records(k.Name(), r.order)
-	if err != nil {
-		return nil, err
-	}
-	out := recs[:0]
-	for _, rec := range recs {
-		if rec.Current {
-			out = append(out, rec)
-		}
-	}
-	return out, nil
+	c, err := r.cached(k.Name())
+	return c.curr, err
 }
 
 // inventoryData reads the current records the inventory is computed from.

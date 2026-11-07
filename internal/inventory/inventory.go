@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/provider"
 	"github.com/rafaelh/recon/internal/scope"
 )
@@ -320,8 +321,8 @@ func (i *Inventory) ProviderHosts(sc *scope.Scope) []ProviderHost {
 // SaaS. host may be a name or an IP literal (such a service is judged by its
 // address alone).
 func (i *Inventory) SaaSServed(host string) bool {
-	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	if a, err := netip.ParseAddr(host); err == nil && a.Zone() == "" {
+	host = input.NormaliseHost(host)
+	if a, ok := input.IPLiteral(host); ok {
 		return i.result(a).Class == provider.ClassSaaS
 	}
 	saas := false

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/kinds"
@@ -100,7 +101,7 @@ func (s *Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.O
 	var obs []run.Observation
 	for _, n := range res.names {
 		n = cleanName(n)
-		if n == "" || seen[n] || !under(n, root) {
+		if n == "" || seen[n] || !dnsname.Under(n, root) {
 			continue
 		}
 		seen[n] = true
@@ -127,7 +128,7 @@ func pickURLs(raw []string, root string, max int) []archivedURL {
 			continue
 		}
 		pu, err := url.Parse(u)
-		if err != nil || !under(pu.Hostname(), root) || web.IsStaticAsset(pu.Path) {
+		if err != nil || !dnsname.Under(pu.Hostname(), root) || web.IsStaticAsset(pu.Path) {
 			continue
 		}
 		byHost[pu.Hostname()] = append(byHost[pu.Hostname()], u)
@@ -195,7 +196,6 @@ func crtsh(ctx context.Context, root string, c egress.Clients) (result, error) {
 }
 
 // under reports whether name is root or a subdomain of it.
-func under(name, root string) bool { return name == root || strings.HasSuffix(name, "."+root) }
 
 // --- Wayback Machine (CDX) ---
 

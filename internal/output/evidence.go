@@ -5,7 +5,6 @@ import (
 
 	"github.com/rafaelh/recon/internal/findings"
 	"github.com/rafaelh/recon/internal/kinds"
-	"github.com/rafaelh/recon/internal/scope"
 )
 
 // findingsFile writes a findings file like the other CSV files. The findings
@@ -25,8 +24,9 @@ var emailPostureColumns = []string{"root", "mx", "spf", "spf_lookups", "dmarc", 
 // emailPostureRows lists the email posture evidence of each in-scope root.
 func emailPostureRows(s Snapshot) []Row {
 	var rows []Row
+	vis := s.vis()
 	for _, r := range s.of(kinds.EmailPosture) {
-		if s.Scope.ClassifyHost(r.Key).Class != scope.InScope {
+		if !vis.Shown(kinds.EmailPosture, r) {
 			continue
 		}
 		a := kinds.EmailPosture.Attrs(r)

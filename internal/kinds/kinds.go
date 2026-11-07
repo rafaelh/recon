@@ -38,10 +38,13 @@ type Kind struct {
 	// PortKey kinds are keyed by a target address and port. Such a record is
 	// shown only while that address is port-eligible, decided when it is read.
 	PortKey bool
+	// HostKey kinds are keyed by a hostname. Such a record is shown only while
+	// that name is in scope, decided when it is read.
+	HostKey bool
 }
 
 // scoped reports whether showing a record of k depends on the scope.
-func (k Kind) scoped() bool { return k.Entity || k.HostAttr != "" || k.PortKey }
+func (k Kind) scoped() bool { return k.Entity || k.HostAttr != "" || k.PortKey || k.HostKey }
 
 // Summary categories of entity kinds.
 const (
@@ -52,18 +55,23 @@ const (
 )
 
 // Named is a kind handle: an Of or a Bare.
-type Named interface{ Name() string }
+type Named interface {
+	Name() string
+	kind() Kind
+}
 
 // Of is the handle of a kind whose observations carry attributes A. Its zero
 // value is not usable; the handles are the variables in table.go.
-type Of[A any] struct{ name string }
+type Of[A any] struct{ k Kind }
 
 // Name is the kind's name, as the store keys its records.
-func (k Of[A]) Name() string { return k.name }
+func (k Of[A]) Name() string { return k.k.Name }
+
+func (k Of[A]) kind() Kind { return k.k }
 
 // Obs is an observation of the kind.
 func (k Of[A]) Obs(key string, a A) store.Obs {
-	return store.Obs{Kind: k.name, Key: key, Attrs: encode(a)}
+	return store.Obs{Kind: k.k.Name, Key: key, Attrs: encode(a)}
 }
 
 // Attrs decodes a record's merged attributes, as encoding/json would from the
@@ -78,13 +86,15 @@ func (k Of[A]) Attrs(r store.Record) A {
 }
 
 // Bare is the handle of a kind whose observations carry no attributes.
-type Bare struct{ name string }
+type Bare struct{ k Kind }
 
 // Name is the kind's name, as the store keys its records.
-func (k Bare) Name() string { return k.name }
+func (k Bare) Name() string { return k.k.Name }
+
+func (k Bare) kind() Kind { return k.k }
 
 // Obs is an observation of the kind.
-func (k Bare) Obs(key string) store.Obs { return store.Obs{Kind: k.name, Key: key} }
+func (k Bare) Obs(key string) store.Obs { return store.Obs{Kind: k.k.Name, Key: key} }
 
 // encode turns attributes into the map the store keeps, in the form the store
 // returns them (numbers as float64, lists as []any).
@@ -102,9 +112,9 @@ func encode(a any) map[string]any {
 
 var table []Kind // sorted by name once the handles are defined
 
-func define[A any](k Kind) Of[A] { table = append(table, k); return Of[A]{k.Name} }
+func define[A any](k Kind) Of[A] { table = append(table, k); return Of[A]{k} }
 
-func defineBare(k Kind) Bare { table = append(table, k); return Bare{k.Name} }
+func defineBare(k Kind) Bare { table = append(table, k); return Bare{k} }
 
 func init() {
 	slices.SortFunc(table, func(a, b Kind) int { return strings.Compare(a.Name, b.Name) })

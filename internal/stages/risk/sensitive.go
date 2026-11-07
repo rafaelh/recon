@@ -41,12 +41,10 @@ type pathInput struct {
 func (*SensitivePaths) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		var svcs []pathInput
-		for _, rec := range v.Records(kinds.WebService) {
-			svc, ok := egress.ParseService(rec.Key)
-			if !ok || !v.Scope().WebHostInScope(svc.Host) || v.SaaSServed(svc.Host) {
-				continue
+		for _, ws := range v.WebServices() {
+			if !v.SaaSServed(ws.Svc.Host) {
+				svcs = append(svcs, pathInput{service: ws.Key, svc: ws.Svc})
 			}
-			svcs = append(svcs, pathInput{service: rec.Key, svc: svc})
 		}
 		for i, entry := range v.Settings().SensitivePathEntries {
 			hash := entry.Hash()
