@@ -5,7 +5,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/inventory"
+	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/output"
 	"github.com/rafaelh/recon/internal/provider"
 	"github.com/rafaelh/recon/internal/scope"
@@ -80,5 +82,43 @@ func TestFindingsFileRows(t *testing.T) {
 	}
 	if got := cellMap(file(t, "risk-email.csv"), rows[0]); got["root"] != "example.com" || got["type"] != "spf-missing" {
 		t.Errorf("row = %v", got)
+	}
+}
+
+// candidates.csv and excluded.csv list exactly what the summary counts: a
+// netblock key that does not parse is neither, and a value excluded under
+// several records is one excluded row, shown as current while any record is.
+func TestCandidateExcludedFilesMatchTotals(t *testing.T) {
+	inv := inventory.New(inventory.Data{}, provider.Default())
+	x, err := input.ParseExclusion("bad.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := scope.New(scope.Config{Roots: []string{"example.com"}, Netblocks: []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
+		Exclusions: []input.Exclusion{x}})
+	recs := map[string][]store.Record{
+		"hostname": {srec("hostname", "www.example.com", true), srec("hostname", "www.other.org", true),
+			srec("hostname", "bad.example.com", false)},
+		"root":     {srec("root", "other.org", true)},
+		"netblock": {srec("netblock", "198.51.100.0/24", true), srec("netblock", "203.0.113.0/24", true), srec("netblock", "not-a-prefix", true)},
+		"excluded": {srec("excluded", "bad.example.com", true, "reason", "guard"), srec("excluded", "192.0.2.1", true, "reason", "guard")},
+	}
+	vis := kinds.NewVisibility(sc, inv)
+	snap := output.Snapshot{Today: "2026-11-01", Records: recs, Scope: sc, Inv: inv, Vis: vis}
+	totals := vis.Totals(recs)
+	current := func(name string) (n int, values []string) {
+		for _, r := range file(t, name).Rows(snap) {
+			if r.Current {
+				n++
+			}
+			values = append(values, r.Cells[0]+"/"+r.Cells[len(r.Cells)-1])
+		}
+		return n, values
+	}
+	if n, v := current("candidates.csv"); n != totals[kinds.Candidates] || n != 3 {
+		t.Errorf("candidates.csv current rows = %d %v, totals = %d", n, v, totals[kinds.Candidates])
+	}
+	if n, v := current("excluded.csv"); n != totals[kinds.Excluded] || n != 2 || len(v) != 2 {
+		t.Errorf("excluded.csv current rows = %d %v, totals = %d", n, v, totals[kinds.Excluded])
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"iter"
 	"net/netip"
-	"slices"
 	"strconv"
 
 	"github.com/rafaelh/recon/internal/config"
@@ -76,19 +75,8 @@ func eligible(ctx context.Context, v run.View) []netip.Addr {
 			out = append(out, a)
 		}
 	}
-	var found []netip.Addr
-	for _, rec := range v.Records(kinds.IP) {
-		a, err := netip.ParseAddr(rec.Key)
-		if err != nil {
-			continue
-		}
-		// IPv4 netblock addresses were all decided above.
-		if a = a.Unmap(); !a.Is4() || !sc.InScopeIP(a) {
-			found = append(found, a)
-		}
-	}
-	slices.SortFunc(found, netip.Addr.Compare)
-	found = slices.Compact(found)
+	// IPv4 netblock addresses were all decided above.
+	found := v.IPs(func(a netip.Addr) bool { return !a.Is4() || !sc.InScopeIP(a) })
 	unknown := 0
 	for _, a := range found {
 		switch {

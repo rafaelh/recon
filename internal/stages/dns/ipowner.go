@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"iter"
 	"net/netip"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,15 +29,9 @@ func NewIPOwner() *IPOwner { return &IPOwner{base: base{"ipowner"}, holders: map
 // Checks yields one check per ip record outside the in-scope netblocks.
 func (*IPOwner) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
-		var ips []string
-		for _, rec := range v.Records(kinds.IP) {
-			if a, err := netip.ParseAddr(rec.Key); err == nil && !v.Scope().InScopeIP(a) {
-				ips = append(ips, a.Unmap().String())
-			}
-		}
-		sort.Strings(ips)
-		for _, s := range ips {
-			if !yield(run.Check{Key: s, Input: netip.MustParseAddr(s)}, nil) {
+		sc := v.Scope()
+		for _, a := range v.IPs(func(a netip.Addr) bool { return !sc.InScopeIP(a) }) {
+			if !yield(run.Check{Key: a.String(), Input: a}, nil) {
 				return
 			}
 		}

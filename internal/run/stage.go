@@ -149,6 +149,20 @@ func (v View) Records(k kinds.Named) []store.Record {
 	return out
 }
 
+// IPs returns the addresses of the current ip records that keep accepts,
+// unmapped, without duplicates, and sorted by address. keep sees the unmapped
+// address. A record whose key is not an address is skipped.
+func (v View) IPs(keep func(netip.Addr) bool) []netip.Addr {
+	var out []netip.Addr
+	for _, rec := range v.Records(kinds.IP) {
+		if a, err := netip.ParseAddr(rec.Key); err == nil && keep(a.Unmap()) {
+			out = append(out, a.Unmap())
+		}
+	}
+	slices.SortFunc(out, netip.Addr.Compare)
+	return slices.Compact(out)
+}
+
 // WebService is a current web_service record whose host is in scope.
 type WebService struct {
 	Key string

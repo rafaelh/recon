@@ -129,6 +129,9 @@ func (v *Visibility) category(k Kind, r store.Record) string {
 			return Excluded
 		}
 	case "netblock":
+		if _, err := netip.ParsePrefix(r.Key); err != nil {
+			return ""
+		}
 		if v.sc.HasNetblock(r.Key) {
 			return Netblocks
 		}
@@ -138,9 +141,12 @@ func (v *Visibility) category(k Kind, r store.Record) string {
 }
 
 // Totals counts the current records by summary category. Hosts and the
-// category of every non-entity kind are listed even when they are empty.
+// category of every non-entity kind are listed even when they are empty. An
+// excluded value is counted once, however many records (a hostname, a root, a
+// guard's excluded record) carry it, as excluded.csv lists it once.
 func (v *Visibility) Totals(recs map[string][]store.Record) map[string]int {
 	totals := map[string]int{Hosts: 0}
+	excluded := map[string]bool{}
 	for _, k := range table {
 		if k.Category == "" {
 			continue
@@ -155,7 +161,14 @@ func (v *Visibility) Totals(recs map[string][]store.Record) map[string]int {
 			if !r.Current {
 				continue
 			}
-			if cat := v.category(k, r); cat != "" {
+			cat := v.category(k, r)
+			if cat == Excluded {
+				if excluded[r.Key] {
+					continue
+				}
+				excluded[r.Key] = true
+			}
+			if cat != "" {
 				totals[cat]++
 			}
 		}

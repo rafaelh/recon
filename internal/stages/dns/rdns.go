@@ -4,7 +4,6 @@ import (
 	"context"
 	"iter"
 	"net/netip"
-	"sort"
 
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
@@ -30,15 +29,9 @@ func (*RDNS) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error]
 				return
 			}
 		}
-		var found []string
-		for _, rec := range v.Records(kinds.IP) {
-			if a, err := netip.ParseAddr(rec.Key); err == nil && !a.Unmap().Is4() && sc.InScopeIP(a) {
-				found = append(found, a.String())
-			}
-		}
-		sort.Strings(found)
-		for _, s := range found {
-			if !yield(run.Check{Key: s, Input: netip.MustParseAddr(s)}, nil) {
+		// IPv4 netblock addresses were all yielded above.
+		for _, a := range v.IPs(func(a netip.Addr) bool { return !a.Is4() && sc.InScopeIP(a) }) {
+			if !yield(run.Check{Key: a.String(), Input: a}, nil) {
 				return
 			}
 		}

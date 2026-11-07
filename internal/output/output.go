@@ -307,40 +307,49 @@ func recordRow(r store.Record, cells ...string) Row {
 	return Row{Cells: cells, Current: r.Current, FirstSeen: r.FirstSeen, LastSeen: r.LastSeen}
 }
 
+// candidateRows lists the roots, hostnames and netblocks the summary counts as
+// candidates: both ask the snapshot's Visibility.
 func candidateRows(s Snapshot) []Row {
 	var rows []Row
-	for _, kind := range []kinds.Named{kinds.Root, kinds.Hostname} {
+	vis := s.vis()
+	for _, kind := range []kinds.Named{kinds.Root, kinds.Hostname, kinds.Netblock} {
 		for _, r := range s.of(kind) {
-			if s.Scope.ClassifyHost(r.Key).Class == scope.Candidate {
+			if vis.Category(kind, r) == kinds.Candidates {
 				rows = append(rows, recordRow(r, kind.Name(), r.Key, strings.Join(r.Stages, ",")))
 			}
 		}
 	}
-	for _, r := range s.of(kinds.Netblock) {
-		if _, err := netip.ParsePrefix(r.Key); err != nil || s.Scope.HasNetblock(r.Key) {
-			continue
-		}
-		rows = append(rows, recordRow(r, "netblock", r.Key, strings.Join(r.Stages, ",")))
-	}
 	return rows
 }
 
+// excludedRows lists the values the summary counts as excluded, once each. A
+// value carried by several records is listed from the first current one, so
+// the row is current exactly when the summary counts it.
 func excludedRows(s Snapshot) []Row {
 	var rows []Row
-	seen := map[string]bool{}
-	for _, kind := range []kinds.Named{kinds.Root, kinds.Hostname} {
+	at := map[string]int{} // value -> index in rows
+	vis := s.vis()
+	for _, kind := range []kinds.Named{kinds.Root, kinds.Hostname, kinds.ExcludedKind} {
 		for _, r := range s.of(kind) {
-			if c := s.Scope.ClassifyHost(r.Key); c.Class == scope.Excluded && !seen[r.Key] {
-				seen[r.Key] = true
-				rows = append(rows, recordRow(r, r.Key, c.Reason))
+			if vis.Category(kind, r) != kinds.Excluded {
+				continue
+			}
+			i, seen := at[r.Key]
+			if seen && (rows[i].Current || !r.Current) {
+				continue
+			}
+			reason := s.Scope.ClassifyHost(r.Key).Reason
+			if kind == kinds.ExcludedKind {
+				reason = kinds.ExcludedKind.Attrs(r).Reason
+			}
+			row := recordRow(r, r.Key, reason)
+			if seen {
+				rows[i] = row
+			} else {
+				at[r.Key] = len(rows)
+				rows = append(rows, row)
 			}
 		}
-	}
-	for _, r := range s.of(kinds.ExcludedKind) {
-		if seen[r.Key] {
-			continue
-		}
-		rows = append(rows, recordRow(r, r.Key, kinds.ExcludedKind.Attrs(r).Reason))
 	}
 	return rows
 }
