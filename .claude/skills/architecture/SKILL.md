@@ -1,11 +1,11 @@
 ---
 name: architecture
 description: >-
-  Find deepening opportunities in a codebase, informed by the domain language in CONTEXT.md. Use
-  when the user wants to improve architecture, find refactoring opportunities, consolidate
-  tightly-coupled modules, reduce how many files or rules a typical change involves, or make a
-  codebase easier to change by hand, more testable, or more AI-navigable. Also use to create or
-  update a CONTEXT.md, CONTEXT-MAP.md or ADRs from the codebase.
+  Find deepening opportunities in a codebase, informed by the domain language its package docs
+  define. Use when the user wants to improve architecture, find refactoring opportunities,
+  consolidate tightly-coupled modules, reduce how many files or rules a typical change involves,
+  or make a codebase easier to change by hand, more testable, or more AI-navigable. Also use to
+  write ADRs from the codebase.
 ---
 
 # Architecture
@@ -16,11 +16,10 @@ Surface architectural friction and propose refactors that turn shallow modules i
 
 ## Domain docs
 
-- `CONTEXT.md`: the domain glossary. Name modules after its concepts.
-- `CONTEXT-MAP.md` (repo root, when there are several contexts): points to each context's `CONTEXT.md` and settles clashes between them. Read it first; its resolutions win.
+- Package doc comments: the domain vocabulary. Each concept is defined in the package that owns it. Name modules after these concepts.
 - `docs/adr/`: decisions not to re-litigate. Invariants in the repo's agent instructions (`CLAUDE.md`, `AGENTS.md`) count the same.
 
-If these are missing, flag it and work from the code's own vocabulary. If the user asks for the docs themselves rather than a review, skip to "Writing domain docs".
+If a package that owns a concept has no doc comment defining it, flag it and work from the code's own vocabulary. If the user asks for the docs themselves rather than a review, skip to "Writing domain docs".
 
 ## Process
 
@@ -36,7 +35,7 @@ Read the domain docs for the area. Then review the codebase. Beyond the usual sm
 - Shallow modules: interface nearly as complex as the implementation.
 - Pure functions extracted just for testability, while the real bugs hide in how they're called.
 - One module doing several unrelated things behind a single interface, or mixing concepts from several contexts.
-- Code vocabulary drifting from the domain docs. Either the docs are stale or the architecture is muddier than the domain model suggests.
+- Code vocabulary drifting from the package docs, or one concept named differently in two packages. Either the docs are stale or the architecture is muddier than the domain model suggests.
 
 **Deletion test** before keeping any candidate: imagine deleting the suspect module. If complexity vanishes, it was a pass-through. If it reappears across N callers, it was earning its keep. Only keep candidates where deepening concentrates complexity rather than just moving it.
 
@@ -69,7 +68,7 @@ Once the user picks a candidate, create a plan. Once tests exist at the deepened
 
 Ask each for what adding a typical feature would touch, alongside the interface and its trade-offs. Compare them, then give an opinionated recommendation (or a hybrid), not a menu. For straightforward cases, sketch alternatives inline instead.
 
-**Doc updates are plan outputs, not afterthoughts.** Before finalising, ask "what vocabulary does this change?" and name in the plan the updates to the owning `CONTEXT.md` and to `CONTEXT-MAP.md` (create the map if a second context appears). Also name any section of the agent instructions or `README.md` the refactor makes stale.
+**Doc updates are plan outputs, not afterthoughts.** Before finalising, ask "what vocabulary does this change?" and name in the plan the updates to the doc comments of the packages that own the changed concepts. Also name any section of the agent instructions or `README.md` the refactor makes stale.
 
 **ADRs.** If the user rejects a candidate for a reason a future reviewer would need, offer to record it so it isn't re-suggested.
 
@@ -77,5 +76,5 @@ Ask each for what adding a typical feature would touch, alongside the interface 
 
 Draft from the code, then interview the user only on what the code can't settle: which of several names wins, whether two things are one concept, where one context ends and the next begins, and why a decision was made. Lead each question with your recommended answer. Match an existing file's format.
 
-- `CONTEXT.md`: only concepts specific to this domain, each with one-sentence definitions and the aliases to avoid. General programming concepts don't belong even if the code uses them heavily.
+- Package doc comments: define each concept specific to this domain once, in the package that owns it. General programming concepts don't belong even if the code uses them heavily, and don't narrate what the code already shows.
 - ADRs: `docs/adr/NNNN-slug.md`, one paragraph unless more earns its place. Only for decisions that are hard to reverse, surprising without context, and the result of a real trade-off.

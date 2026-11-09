@@ -115,26 +115,17 @@ func TestEngagementName(t *testing.T) {
 		"a--b":             "a-b",
 		"UPPER.Case":       "upper.case",
 		"bücher.de":        "b-cher.de",
+		"../x":             "x",
+		".hidden":          "hidden",
 	} {
 		got, err := input.EngagementName(in)
 		if err != nil || got != want {
 			t.Errorf("EngagementName(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	if _, err := input.EngagementName("---"); err == nil {
-		t.Error("empty result should fail")
-	}
-}
-
-func TestValidateEngagementName(t *testing.T) {
-	for _, ok := range []string{"a", "example.com", "a_b-c.d", "0day"} {
-		if err := input.ValidateEngagementName(ok); err != nil {
-			t.Errorf("%q: %v", ok, err)
-		}
-	}
-	for _, bad := range []string{"", "../x", "a/b", ".hidden", "-a", "A", "a b", ".."} {
-		if err := input.ValidateEngagementName(bad); err == nil {
-			t.Errorf("%q should be rejected", bad)
+	for _, bad := range []string{"", "---", "..", "/", " . "} {
+		if got, err := input.EngagementName(bad); err == nil {
+			t.Errorf("EngagementName(%q) = %q, want an error", bad, got)
 		}
 	}
 }

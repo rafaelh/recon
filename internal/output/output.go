@@ -102,6 +102,8 @@ func Sweep(dir string) error {
 
 // renderFile writes f, or removes it when it would have no rows (a TXT file
 // lists only current rows), so an empty file is never left in the engagement.
+// This is deliberate: a file with only a header row tells the operator nothing,
+// so a file's presence is itself the signal that there is something to read.
 func renderFile(dir, tmp string, f File, snap Snapshot) error {
 	rows := f.Rows(snap)
 	if f.Format == TXT {

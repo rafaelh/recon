@@ -42,50 +42,6 @@ func TestVersionFlagZeroDeps(t *testing.T) {
 	}
 }
 
-// With --json every stdout line must be JSON, so the version line goes to stderr.
-func TestVersionFlagJSON(t *testing.T) {
-	h := newHarness(t, noop())
-	h.version = "v1.2.3"
-	if code := h.exec("--json", "--version"); code != 0 {
-		t.Fatalf("exit %d", code)
-	}
-	if h.stdout.Len() != 0 {
-		t.Errorf("stdout = %q, want empty", h.stdout.String())
-	}
-	if got := h.stderr.String(); got != "recon v1.2.3\n" {
-		t.Errorf("stderr = %q", got)
-	}
-}
-
-// Every spelling pflag accepts for --json counts, and the last one wins.
-func TestVersionFlagJSONSpellings(t *testing.T) {
-	cases := []struct {
-		args []string
-		json bool
-	}{
-		{[]string{"--json=1", "--version"}, true},
-		{[]string{"--json=True", "--version"}, true},
-		{[]string{"--json=t", "--version"}, true},
-		{[]string{"--version", "--json"}, true},
-		{[]string{"--json", "--json=false", "--version"}, false},
-		{[]string{"--json=0", "--version"}, false},
-	}
-	for _, c := range cases {
-		h := newHarness(t, noop())
-		h.version = "v1.2.3"
-		if code := h.exec(c.args...); code != 0 {
-			t.Fatalf("%v: exit %d", c.args, code)
-		}
-		out, other := h.stdout.String(), h.stderr.String()
-		if c.json {
-			out, other = other, out
-		}
-		if out != "recon v1.2.3\n" || other != "" {
-			t.Errorf("%v: stdout %q, stderr %q", c.args, h.stdout.String(), h.stderr.String())
-		}
-	}
-}
-
 // --version is long-only; -v must not become a shorthand that could be mistaken for --verbose.
 func TestNoVersionShorthand(t *testing.T) {
 	h := newHarness(t, noop())

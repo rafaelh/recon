@@ -21,8 +21,9 @@ import (
 const urlsPerPage = 20
 
 // Crawl is the crawl stage: a breadth-first walk of one web service's own
-// pages with GET only. It never submits a form, never reads robots.txt or
-// sitemap.xml, and never leaves the service's origin.
+// pages with GET only. It never submits a form and never leaves the service's
+// origin. robots.txt and sitemap.xml are read for the URLs they list; robots.txt
+// is not obeyed.
 type Crawl struct{}
 
 // NewCrawl returns the crawl stage.
@@ -115,7 +116,11 @@ func (*Crawl) Run(ctx context.Context, chk run.Check, e egress.Clients) ([]run.O
 	// egress.Link only needs where the root came from, not its body.
 	c.anchor = root
 	c.anchor.Body, c.anchor.Header, c.anchor.PeerCerts = nil, nil, nil
+	robots, _ := NormaliseURL(in.origin + "/robots.txt")
+	sitemap, _ := NormaliseURL(in.origin + "/sitemap.xml")
+	c.visited[robots], c.visited[sitemap] = true, true // read as lists below, not crawled as pages
 	c.scan(root, 0)
+	c.readLists(robots, sitemap)
 	for len(c.queue) > 0 && c.gets < in.pages {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -168,7 +173,7 @@ func (c *crawler) fetchPage(req egress.Request, page string) (resp egress.Respon
 		if originOf(target) != c.in.origin {
 			return resp, false, nil
 		}
-		if neverRequested(target) || c.visited[target] || c.gets >= c.in.pages {
+		if c.visited[target] || c.gets >= c.in.pages {
 			return resp, true, nil
 		}
 		c.visited[target] = true
@@ -208,10 +213,8 @@ func (c *crawler) scan(resp egress.Response, depth int) {
 			return
 		}
 		c.record(abs)
-		if follow && depth < c.in.depth && originOf(abs) == c.in.origin && !IsStaticAsset(t.Path) && !neverRequested(abs) &&
-			!c.visited[abs] && len(c.queue)+c.gets < c.in.pages {
-			c.visited[abs] = true
-			c.queue = append(c.queue, queued{abs, depth + 1})
+		if follow {
+			c.enqueue(abs, depth+1)
 		}
 	}
 	for _, h := range l.follow {
@@ -224,6 +227,19 @@ func (c *crawler) scan(resp egress.Response, depth int) {
 	for _, r := range l.refs {
 		c.storageRef(base, r, pageURL)
 	}
+}
+
+// enqueue queues a URL to be fetched at depth if it is on this origin, within
+// the depth and page limits, not a static asset and not already seen.
+func (c *crawler) enqueue(abs string, depth int) {
+	if depth > c.in.depth || originOf(abs) != c.in.origin || c.visited[abs] || len(c.queue)+c.gets >= c.in.pages {
+		return
+	}
+	if u, err := url.Parse(abs); err != nil || IsStaticAsset(u.Path) {
+		return
+	}
+	c.visited[abs] = true
+	c.queue = append(c.queue, queued{abs, depth})
 }
 
 // storageRef records a link or asset that names a cloud-storage bucket, wherever
@@ -293,20 +309,6 @@ func (c *crawler) observations() []run.Observation {
 		out = append(out, storageObservation(*c.storage[k]))
 	}
 	return out
-}
-
-// neverRequested is true for robots.txt and sitemap.xml: the crawl may record a
-// link to one but does not ask for it, and does not honour robots.txt.
-func neverRequested(abs string) bool {
-	u, err := url.Parse(abs)
-	if err != nil {
-		return false
-	}
-	switch strings.ToLower(u.Path) {
-	case "/robots.txt", "/sitemap.xml":
-		return true
-	}
-	return false
 }
 
 // originOf is the origin of a normalised absolute URL, in Origin's form.

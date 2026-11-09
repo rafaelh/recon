@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -120,43 +119,12 @@ func Execute(ctx context.Context, args []string, d Deps) int {
 		code = runCommand(ctx, c, positional, &o, d)
 	})
 	cmd.SetArgs(args)
-	// Help and --version are written after the flags are parsed, so o.json is
-	// already pflag's own reading of --json (any ParseBool spelling). JSON mode
-	// keeps stdout to JSON events only.
-	cmd.SetOut(writerFunc(func(p []byte) (int, error) {
-		if o.json {
-			return d.Stderr.Write(p)
-		}
-		return d.Stdout.Write(p)
-	}))
+	cmd.SetOut(d.Stdout)
 	cmd.SetErr(d.Stderr)
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		// Parsing may have failed before --json was reached, so the args are
-		// checked as well.
-		return fail(newEmitter(d, o.json || argsWantJSON(args)), run.ExitInvalid, err)
+		return fail(newEmitter(d, o.json), run.ExitInvalid, err)
 	}
 	return code
-}
-
-type writerFunc func([]byte) (int, error)
-
-func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
-
-// argsWantJSON reports whether args set --json to true, accepting every
-// spelling pflag does. The last occurrence wins; "--" ends the flags.
-func argsWantJSON(args []string) bool {
-	on := false
-	for _, a := range args {
-		if a == "--" {
-			break
-		}
-		if a == "--json" {
-			on = true
-		} else if v, ok := strings.CutPrefix(a, "--json="); ok {
-			on, _ = strconv.ParseBool(v)
-		}
-	}
-	return on
 }
 
 // fail reports a fatal error and the run's end, and returns code.
@@ -235,7 +203,8 @@ func helpFooter(stages []run.Stage) string {
 Engagement name (a directory under --output-dir):
   Taken from -e if given, else from the first input, in this order of precedence: the first positional
   domain, else the first line of the domains file, else the first --org, else the first --asn, else the
-  first --cidr. So naming depends on the order of your inputs. The name is lowercased and sanitised.
+  first --cidr. So naming depends on the order of your inputs. Either way the name is lowercased and
+  sanitised.
 
 Configuration:
   Settings come from a YAML config file, RECON_* environment variables or flags; flags override
@@ -271,15 +240,14 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 	var name string
 	switch {
 	case o.engagement != "":
-		if err := input.ValidateEngagementName(o.engagement); err != nil {
+		if name, err = input.EngagementName(o.engagement); err != nil {
 			return bail(run.ExitInvalid, err)
 		}
-		name = o.engagement
 	case parsed.Empty():
 		return bail(run.ExitInvalid, errors.New("no inputs: give domains, --org, --asn or --cidr, or -e <engagement> to resume one"))
 	default:
 		if name, err = input.EngagementName(parsed.First); err != nil {
-			return bail(run.ExitInvalid, err)
+			return bail(run.ExitInvalid, fmt.Errorf("%w; name the engagement with -e", err))
 		}
 	}
 	if names := stageNames(d.Stages); o.redo != "" && !slices.Contains(names, o.redo) {

@@ -51,7 +51,7 @@ Results are written to `<output-dir>/<engagement>/` and summarised on the consol
   addresses are never contacted.
 - **Engagement name:** `-e <name>`, or derived from the first input: the first positional domain,
   else the first line of the domains file, else the first `--org`, `--asn` or `--cidr`. The
-  derivation depends on the order of your inputs. The name is lowercased and sanitised.
+  derivation depends on the order of your inputs. Either way, the name is lowercased and sanitised.
 - **Re-runs:** inputs and exclusions are added to those already stored for the engagement. Nothing
   is removed because you left it out of a later run.
 - **Resume:** a re-run performs only the checks not yet done. Checks that failed (a transient
@@ -99,7 +99,8 @@ recon limits what target-owned systems can receive. It sends only:
 - **TCP handshakes** to the configured port list. It reads only what the service sends
   unprompted and sends nothing.
 - **HTTP(S) GET and HEAD requests** to in-scope, non-excluded hosts, to same-host links found
-  while crawling, and to the paths on the sensitive-path list.
+  while crawling, to each service's `/robots.txt` and `/sitemap.xml` and the same-host URLs they
+  list (robots.txt is read, not obeyed), and to the paths on the sensitive-path list.
 
 It never sends credentials, submits forms, uses other HTTP methods, puts payloads in parameters or
 headers, or requests paths beyond those listed. UDP is not used. Candidate hosts (found but not in
@@ -142,8 +143,7 @@ failures), `done-previously`, `failed` or `not-configured` (with the reason). A 
 for each find, with its severity for findings. A summary lists counts and the high and medium
 findings. `--verbose` also shows warnings, including failed checks.
 
-`--json` prints one JSON event per line on stdout, with no styling or prompts. Every stdout line is
-JSON, so `--help` and `--version` output goes to stderr in this mode.
+`--json` prints one JSON event per line on stdout, with no styling or prompts.
 
 ## Output files
 

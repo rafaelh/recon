@@ -76,7 +76,9 @@ type Settings struct {
 	NetblockLimit  int // IPv4 addresses
 }
 
-// Defaults returns the default settings.
+// Defaults returns the default settings. The limits and rates are reasonable
+// starting points, not taken from any source's fair-use terms or from
+// engagement norms: tune them when there is evidence for a better value.
 func Defaults() Settings {
 	return Settings{
 		Keys:            map[string]Secret{},

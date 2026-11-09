@@ -295,18 +295,12 @@ func Parse(raw Raw) (Parsed, error) {
 
 var nameOK = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
-// ValidateEngagementName checks a name given with -e.
-func ValidateEngagementName(name string) error {
-	if !nameOK.MatchString(name) || strings.Contains(name, "..") {
-		return fmt.Errorf("invalid engagement name %q: must match ^[a-z0-9][a-z0-9._-]*$", name)
-	}
-	return nil
-}
-
-// EngagementName derives a safe directory name from the first input.
-func EngagementName(first string) (string, error) {
+// EngagementName makes a safe directory name from a name given with -e, or
+// from the first input: lowercased, every character outside [a-z0-9._-]
+// replaced, and no path separators or leading dots left.
+func EngagementName(s string) (string, error) {
 	var b strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(first)) {
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
 		switch {
 		case r == '/':
 			b.WriteByte('_')
@@ -316,13 +310,13 @@ func EngagementName(first string) (string, error) {
 			b.WriteByte('-')
 		}
 	}
-	s := b.String()
-	for strings.Contains(s, "--") {
-		s = strings.ReplaceAll(s, "--", "-")
+	name := b.String()
+	for strings.Contains(name, "--") {
+		name = strings.ReplaceAll(name, "--", "-")
 	}
-	s = strings.Trim(s, "-._")
-	if err := ValidateEngagementName(s); err != nil {
-		return "", fmt.Errorf("cannot derive an engagement name from %q (use -e)", first)
+	name = strings.Trim(name, "-._")
+	if !nameOK.MatchString(name) || strings.Contains(name, "..") {
+		return "", fmt.Errorf("cannot make an engagement name from %q", s)
 	}
-	return s, nil
+	return name, nil
 }

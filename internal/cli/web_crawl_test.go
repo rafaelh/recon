@@ -55,7 +55,12 @@ func TestCrawl_FetchesAndRecords(t *testing.T) {
 	if s.count("/p1/deeper/deepest") != 0 {
 		t.Error("depth 3 was fetched with a depth limit of 2")
 	}
-	for _, u := range []string{"/submit", "/app.js", "/s.css", "/img/logo.png", "/other-scheme", "/x", "/y", "/robots.txt", "/sitemap.xml"} {
+	for _, u := range []string{"/robots.txt", "/sitemap.xml"} {
+		if s.count(u) != 1 {
+			t.Errorf("%s fetched %d times, want once (read as a list, not crawled as a page)", u, s.count(u))
+		}
+	}
+	for _, u := range []string{"/submit", "/app.js", "/s.css", "/img/logo.png", "/other-scheme", "/x", "/y"} {
 		if s.count(u) != 0 {
 			t.Errorf("%s must be recorded or ignored, never fetched", u)
 		}
@@ -260,8 +265,68 @@ func TestCrawl_SameOriginRedirectsAreFollowedAndOnlyHTMLIsParsed(t *testing.T) {
 	if s.count("/hidden") != 0 {
 		t.Error("links in a text/plain body were followed")
 	}
-	if s.count("/robots.txt") != 0 {
-		t.Error("a redirect to robots.txt was followed")
+	if s.count("/robots.txt") != 1 {
+		t.Errorf("robots.txt fetched %d times, want once", s.count("/robots.txt"))
+	}
+}
+
+// robots.txt and the sitemaps are read for the URLs they list, which are crawled
+// as if the root linked to them. A Disallow is a path to visit, not a rule.
+func TestCrawl_ReadsRobotsAndSitemaps(t *testing.T) {
+	x := newWeb(t)
+	x.names("a.example.com")
+	x.host("a.example.com", "203.0.113.5")
+	xml := func(body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = w.Write([]byte(body))
+		}
+	}
+	s := x.plain("203.0.113.5", 80, routes(map[string]http.HandlerFunc{
+		"/": page(`<a href="/linked">l</a>`),
+		"/robots.txt": func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("User-agent: *\nDisallow: /\nDisallow: /private/ # staff only\nAllow: /api/*.json\n" +
+				"Sitemap: http://a.example.com/index.xml\nSitemap: http://off.example.net/sm.xml\n"))
+		},
+		"/sitemap.xml": xml(`<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc> http://a.example.com/from-sitemap </loc></url><url><loc>http://off.example.net/z</loc></url></urlset>`),
+		"/index.xml": xml(`<sitemapindex><sitemap><loc>http://a.example.com/more.xml</loc></sitemap></sitemapindex>`),
+		"/more.xml":  xml(`<urlset><url><loc>http://a.example.com/from-index</loc></url></urlset>`),
+		"/linked":    page("linked"), "/private/": page("private"), "/api/": page("api"),
+		"/from-sitemap": page("s"), "/from-index": page("i"),
+	}))
+	x.mustRun()
+
+	for _, u := range []string{"/linked", "/private/", "/api/", "/index.xml", "/more.xml", "/from-sitemap", "/from-index"} {
+		if s.count(u) != 1 {
+			t.Errorf("%s fetched %d times, want once: %v", u, s.count(u), s.uris())
+		}
+	}
+	rows := x.urls()
+	for _, u := range []string{"http://a.example.com/robots.txt", "http://a.example.com/sitemap.xml", "http://a.example.com/private/", "http://a.example.com/from-index"} {
+		if r := find(rows, "url", u); r == nil || r["status"] != "200" || !strings.Contains(r["found_by"], "crawl") {
+			t.Errorf("%s = %v, want status 200 found by crawl", u, r)
+		}
+	}
+	for _, u := range x.urlSet() {
+		if strings.Contains(u, "off.example.net") {
+			t.Errorf("an off-scope URL from a list was recorded: %s", u)
+		}
+	}
+}
+
+// A service without robots.txt or a sitemap adds no rows for them.
+func TestCrawl_MissingListsAreNotRecorded(t *testing.T) {
+	x := newWeb(t)
+	x.names("a.example.com")
+	x.host("a.example.com", "203.0.113.5")
+	x.plain("203.0.113.5", 80, routes(map[string]http.HandlerFunc{"/": page("root")}))
+	x.mustRun()
+	for _, u := range x.urlSet() {
+		if strings.HasSuffix(u, "/robots.txt") || strings.HasSuffix(u, "/sitemap.xml") {
+			t.Errorf("a missing list was recorded: %s", u)
+		}
 	}
 }
 

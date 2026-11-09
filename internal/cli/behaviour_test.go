@@ -94,6 +94,8 @@ func TestEngagementDirNaming(t *testing.T) {
 		{[]string{"--asn", "64500"}, "as64500"},
 		{[]string{"--cidr", "10.0.0.0/24"}, "10.0.0.0_24"},
 		{[]string{"-e", "custom-name", "example.net"}, "custom-name"},
+		{[]string{"-e", "Custom Name", "example.net"}, "custom-name"},
+		{[]string{"-e", "../escape", "example.net"}, "escape"},
 	} {
 		if code := h.exec(c.args...); code != 0 {
 			t.Fatalf("%v: exit %d %s", c.args, code, h.stderr.String())
@@ -102,13 +104,13 @@ func TestEngagementDirNaming(t *testing.T) {
 			t.Errorf("%v: expected dir %s", c.args, c.dir)
 		}
 	}
-	for _, bad := range []string{"../x", "a/b", "UPPER", ".hid"} {
+	for _, bad := range []string{"---", "..", "/"} {
 		if code := h.exec("-e", bad, "example.com"); code != 2 || !strings.Contains(h.stderr.String(), bad) {
 			t.Errorf("-e %s: exit %d, stderr %q", bad, code, h.stderr.String())
 		}
 	}
-	if _, err := os.Stat(filepath.Join(h.out, "x")); err == nil {
-		t.Error("traversal created a directory")
+	if _, err := os.Stat(filepath.Join(filepath.Dir(h.out), "escape")); err == nil {
+		t.Error("-e escaped the output directory")
 	}
 }
 

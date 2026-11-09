@@ -20,7 +20,8 @@ import (
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
 )
 
-// maxASNsPerOrg caps the autonomous systems taken for one organisation.
+// maxASNsPerOrg caps the autonomous systems taken for one organisation. The
+// value is a reasonable guess, not a source limit.
 const maxASNsPerOrg = 10
 
 // orgStage is the part every organisation stage shares: one check per input organisation.

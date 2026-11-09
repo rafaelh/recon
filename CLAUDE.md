@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 recon is a passive-first reconnaissance CLI for authorised engagements: a single static Go binary
 for macOS and Linux (Windows is not supported). `README.md` is the user-facing behaviour contract
-(flags, output files, exit codes, the passive boundary). `CONTEXT.md` defines the domain
-vocabulary. Use its terms (engagement, scope input, stage, check, observation, record, record
-kind, shown, evidence, finding) and avoid the synonyms it lists.
+(flags, output files, exit codes, the passive boundary). The domain vocabulary (engagement, scope
+input, stage, check, observation, record, record kind, shown, evidence, finding) is defined in the
+doc comments of the packages that own each term.
 
 ## Commands
 
@@ -114,6 +114,9 @@ when it has rows, and is removed once it has none.
   `--authorized` is accepted only as a flag alias.
 - Specs live in `docs/specs/` (the `.claude/skills/spec-*` workflow). Code, comments, test names
   and file names must never cite spec numbers or spec IDs; describe the behaviour instead.
+- CSV columns and `--json` event fields are read by people, not parsed by tools: change them
+  freely, keeping `README.md` accurate. Only the attribute JSON names in the state database must
+  stay stable (renaming one breaks resume; see `internal/kinds/kinds.go`).
 - Commit messages use conventional prefixes (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`,
   `style:`).
 - `docs/todo.md` lists known deferred work, such as store statement batching, HTTP connection

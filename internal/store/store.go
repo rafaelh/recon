@@ -54,7 +54,7 @@ type Obs struct {
 type Record struct {
 	Kind, Key           string
 	FirstSeen, LastSeen string
-	Current             bool
+	Current             bool // while at least one completed check still observes it
 	Attrs               map[string]any
 	Stages              []string // sorted stages currently observing the record
 }
