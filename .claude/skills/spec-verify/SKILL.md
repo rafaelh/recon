@@ -52,9 +52,3 @@ When you are finished:
 - If the project's instructions say where to archive finished specification files, copy the file
   there.
 - Then stop.
-
-# Uploading the specification file
-Run the following command outside the sandbox:
-```
-uv run --frozen blob upload specifications <spec-name>.md local-path/to/<spec-name>.md --confirm
-```
