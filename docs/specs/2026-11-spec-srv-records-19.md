@@ -24,3 +24,52 @@ well-known hostnames is discovered for each in-scope root, without widening what
    `enterpriseregistration` and `mta-sts` under each root, even when the wordlist lacks them,
    and only when permutations are enabled. These fixed labels are part of the permutation check
    like any wordlist change.
+
+# Design
+
+**Status:** ready to build (wave 2). **Depends on:** Spec 3 (the `dnsroot` stage, `third_party`)
+and Spec 6 (it reorders the permutations stage this spec also edits). Re-check `dnsroot`'s check
+shape once Spec 3 has merged.
+
+## Decisions
+
+- **SRV is one more check per root in `dnsroot`**, keyed `<root>|SRV|<hash of the service list>`.
+  The existing type checks keep their keys, so nothing recorded is re-queried, and editing the
+  list later re-runs only this check. A SERVFAIL or timeout on any service fails the check.
+- **Egress** gains `TypeSRV` with the value `priority weight port target`.
+- **Rows** are `resolution` records with the service name (`_sip._tls.example.com`) as the name
+  and type `SRV`. The inventory reads only `A`, `AAAA` and `CNAME` rows and the wildcard stage
+  derives zones from hostnames, so service names are never treated as hostnames or wildcard
+  zones; a test pins both.
+- **Targets**: `.` records nothing; an in-scope target is a `hostname` observation; any other is a
+  `third_party` observation with mechanism `srv` and the target's registrable domain.
+- **`srv_ports` is derived on read** in the inventory: for each current SRV row whose target is an
+  in-scope hostname, the port is attached to that hostname's addresses, and `ips.csv` lists them
+  `;`-joined. Nothing reads the column back: the ports stage and the egress policy keep to the
+  configured list.
+- **Fixed labels** are a constant in the permutations stage, appended to the root check's words
+  after the wordlist (deduplicated). The root check's key hashes the wordlist and the fixed
+  labels together, so adding them repeats the root checks once, as a wordlist change does.
+
+## Changes
+
+- `internal/egress/dns.go`, `egresstest/dns.go`: SRV.
+- `internal/stages/dns/dnsroot.go`: the SRV check. `permutations.go`: fixed labels and key.
+- `internal/inventory/inventory.go`: `IPRow.SRVPorts`. `internal/output/output.go`: the column.
+- `README.md`: the service list, `srv_ports`, the fixed labels.
+
+## Tests
+
+`internal/cli/srv_test.go`, with `egresstest`:
+
+- Each answer is a `resolutions.csv` row with the stated value; `.` records nothing; an in-scope
+  target becomes a hostname; another is a `third-parties.csv` row and not a candidate.
+- An existing engagement runs only the new check; NS, SOA, TXT and CAA are not re-queried.
+- `ips.csv` shows `srv_ports`; **canary:** an SRV port outside the configured list is never
+  connected to; no wildcard check is made for a service name.
+- The five fixed labels are tried with a custom wordlist that lacks them, and not at all with
+  `--no-permutations`.
+
+## Out of scope
+
+Connecting to SRV ports; SRV lookups under subdomains.

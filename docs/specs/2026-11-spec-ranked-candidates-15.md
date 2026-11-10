@@ -29,3 +29,75 @@ because each shows how many independent signals support it and a confidence leve
    candidates. `--json` emits one `candidate` event per high candidate.
 5. Confidence is recomputed on every run from current evidence. After `--redo` of the stage that
    found a candidate's support, a candidate no longer supported drops a level.
+
+# Design
+
+**Status:** ready to build (wave 1). **Depends on:** nothing. The family table names sources that
+Specs 2, 8, 10, 13 and 16 add; re-check it as each lands. **Owns for later specs:** candidate
+evidence, `internal/candidates`, `internal/orgname`, the derived-records hook, `File.Order`.
+
+## Decisions
+
+- **Evidence is read from the observations the store already keeps**, not from a new kind. A
+  candidate's evidence is the distinct `(source, item)` pairs of the completed checks that
+  currently observe its record. `store.Observers(kind)` returns the `(stage, check key)` pairs per
+  record key. By default the source is the stage name and the item is the check key, which is
+  already the supporting item for today's candidate producers (an organisation for `ct-org`,
+  `whoisxml` and `org-asn`, a netblock for `shodan`, a service for `httpprobe`, an address for
+  `rdns`). A stage whose key carries settings, or which reports a mechanism rather than its own
+  name, implements `run.Evidencer.Evidence(checkKey) (source, item string)`.
+- **Ranking is pure**, in a new package `internal/candidates`: the family table, the confidence
+  rules of behaviour 2, the sort order, and `Promote(type, value)` giving the input that promotes
+  a candidate. Sources outside the listed families each form their own family (`httpprobe`,
+  `rdns`); the README lists them. `org-asn` is in the registrant family (assumption: RIPEstat's
+  organisation search matches registry organisation names).
+- **A registrant match of the input organisation** is evidence from a registrant-family source
+  whose item is an `--org` input. Those stages already filter by the word rule, which moves to
+  `internal/orgname` so RDAP (Spec 8) uses the same function.
+- **Ranks are stored as derived records**, like findings. The runner gets a small list of
+  derivers (`name`, the kinds it reads, `derive func(DeriveInput) []store.Obs`), run at the two
+  places `deriveFindings` is called today (after a stage did work, and before a render), each
+  skipped while the versions of the kinds it reads, the inputs and the date are unchanged, and
+  each stored under its own pseudo-stage. Findings stay as they are: their derivation also
+  returns the storage attribution the render needs, and they depend on every evidence kind. Their
+  signature additionally excludes `candidate_rank`. The `candidate_rank` deriver emits one record
+  per candidate (`type`, `value`, `sources`, `evidence_count`, `confidence`, `current`) and
+  re-emits the last rank of a candidate that is no longer current, which is how such a row keeps
+  "the confidence it last had".
+- **A candidate root also counts the evidence of candidate hostnames under it.** Reverse IP,
+  Shodan and the pivots report roots while `rdns` and the probe report hostnames; without this the
+  families would rarely combine. The hostname rows keep their own rank.
+- **A candidate-producing stage whose check key carries a setting must implement `Evidencer`**,
+  or a changed setting would leave two keys observing one record and count twice.
+- **`candidates.csv`** is written from `candidate_rank` joined to the entity record for its dates,
+  with columns `type`, `value`, `sources`, `evidence_count`, `confidence`. `output.File` gains
+  `Order func(a, b Row) int` so this file can sort by confidence instead of by cells; not-current
+  rows sort last.
+- **Summary**: the `summary` event gains `candidates` (the high ones, with `promote`); the console
+  lists 20 and `and N more in candidates.csv`; `--verbose` adds medium. `--json` emits one
+  `candidate` event per high candidate before the summary.
+
+## Changes
+
+- `internal/store/store.go`: `Observers`. `internal/run/stage.go`: `Evidencer`.
+- `internal/candidates/` and `internal/orgname/` (moved from `orgpivot.tokens`).
+- `internal/run/runner.go`: the deriver list, `candidate_rank`, summary fields.
+- `internal/kinds/candidaterank.go`. `internal/output/candidates.go` (moved out of `output.go`),
+  `File.Order` in `renderFile`. `internal/report/report.go`: summary block and `candidate` event.
+- `README.md`: columns, allowed sources, families and rules.
+
+## Tests
+
+- `internal/candidates`: the rule table (registrant plus another family, three families, two
+  families, registrant alone, reverse IP on two addresses, shared NS, one source, no `--org`),
+  sort order, `Promote`.
+- `internal/store`: `Observers` after completes, a redo and a retire.
+- `internal/cli/candidates_test.go` (fake stages): columns and order; a not-current row sorts last
+  with its last confidence; `--redo` of a supporting stage lowers a level; a hostname's evidence raises its root; findings
+  are still re-derived when only an evidence kind changed; the console list, the
+  `N more` line, `--verbose` medium list and `candidate` events.
+
+## Out of scope
+
+The `organisation` and `asn` candidate types (Spec 8 adds them to this model); any change to what
+is contacted.

@@ -34,3 +34,75 @@ platforms the organisation has verified domain ownership with.
    failure for that type's check only.
 8. The console `+` line for a new third party reads `third-party <platform> via txt-verification
    on <root>`; the `--json` `found` event carries the platform, mechanism and root.
+
+# Design
+
+**Status:** ready to build (wave 1). **Depends on:** nothing. **Owns for later specs:** the
+`third_party` kind and `third-parties.csv` (Specs 9, 19), the `provider` domain and TXT tables
+(9, 16), `Kind.Found` (4, 7), egress `TypeNS`/`TypeSOA`/`TypeCAA` and the `dnsroot` stage (16, 19).
+
+## Decisions
+
+- **`dnsroot` is a DNS stage** beside `resolve` (`internal/stages/dns/dnsroot.go`, using the
+  package's `base`). One check per in-scope input root and type, keyed `<root>|<TYPE>`, so one
+  failing type never blocks the others and Spec 19 can add a type without repeating these.
+- **Answers are `resolution` records** keyed `name|TYPE|value` like today's. The inventory reads
+  only `A`, `AAAA` and `CNAME` rows, so the new types cannot change what is contacted. The
+  wildcard stage is the other reader: `Wildcard.Checks` takes zones from the name of every
+  `resolution` row, so it is changed to read only `A`, `AAAA` and `CNAME` rows. Both readers are
+  pinned by tests, because Specs 7 and 19 rely on them.
+- **Value formats are produced in egress `rdata`**: CAA as `<flags> <tag> "<value>"`; SOA as
+  `<mname> <mailbox>`, where the mailbox's first unescaped dot becomes `@` and `\.` becomes `.`.
+- **Third parties are their own kind**, `third_party`, keyed `<root>|<mechanism>|<name>`, with
+  attributes `root`, `mechanism`, `domain`, `provider`, `depth`. It is printed, counted under
+  `third parties`, shown while `root` is in scope and, through a new showing rule
+  `Kind.OutsideAttr: "domain"`, only while `domain` is not in scope. The rule is evaluated on read,
+  so a root added later hides the row without a re-run.
+- **One file for every mechanism**: `third-parties.csv` with columns `root`, `mechanism`,
+  `domain`, `provider`, `depth`. An `ns` row has the name server's registrable domain and the
+  provider when known; a `txt-verification` row has the platform in `provider` and no domain (the
+  token never leaves `resolutions.csv`).
+- **Knowledge stays in `provider`**: two new lists in `providers.yaml`. `txt:` maps a
+  case-insensitive TXT prefix to a platform; `domains:` maps a domain suffix to a provider name
+  (managed DNS now, mail and SaaS in Spec 9). Both are pure lookups (`provider.Verification`,
+  `provider.DomainOwner`).
+- **A kind may describe its own found line.** `Kind.Found func(store.Record) (text string, fields
+  map[string]any)` is optional; the runner uses it for the `found` event, and the console prints
+  `+ <text>` when the event carries `text`. This replaces a special case per kind in the runner
+  and is what `docs/todo.md` asks for.
+- **NS and SOA targets**: the check input carries the `*scope.Scope` (as the crawl does); an
+  in-scope target is a `hostname` observation, any other NS target a `third_party` observation.
+
+## Changes
+
+- `internal/egress/dns.go`: `TypeNS`, `TypeSOA`, `TypeCAA`; `rdata` cases for SOA and CAA.
+- `internal/egress/egresstest/dns.go`: the three types in the fake server.
+- `internal/stages/dns/dnsroot.go`: the stage. `wildcard.go`: the row-type filter. `internal/cli/cli.go`: registered after `ipowner`.
+- `internal/kinds/kinds.go`: `Kind.OutsideAttr`, `Kind.Found`. `internal/kinds/visibility.go`: the
+  rule. `internal/kinds/thirdparty.go`: the kind.
+- `internal/provider/provider.go` and `providers.yaml`: `txt:` and `domains:` lists and lookups.
+- `internal/output/thirdparties.go`: the file; one line in `Default()`.
+- `internal/run/runner.go`: `onNewRecord` uses `Kind.Found`. `internal/report/report.go`: `text`.
+- `README.md`: `third-parties.csv`, the platform list, `resolutions.csv` wording, `dnsroot`.
+
+## Tests
+
+`internal/cli/dnsroot_test.go`, with `egresstest`:
+
+- NS, SOA, TXT and CAA rows appear in `resolutions.csv` with the stated formats, including the
+  escaped-dot mailbox.
+- An in-scope NS target becomes a hostname and is resolved and probed; an out-of-scope one is a
+  `third-parties.csv` row with its provider or domain, and is not in `candidates.csv`.
+- Each listed TXT prefix (case-insensitive) yields one row per platform and root without the
+  token; an unmatched TXT yields only its `resolutions.csv` row.
+- NODATA and NXDOMAIN complete; SERVFAIL fails only that type and is retried.
+- `--redo dnsroot` marks a vanished record not current; `--passive` runs the stage.
+- The `+` line and the `found` event fields (behaviour 8).
+- `internal/inventory`: NS, SOA, TXT and CAA rows do not affect addresses, wildcards or
+  port eligibility.
+- NS, SOA, TXT and CAA rows create no wildcard checks.
+- `internal/egress`: `AXFR` and `IXFR` are still refused.
+
+## Out of scope
+
+SRV (Spec 19), SPF and DMARC third parties (Spec 9), using NS data for relatedness (Spec 16).

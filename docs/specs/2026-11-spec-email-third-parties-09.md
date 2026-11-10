@@ -41,3 +41,66 @@ root publishes an MTA-STS policy.
    is the low finding `mta-sts-missing` in `risk-email.csv`, and the README row for that file
    mentions MTA-STS. The policy file over HTTPS is never fetched. The added lookup is part of the
    email check, so existing engagements re-run their email checks once.
+
+# Design
+
+**Status:** ready to build (wave 2). **Depends on:** Spec 3 (the `third_party` kind, its showing
+rule, `third-parties.csv`, `provider.DomainOwner`) and Spec 15 (the runner's derived-records
+hook); re-check both names once they have merged.
+
+## Decisions
+
+- **SPF, DMARC and MX third parties are observations of the email check.** `spfEval` already
+  walks the record; it additionally collects `{domain, depth}` for each `include:` and
+  `redirect=` it follows and each `a:`, `mx:` and `exists:` argument, skipping macros. DMARC
+  `rua` and `ruf` are parsed from the record the check already holds. The check emits
+  `third_party` observations beside `email_posture`, so a failed check records none (behaviour 1)
+  and `--redo email` retires stale ones (the stage is already `Retiring`).
+- **What counts as a third party is decided on read**, not in the stage: the stage drops only a
+  domain sharing the registrable domain of the root it was found on; Spec 3's `OutsideAttr` rule
+  hides any domain that is, or later becomes, in scope.
+- **The domain is kept as written** for `spf` and `dmarc` rows (`_spf.google.com`), and is the
+  registrable domain for `mx` rows. `provider` comes from `provider.DomainOwner`, whose
+  `domains:` list this spec extends with mail and SaaS providers.
+- **`cname` rows are derived, then stored**, so they are printed, counted and dated like the
+  others: a `thirdparty-cname` deriver on the runner's hook (its input signature is the `hostname`,
+  `resolution` and `wildcard` kinds and the inputs, not `third_party`, which stages also write) emits one `third_party` record per
+  root and provider suffix for each in-scope, non-wildcard-only hostname whose CNAME chain ends at
+  a SaaS-class entry. A row whose hostname stops pointing there loses its observation and goes not
+  current, which is what `--redo resolve` produces. `provider-hosts.csv` is not touched.
+- **MTA-STS is part of the email check**: when the root has a non-null MX, one TXT lookup at
+  `_mta-sts.<root>`; `mta_sts` is `present` for exactly one `v=STSv1` record, else `absent`; a
+  timeout or SERVFAIL fails the check. The check key gains a `|mta-sts` token so existing
+  engagements run it once; the old checks are retired.
+- **Finding**: `mta-sts-missing` (low) in the `email` category when `mta_sts` is `absent`.
+
+## Changes
+
+- `internal/stages/risk/email.go`: SPF collection, DMARC URIs, MX domains, MTA-STS, key token.
+- `internal/kinds/table.go`: `MTASTS` at the end of `EmailPostureAttrs`.
+- `internal/thirdparty/` (pure): the `cname` derivation. `internal/run/runner.go`: one deriver.
+- `internal/provider/providers.yaml`: mail and SaaS `domains:` entries.
+- `internal/output/evidence.go`: `mta_sts` column. `internal/findings/findings.go`, `table.go`.
+- `README.md`: mechanisms, the provider list, `email-posture.csv` and `risk-email.csv` rows.
+
+## Tests
+
+`internal/cli/email_third_parties_test.go`, with `egresstest`:
+
+- Includes two deep give depths 1 and 2; `a:`, `mx:`, `exists:` are listed; macros are skipped; an
+  include with no SPF record is listed; a SERVFAIL on an include records nothing for the root.
+- `rua`/`ruf`: several URIs, a `!10m` suffix, a non-`mailto:` URI, and a policy inherited from
+  the organisational domain (the row belongs to the root).
+- MX rows use the registrable domain; an in-scope MX host is not listed.
+- A domain under another in-scope root is hidden, including when that root is added later.
+- `cname` rows for SaaS chains only; wildcard-only and excluded names are not listed; the row goes
+  not current after the CNAME changes and `--redo resolve`.
+- One row per root, mechanism and domain; the `provider` column; nothing in `candidates.csv`;
+  the `+` line and the `N third parties` count; the stage runs under `--passive`.
+- MTA-STS: `present`, `absent`, empty without MX, no fallback for a subdomain root, SERVFAIL
+  fails the check, the finding, and an existing engagement re-running its email checks once. The
+  canaries see no HTTPS request for the policy file.
+
+## Out of scope
+
+Fetching the MTA-STS policy; TLS-RPT; resolving third-party domains.

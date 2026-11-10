@@ -36,3 +36,65 @@ inside a script is ever requested.
    not current.
 8. Existing engagements gain script records only when the crawl runs again (`--redo crawl`); the
    README says so.
+
+# Design
+
+**Status:** ready to build (wave 2). **Depends on:** Spec 1 (`run.Warnf`). **Shares with Spec
+13:** `crawl.go` (each adds one emit in `observations()`); nothing in the probe.
+
+## Decisions
+
+- **Scripts are a kind**, `script` (key: the normalised script URL; `url`, `host`, `service`),
+  shown while its host is in scope. The crawl emits one for every `script[src]` it sees, in
+  addition to the `url` record it writes today. The crawl's check key does not change, so existing
+  engagements gain scripts only when the crawl runs again.
+- **`jsparse`** (`internal/stages/web/jsparse.go`, target contact) yields one check per `script`
+  whose host is a probe hostname (in scope, resolved, not wildcard-only), not excluded and not
+  `SaaSServed`. Per script origin it takes the first `jsparse.max_scripts` (default 50, minimum 1)
+  and warns from `Checks` about the rest. Scripts already parsed are taken first, then others in
+  URL order: each completed check also emits a `script_parsed` marker (key: the URL), so a script
+  that was fetched is never pushed past the cap, and so never retired, by a new script that sorts
+  before it. Key: `<url>|p=<parser hash>`. The stage is
+  `Retiring`, so when a re-crawl stops referencing a script its check is retired and the URLs only
+  it observed go not current (behaviour 7), and a parser change re-reads scripts.
+- **Egress cannot be asked for an arbitrary path.** A new constructor `egress.Script(url)` builds
+  a request that the policy allows only if the URL is in `Policy.Scripts`, a set the runner builds
+  from current `script` records, exactly as sensitive paths are allowed by list index. Host scope,
+  exclusion and port rules apply as for any target request. Script responses are read up to
+  4 MiB; `Response.Truncated` is set when the cap cut the body.
+- **Redirects**: `egress.Redirect` is used only when the target is on the same host; anything else
+  completes with nothing. Non-2xx completes with nothing; a timeout is a transient error.
+- **Extraction is pure**: `web.ExtractEndpoints(body, origin)` returns candidate URLs in order of
+  appearance from string literals: absolute `http(s)://` URLs, `//host/path` references, and
+  quoted paths starting with `/` that are at least two characters with no whitespace, backslash,
+  `${` or `{{`, and whose first segment is not empty and not just an extension. The stage keeps
+  those whose host is in scope, records at most 500 as `url` observations without a status, and
+  records their hosts as `hostname` observations. `text/html` or a body starting with `<` yields
+  nothing.
+- **Nothing recorded here is requested**: the crawl queues only links from pages it fetched, and
+  `egress.Script` accepts only crawl-recorded script URLs.
+
+## Changes
+
+- `internal/kinds/script.go` (`script`, `script_parsed`). `internal/stages/web/crawl.go`: emit `script`.
+- `internal/stages/web/jsparse.go`, `endpoints.go`. `internal/cli/cli.go`: after `crawl`.
+- `internal/egress/http.go`, `egress.go`: `Script`, `Policy.Scripts`, the 4 MiB cap, `Truncated`.
+- `internal/run/runner.go`: `script` in `scopeKinds`; `Policy.Scripts` in `buildScope`.
+- `internal/config/config.go`: `jsparse.max_scripts`. `README.md`: boundary list, limit, stage.
+
+## Tests
+
+- `internal/stages/web`: the extraction table, including every example in behaviour 3, the 500
+  cap and template placeholders.
+- `internal/egress`: `Script` is refused for a URL not in the policy set, a candidate host, an
+  excluded host and under `--passive`; the 4 MiB cap and `Truncated`.
+- `internal/cli/jsparse_test.go`: same-host scripts are fetched once, CDN and SaaS-hosted ones
+  never; the per-origin cap and its warning; a parsed script stays within the cap, and its URLs stay
+  current, when new scripts sort before it; URLs appear in `urls.csv` with `found_by` including
+  `jsparse` and no status; in-scope hosts become hostnames; an HTML answer and a non-2xx record
+  nothing; a truncated bundle records what was read and warns; a script dropped by a re-crawl
+  retires its URLs; **canary:** no URL found in a script is ever requested.
+
+## Out of scope
+
+Source maps, inline scripts, executing JavaScript, secrets detection.

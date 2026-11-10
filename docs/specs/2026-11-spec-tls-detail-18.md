@@ -32,3 +32,57 @@ certificate for the wrong name, are low findings.
    matching certificate. Existing engagements have empty `tls_version` and `tls_cipher` until
    `--redo httpprobe`; the README says so, and its `risk-certificates.csv` row mentions legacy
    TLS and hostname mismatch.
+
+# Design
+
+**Status:** ready to build (wave 1). **Depends on:** nothing. **Used by:** Spec 7 (its origin
+check goes through the same target client). **Shares with Specs 12 and 13:** `web-services.csv`.
+
+## Decisions
+
+- **One TLS configuration for every target request.** All target HTTP goes through
+  `targetHTTP.do`, so the change is there: `MinVersion: tls.VersionTLS10` and an explicit
+  `CipherSuites` list built once from `tls.CipherSuites()` plus the CBC and RSA key-exchange
+  suites of `tls.InsecureCipherSuites()`, excluding any suite whose name contains `RC4` or `3DES`.
+  The third-party client is untouched.
+- **Egress reports what was negotiated**: `Response.TLSVersion` (`tls.VersionName`: `TLS 1.2`),
+  `Response.TLSCipher` (`tls.CipherSuiteName`), and `Response.CertTrust()`, which replaces
+  `CertVerifyErr` and returns the first that applies of `expired`, `hostname-mismatch`,
+  `self-signed`, `untrusted-chain`, `trusted`. The self-signed test moves from the probe into
+  egress so the order is decided in one place.
+- **Attributes**: `tls_version`, `tls_cipher` and `tls_trust` are added to `WebServiceAttrs`.
+  `tls_self_signed` is still written (the existing finding reads it); `tls_error` is no longer
+  written but stays in the struct so old records decode.
+- **Old records get a trust value on read**: `kinds.TLSTrust(attrs)` returns `tls_trust` when set
+  and otherwise maps the old `tls_error` text and `tls_self_signed` to the same five values.
+  `web-services.csv` shows `tls_version`, `tls_cipher`, `tls_trust` in place of `tls_error` and
+  `tls_self_signed`.
+- **Findings** extend the `certificates` category: `legacy-tls` (low) when `tls_version` is
+  `TLS 1.0` or `TLS 1.1`; `hostname-mismatch` (low) when trust is `hostname-mismatch`, the host is
+  not an IP literal and `inv.ProviderServed(host)` is false (a new inventory method: a provider
+  CNAME on the chain or a shared-provider address). They join the existing `;`-joined type of the
+  one row per service.
+
+## Changes
+
+- `internal/egress/http.go`: TLS config, the three accessors, `CertTrust`.
+- `internal/stages/web/probe.go`: attributes from the first response.
+- `internal/kinds/table.go`: three fields at the end of `WebServiceAttrs`; `TLSTrust`.
+- `internal/inventory/inventory.go`: `ProviderServed`.
+- `internal/output/output.go`: columns. `internal/findings/findings.go`, `table.go`: two types.
+- `README.md`: columns, the root-store note, what is not detected, the `risk-certificates.csv` row.
+
+## Tests
+
+- `internal/egress` (test TLS servers): a TLS 1.0-only and a 1.1-only server answer and report
+  their version; an RSA-CBC-only server answers; an RC4-only or 3DES-only server is `tls-failed`;
+  each trust value from a crafted chain against the fixed clock; third-party requests still
+  refuse TLS 1.1.
+- `internal/findings`: both new types, the IP-literal and provider exceptions, combined types.
+- `internal/cli/tls_test.go`: a legacy service is recorded, crawled and checked for sensitive
+  paths; columns; old records show a derived `tls_trust` and empty version until
+  `--redo httpprobe`; findings go not current after a redo against a fixed service.
+
+## Out of scope
+
+Enumerating every version a server offers; SSL 3.0; any extra handshake.

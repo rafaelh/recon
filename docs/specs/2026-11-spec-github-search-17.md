@@ -26,3 +26,55 @@ in the matched code become hostname observations, so forgotten internal hostname
 5. Rows whose match is gone after `--redo github` are marked not current. The README adds
    `github` to the keyed-sources list, the passive-boundary list of third parties and the output
    table; without a key the stage is `not-configured (no key)`.
+
+# Design
+
+**Status:** ready to build (wave 2). **Depends on:** Spec 1 (`KeyPrefix`, `Accept`, `Warnf`,
+`CleanName`).
+
+## Decisions
+
+- **One stage, `github`**, in `internal/stages/github`, keyed, source `api.github.com`. One check
+  per in-scope input root, keyed `<root>|max=<n>`, so changing `github.max_results` (default 500,
+  minimum 1, maximum 1,000) searches again.
+- **Request**: `GET /search/code?q="<root>"&per_page=100&page=<n>` with
+  `Authorization: Bearer <key>` and `Accept: application/vnd.github.text-match+json`, which is
+  what makes GitHub return fragments. Pages are read until the cap, the total, or an empty page.
+- **Rate limits are handled in the stage**, so it calls `ThirdParty.Do` and reads the headers
+  itself instead of `httpsrc.Get`: on a 403 or 429 with `retry-after`, or with
+  `x-ratelimit-remaining: 0` and `x-ratelimit-reset`, it computes the wait; 60 seconds or less
+  means wait on a timer that also selects on the context (an interrupt returns at once and the
+  check is simply not completed) and retry the same page; anything else, and any 401, returns
+  `run.ErrAbortStage`. A root already completed is kept either way.
+- **Records**: kind `code_mention`, keyed by the match's `html_url`, with `root`, `repository`,
+  `path`, `url`, `hostnames` (`;`-joined), shown while `root` is in scope and counted as
+  `code mentions`. Hostnames are extracted from `text_matches[].fragment` with a hostname
+  pattern, cleaned, and kept when under an in-scope root (the check input carries the scope);
+  each is also a `hostname` observation. The fragment itself is never stored.
+- **`code-mentions.csv`**: `repository`, `path`, `url`, `hostnames`, `root`. Because a redo
+  replaces the check's observations, a match that is gone goes not current.
+
+## Changes
+
+- `internal/stages/github/`. `internal/cli/cli.go`: registered after the subdomain sources.
+- `internal/kinds/codemention.go`. `internal/output/codementions.go`; one line in `Default()`.
+- `internal/config/config.go`: `github.max_results`. `README.md`: keyed sources, boundary list,
+  output table, the statement of what is and is not recorded.
+
+## Tests
+
+`internal/cli/github_test.go`, with a loopback fake:
+
+- No key: `not-configured (no key)`. With one: rows for each match, hostnames under an in-scope
+  root recorded and resolved, other hostnames ignored, no fragment text in any file or the
+  database.
+- The cap stops paging; changing it searches again; a completed root is not searched again; a
+  root added later is searched.
+- A reset within 60 seconds waits and continues; an interrupt during the wait exits 130 with the
+  completed roots kept; a longer reset, a 401 and a plain 403 stop the stage.
+- `--redo github` marks vanished matches not current; the key appears nowhere; `--passive` runs
+  the stage; nothing becomes a finding.
+
+## Out of scope
+
+Secrets detection; cloning or reading file contents; GitLab and paste sites.
