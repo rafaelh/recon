@@ -20,8 +20,9 @@ golangci-lint run ./...         # config in .golangci.yml (v2, std-error-handlin
 
 - Don't export `CGO_ENABLED=0` globally: `-race` needs cgo on Linux.
 - `go.mod` pins a recent toolchain. With `GOTOOLCHAIN=local` and an older Go, builds fail.
-- The `.claude/hooks/go-check.sh` PostToolUse hook runs gofmt, `go vet` and golangci-lint
-  (new issues only) on each edited `.go` file. Exit 2 means it found something to fix.
+- The `.claude/hooks/go-check.sh` PostToolUse hook runs `gofmt -w`, `go vet` and golangci-lint
+  (new issues only) on each edited `.go` file. Exit 2 means it found something to fix. gofmt
+  rewrites the file in place, so its contents may differ from what you just wrote.
 - When running the binary by hand, use an `--output-dir` outside the repo. `output_dir` defaults
   to `.`, and `/output/` is gitignored.
 
@@ -105,15 +106,25 @@ when it has rows, and is removed once it has none.
   `DialMap` redirect traffic without changing policy logic. The harness has UDP/HTTP/TCP
   "canaries" that detect any unexpected request. The clock is fixed at 2026-11-01 UTC.
 - `crash_test.go` re-executes the test binary as a child process (`RECON_TEST_CHILD=1`) and uses
-  `internal/fault` crash points (`RECON_FAULT=<point>`, such as `in-check-tx`, `after-commit` or
-  `render-mid-file`) to kill the process at known moments and verify resume and atomic output.
+  `internal/fault` crash points (`RECON_FAULT=<point>`, such as `in-check-tx`, `after-commit`,
+  `in-flight` or `render-mid-file`) to kill the process at known moments and verify resume and atomic output.
 
 ## Conventions
 
 - Australian English in docs, comments and messages ("authorised", "behaviour", "sanitise").
   `--authorized` is accepted only as a flag alias.
-- Specs live in `docs/specs/` (the `.claude/skills/spec-*` workflow). Code, comments, test names
-  and file names must never cite spec numbers or spec IDs; describe the behaviour instead.
+- Specs live in `docs/specs/` (the `.claude/skills/spec-*` workflow). Each has `## Goal` and
+  `## Behaviours`, then a `# Design` section once planned. Code, comments, test names and file
+  names must never cite spec numbers or spec IDs; describe the behaviour instead.
+- Before building any spec, read `docs/plans/2026-11-build-order.md`. It gives the order specs
+  can be built in, which spec owns each shared seam (a dependent spec uses the seam as built and
+  never writes its own), the final stage registry order and CSV column order, and where each kind
+  of addition goes so parallel branches don't collide: a new kind in its own
+  `internal/kinds/<kind>.go`, a new output file in its own `internal/output/<file>.go`, a new
+  findings category in its own file, new struct fields, settings and columns appended at the end,
+  and behaviour tests in a new `internal/cli/<feature>_test.go`. The seams it names (such as
+  `run.ErrQuota` or `run.BuildScope`) exist only once their owning spec has merged, so check the
+  code before relying on one.
 - CSV columns and `--json` event fields are read by people, not parsed by tools: change them
   freely, keeping `README.md` accurate. Only the attribute JSON names in the state database must
   stay stable (renaming one breaks resume; see `internal/kinds/kinds.go`).
