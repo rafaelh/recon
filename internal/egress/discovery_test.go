@@ -133,6 +133,25 @@ func TestThirdPartyKeyBodyField(t *testing.T) {
 	}
 }
 
+// KeyPrefix goes before the key in the key header, and Accept sets the Accept header.
+func TestThirdPartyKeyPrefixAndAccept(t *testing.T) {
+	var auth, accept string
+	c := thirdPartyServer(t, func(w http.ResponseWriter, r *http.Request) {
+		auth, accept = r.Header.Get("Authorization"), r.Header.Get("Accept")
+	}, egress.Options{})
+	_, err := c.Do(context.Background(), egress.ThirdPartyRequest{
+		Method: "GET", URL: "https://api.example.net/x", KeySource: "whoisxml",
+		KeyHeader: "Authorization", KeyPrefix: "Bearer ", Accept: "application/json",
+	})
+	if err != nil || auth != "Bearer sekrit-key" || accept != "application/json" {
+		t.Errorf("Authorization = %q, Accept = %q, err = %v", auth, accept, err)
+	}
+	_, err = c.Do(context.Background(), egress.ThirdPartyRequest{Method: "GET", URL: "https://api.example.net/x"})
+	if err != nil || auth != "" || accept == "application/json" {
+		t.Errorf("a request without them sent Authorization = %q, Accept = %q, err = %v", auth, accept, err)
+	}
+}
+
 // --- TCP eligibility ---
 
 type tcpEnv struct {

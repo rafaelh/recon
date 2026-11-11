@@ -28,9 +28,13 @@ type ThirdPartyRequest struct {
 	URL         string // https URL whose host matches the calling stage's Sources()
 	Body        []byte
 	ContentType string
+	// Accept sets the Accept header when it is not empty.
+	Accept string
 	// KeySource names a configured key to attach, as header KeyHeader and/or
 	// query parameter KeyParam. The client attaches it; stages never handle it.
 	KeySource, KeyHeader, KeyParam string
+	// KeyPrefix is put before the key in the KeyHeader value ("Bearer ").
+	KeyPrefix string
 	// KeyBodyField, with KeySource, sets this field of the JSON object in Body
 	// to the key, so a source that wants the key in the body never exposes it to the stage.
 	KeyBodyField string
@@ -172,8 +176,11 @@ func (t *thirdParty) Do(ctx context.Context, r ThirdPartyRequest) (ThirdPartyRes
 	if r.ContentType != "" {
 		hreq.Header.Set("Content-Type", r.ContentType)
 	}
+	if r.Accept != "" {
+		hreq.Header.Set("Accept", r.Accept)
+	}
 	if r.KeySource != "" && r.KeyHeader != "" {
-		hreq.Header.Set(r.KeyHeader, key.Reveal())
+		hreq.Header.Set(r.KeyHeader, r.KeyPrefix+key.Reveal())
 	}
 	resp, err := e.thirdParty.Do(hreq)
 	if err != nil {

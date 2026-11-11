@@ -23,7 +23,8 @@ if ! out=$(gofmt -w "$file" 2>&1); then
   exit 2
 fi
 
-pkg="./$(realpath --relative-to=. "$(dirname "$file")")"
+# Portable: BSD realpath (macOS) has no --relative-to.
+pkg="./$(dirname "${file#"$PWD"/}")"
 
 if ! out=$(go vet "$pkg" 2>&1); then
   errors+="go vet $pkg:"$'\n'"$out"$'\n'

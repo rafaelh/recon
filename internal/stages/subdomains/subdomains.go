@@ -1,6 +1,7 @@
 // Package subdomains has the per-source stages that list subdomains of an
-// in-scope root: crtsh, wayback, commoncrawl, virustotal and securitytrails.
-// They share one check and enumeration type; each source is a fetcher.
+// in-scope root: crtsh, wayback, commoncrawl, virustotal, securitytrails, otx,
+// hackertarget, urlscan, anubis and certspotter. They share one check and
+// enumeration type; each source is a fetcher.
 package subdomains
 
 import (
@@ -16,11 +17,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
-	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
+	"github.com/rafaelh/recon/internal/scope"
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
 	"github.com/rafaelh/recon/internal/stages/web"
 )
@@ -36,13 +38,15 @@ type result struct {
 	urls  []string
 }
 
-type fetcher func(ctx context.Context, root string, c egress.Clients) (result, error)
+type fetcher func(ctx context.Context, in rootInput, c egress.Clients) (result, error)
 
 // rootInput is the Check.Input of every subdomain source. The root travels in
 // it, not in the key, because an archive stage's key also carries the URL cap.
 type rootInput struct {
 	root    string
 	maxURLs int
+	pages   int  // the paging cap of a stage with pageCap
+	keyed   bool // an optionalKey stage has its key to send; the key is not part of the check
 }
 
 // Stage is one subdomain source.
@@ -50,7 +54,12 @@ type Stage struct {
 	name    string
 	sources []string
 	keyed   bool
-	archive bool // also records URLs; its check key carries archive.max_urls
+	// optionalKey is a source that works unkeyed and sends keys.<name> when set.
+	optionalKey bool
+	archive     bool // also records URLs; its check key carries archive.max_urls
+	// pageCap, when set, is the paging cap that the check key carries, so
+	// raising it repeats the checks.
+	pageCap func(config.Settings) int
 	fetch   fetcher
 }
 
@@ -62,6 +71,12 @@ func New() []run.Stage {
 		&Stage{name: "commoncrawl", sources: []string{"index.commoncrawl.org"}, archive: true, fetch: commoncrawl},
 		&Stage{name: "virustotal", sources: []string{"www.virustotal.com"}, keyed: true, fetch: virustotal},
 		&Stage{name: "securitytrails", sources: []string{"api.securitytrails.com"}, keyed: true, fetch: securitytrails},
+		&Stage{name: "otx", sources: []string{"otx.alienvault.com"}, fetch: otx},
+		&Stage{name: "hackertarget", sources: []string{"api.hackertarget.com"}, fetch: hackertarget},
+		&Stage{name: "urlscan", sources: []string{"urlscan.io"}, fetch: urlscan},
+		&Stage{name: "anubis", sources: []string{"jldc.me"}, fetch: anubis},
+		&Stage{name: "certspotter", sources: []string{"api.certspotter.com"}, optionalKey: true,
+			pageCap: func(c config.Settings) int { return c.Certspotter.MaxPages }, fetch: certspotter},
 	}
 }
 
@@ -72,17 +87,33 @@ func (s *Stage) Sources() []string    { return s.sources }
 // Configured: keyed sources need keys.<source>.
 func (s *Stage) Configured(e run.Env) (bool, string) { return httpsrc.Configured(e, s.name, s.keyed) }
 
-// Checks yields one check per in-scope root. An archive stage's key is
-// "<root>|urls=N", so changing archive.max_urls re-runs it and nothing else.
+// Checks yields one check per in-scope root; a root that is excluded is never
+// asked about. An archive stage's key is "<root>|urls=N", so changing
+// archive.max_urls re-runs it and nothing else; a paged stage's is
+// "<root>|pages=N" likewise.
 func (s *Stage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
-		max := v.Settings().Archive.MaxURLs
+		set := v.Settings()
+		in := rootInput{maxURLs: set.Archive.MaxURLs}
+		if s.pageCap != nil {
+			in.pages = s.pageCap(set)
+		}
+		if s.optionalKey {
+			_, in.keyed = run.Env{Settings: set}.Key(s.name)
+		}
 		for _, r := range v.Inputs().Roots {
-			key := r
-			if s.archive {
-				key = fmt.Sprintf("%s|urls=%d", r, max)
+			if v.Scope().ClassifyHost(r).Class != scope.InScope {
+				continue
 			}
-			if !yield(run.Check{Key: key, Input: rootInput{root: r, maxURLs: max}}, nil) {
+			key := r
+			switch {
+			case s.archive:
+				key = fmt.Sprintf("%s|urls=%d", r, in.maxURLs)
+			case s.pageCap != nil:
+				key = fmt.Sprintf("%s|pages=%d", r, in.pages)
+			}
+			in.root = r
+			if !yield(run.Check{Key: key, Input: in}, nil) {
 				return
 			}
 		}
@@ -93,14 +124,14 @@ func (s *Stage) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, err
 func (s *Stage) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
 	in := c.Input.(rootInput)
 	root := in.root
-	res, err := s.fetch(ctx, root, e)
+	res, err := s.fetch(ctx, in, e)
 	if err != nil {
 		return nil, fmt.Errorf("%s %s: %w", s.name, root, err)
 	}
 	seen := map[string]bool{}
 	var obs []run.Observation
 	for _, n := range res.names {
-		n = cleanName(n)
+		n = httpsrc.CleanName(n)
 		if n == "" || seen[n] || !dnsname.Under(n, root) {
 			continue
 		}
@@ -156,13 +187,6 @@ func pickURLs(raw []string, root string, max int) []archivedURL {
 	return out
 }
 
-// cleanName returns a name from a source in canonical punycode form, or ""
-// for a wildcard or non-hostname.
-func cleanName(n string) string {
-	d, _ := input.ParseDomain(n)
-	return d
-}
-
 // --- crt.sh ---
 
 // crtshNames returns the names in a crt.sh JSON answer: name_value holds one or
@@ -181,8 +205,8 @@ func crtshNames(body []byte) ([]string, error) {
 	return out, nil
 }
 
-func crtsh(ctx context.Context, root string, c egress.Clients) (result, error) {
-	body, err := httpsrc.Crtsh(ctx, c, url.Values{"q": {"%." + root}})
+func crtsh(ctx context.Context, in rootInput, c egress.Clients) (result, error) {
+	body, err := httpsrc.Crtsh(ctx, c, url.Values{"q": {"%." + in.root}})
 	if err != nil {
 		return result{}, err
 	}
@@ -201,7 +225,8 @@ func withScheme(raw string) string {
 	return raw
 }
 
-func wayback(ctx context.Context, root string, c egress.Clients) (result, error) {
+func wayback(ctx context.Context, in rootInput, c egress.Clients) (result, error) {
+	root := in.root
 	base := url.Values{"url": {root}, "matchType": {"domain"}, "output": {"json"}, "fl": {"original"}, "collapse": {"urlkey"}}
 	count := url.Values{"url": {root}, "matchType": {"domain"}, "showNumPages": {"true"}}
 	body, err := httpsrc.Get(ctx, c, egress.ThirdPartyRequest{Method: "GET", URL: "https://web.archive.org/cdx/search/cdx?" + count.Encode()})
@@ -239,7 +264,8 @@ func wayback(ctx context.Context, root string, c egress.Clients) (result, error)
 
 // --- Common Crawl ---
 
-func commoncrawl(ctx context.Context, root string, c egress.Clients) (result, error) {
+func commoncrawl(ctx context.Context, in rootInput, c egress.Clients) (result, error) {
+	root := in.root
 	body, err := httpsrc.Get(ctx, c, egress.ThirdPartyRequest{Method: "GET", URL: "https://index.commoncrawl.org/collinfo.json"})
 	if err != nil {
 		return result{}, err
@@ -291,7 +317,8 @@ func commoncrawl(ctx context.Context, root string, c egress.Clients) (result, er
 
 // --- VirusTotal ---
 
-func virustotal(ctx context.Context, root string, c egress.Clients) (result, error) {
+func virustotal(ctx context.Context, in rootInput, c egress.Clients) (result, error) {
+	root := in.root
 	var names []string
 	cursor := ""
 	for page := 0; page < maxPages; page++ {
@@ -333,7 +360,8 @@ func virustotal(ctx context.Context, root string, c egress.Clients) (result, err
 
 // --- SecurityTrails ---
 
-func securitytrails(ctx context.Context, root string, c egress.Clients) (result, error) {
+func securitytrails(ctx context.Context, in rootInput, c egress.Clients) (result, error) {
+	root := in.root
 	body, err := httpsrc.Get(ctx, c, egress.ThirdPartyRequest{
 		Method: "GET", URL: "https://api.securitytrails.com/v1/domain/" + url.PathEscape(root) + "/subdomains?children_only=false&include_inactive=true",
 		KeySource: "securitytrails", KeyHeader: "APIKEY",

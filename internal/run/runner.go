@@ -383,6 +383,11 @@ func (r *Runner) stat(stage string) *stageStats {
 
 func (r *Runner) gate(s Stage) (bool, string) {
 	eng := r.cfg.Engagement
+	// Skipped comes before every other reason: it is the operator's choice, and
+	// it must not depend on a key, --passive or the authorisation.
+	if slices.Contains(r.cfg.Settings.Skip, s.Name()) {
+		return false, "skipped"
+	}
 	if s.Contact() == Target {
 		if r.cfg.Passive {
 			return false, "passive-only"
@@ -445,7 +450,14 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 	workers = max(workers, 1)
 	work := make(chan Check)
 	var wg sync.WaitGroup
-	var attempted atomic.Int64
+	var attempted, aborted atomic.Int64 // aborted: checks failed by the stage's abort
+	runCtx := withWarner(ctx, r.warn)
+	// abortFail fails a check because its stage aborted. The stage warns once for
+	// all of them (below), not once per check.
+	abortFail := func(key, msg string) {
+		r.recordFailure(name, key, msg)
+		aborted.Add(1)
+	}
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func() {
@@ -455,22 +467,24 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 					continue
 				}
 				if r.isAborted(name) {
-					r.failCheck(name, c.Key, "stage aborted earlier in this run")
+					abortFail(c.Key, "stage aborted earlier in this run")
 					attempted.Add(1)
 					continue
 				}
 				fault.PointDetail("in-flight", c.Key)
-				obs, err := s.Run(ctx, c, clients)
+				obs, err := s.Run(runCtx, c, clients)
 				if ctx.Err() != nil {
 					continue // in-flight checks are abandoned and redone next run
 				}
 				attempted.Add(1)
+				if errors.Is(err, ErrAbortStage) {
+					r.mu.Lock()
+					r.aborted[name] = true
+					r.mu.Unlock()
+					abortFail(c.Key, err.Error())
+					continue
+				}
 				if err != nil {
-					if errors.Is(err, ErrAbortStage) {
-						r.mu.Lock()
-						r.aborted[name] = true
-						r.mu.Unlock()
-					}
 					r.failCheck(name, c.Key, err.Error())
 					continue
 				}
@@ -521,7 +535,7 @@ produce:
 		if r.isAborted(name) {
 			running = true
 			attempted.Add(1)
-			r.failCheck(name, c.Key, "stage aborted earlier in this run")
+			abortFail(c.Key, "stage aborted earlier in this run")
 			continue
 		}
 		if !running {
@@ -538,6 +552,9 @@ produce:
 	wg.Wait()
 	if ctx.Err() != nil {
 		return int(attempted.Load()), nil
+	}
+	if n := aborted.Load(); n > 0 {
+		r.warn("%s: quota spent or key rejected; %d checks will be retried next run", name, n)
 	}
 
 	n := int(attempted.Load())
@@ -598,14 +615,19 @@ func (r *Runner) isAborted(stage string) bool {
 	return r.aborted[stage]
 }
 
-// failCheck records a transient failure: not a completion, not retried this run.
+// failCheck records a transient failure and warns about it.
 func (r *Runner) failCheck(stage, key, msg string) {
+	r.recordFailure(stage, key, msg)
+	r.warn("%s check %s failed: %s", stage, key, msg)
+}
+
+// recordFailure records a transient failure: not a completion, not retried this run.
+func (r *Runner) recordFailure(stage, key, msg string) {
 	r.mu.Lock()
 	r.failedLocked(stage)[key] = true
 	r.stat(stage).failed++
 	r.mu.Unlock()
 	r.st.Fail(stage, key, msg)
-	r.warn("%s check %s failed: %s", stage, key, msg)
 }
 
 // emitCounts emits the category counts that changed. They are counted from the

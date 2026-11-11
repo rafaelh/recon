@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"errors"
+	"fmt"
 	"iter"
 	"maps"
 	"net/netip"
@@ -49,6 +50,28 @@ type Observation = store.Obs
 // ErrAbortStage, wrapped in a check's error, fails that check and every
 // remaining check of the stage for this run without sending them.
 var ErrAbortStage = errors.New("abort stage")
+
+// ErrQuota, wrapped in a check's error, says the source's quota is spent. It
+// aborts the stage like ErrAbortStage, which it wraps: the checks not yet done
+// fail and are retried on the next run.
+var ErrQuota = fmt.Errorf("quota spent: %w", ErrAbortStage)
+
+type warnerKey struct{}
+
+// withWarner returns a context whose Warnf calls go to warn.
+func withWarner(ctx context.Context, warn func(format string, a ...any)) context.Context {
+	return context.WithValue(ctx, warnerKey{}, warn)
+}
+
+// Warnf reports a problem that does not fail the check, such as a truncated
+// result. Like View.Warn it is shown only with --verbose. A context that did not
+// come from the runner has no warner, and the call does nothing, so stages stay
+// testable without one.
+func Warnf(ctx context.Context, format string, a ...any) {
+	if warn, ok := ctx.Value(warnerKey{}).(func(string, ...any)); ok {
+		warn(format, a...)
+	}
+}
 
 // Env is what a stage sees when deciding whether it can run.
 type Env struct {

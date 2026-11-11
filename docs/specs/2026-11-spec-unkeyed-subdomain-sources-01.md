@@ -137,3 +137,160 @@ New `internal/cli/sources_unkeyed_test.go` and `skip_test.go`, with loopback fak
 
 RapidDNS (HTML scraping); recording addresses or URLs from these sources; per-source rate
 settings.
+
+# Implementation
+
+## Develop
+
+Built as designed, with the five sources as fetchers on `subdomains.Stage` (new file
+`internal/stages/subdomains/sources_unkeyed.go`). Every behaviour is tested through `cli.Execute`
+against loopback fakes, in `internal/cli/sources_unkeyed_test.go` and `skip_test.go`.
+
+- **Runner** (`internal/run`): `ErrQuota` wraps `ErrAbortStage`; `Warnf` reads a warner the runner
+  puts in the context it passes to `Run`. An aborted stage now emits one warning after its pass
+  (`<stage>: quota spent or key rejected; N checks will be retried next run`) and no longer warns
+  once per aborted check. This applies to the existing keyed aborts too. `gate` returns `skipped`
+  before the passive and authorisation reasons.
+- **`httpsrc`**: `GetQuota` (`Get` plus unkeyed 429 → `ErrQuota`, keyed 429 keeps `ErrAbortStage`) and
+  `CleanName`. `ThirdPartyRequest` gained `KeyPrefix` and `Accept`.
+- **Subdomain stage**: `fetcher` now takes the whole `rootInput` (root, `pages`, `keyed`) instead of
+  the root. `Checks` skips roots that are not in scope, so an excluded root is no longer asked about
+  by any source, old ones included. Cert Spotter's check key is `<root>|pages=<n>`; whether a key is
+  set is in the check's input, not its key.
+- **Config and CLI**: `skip` (list; `none` clears; `none` with stage names is rejected) and
+  `certspotter.max_pages` (minimum 1). `--skip` validation (unknown name, clash with `--redo`, the
+  four protected stages) is in `cli.validateSkip`; `acknowledge` ignores skipped stages.
+- **Tests** (behaviour → test): 1 `TestUnkeyed_NamesAreRecorded`, `TestUnkeyed_HelpAndRedo`; 2
+  `TestSkip_*`; 3 `TestUnkeyed_NamesAreRecorded`, `TestUnkeyed_ScopeDecidesTheFile`,
+  `TestUnkeyed_ExcludedRootIsNotQueried`; 4 `TestUnkeyed_NamesAreNormalised`,
+  `TestUnkeyed_HackerTargetEmptyBodies`; 5 `TestUnkeyed_QuotaSpentAbortsOnlyThatStage`,
+  `TestRunner_QuotaAbortWarnsOnce`; 6 `TestCertSpotter_*`; 7 `TestUnkeyed_NotFoundIsEmpty`,
+  `TestUnkeyed_TransientFailuresAreRetried`; 8 `TestUnkeyed_RerunResolvesOnlyAddedNames`; 9
+  `TestReadme_NamesTheNewSources`; `Get` unchanged: `TestGet_RangePublisher429StaysAFailedCheck`.
+- **Deviations from the plan**: `--skip` is read from `Settings.Skip` in the runner, so there is no
+  separate `Config.Skip`. The help footer keeps `Stages accepted by --redo:` (an existing test pins
+  it) and adds one line for `--skip`. `world_test.go` lists the five new hosts so the existing tests
+  never reach the network.
+- **Side effect**: `CleanName` strips `*.` before validating, so a certificate name `*.example.com`
+  now records the root `example.com` itself from crt.sh, as an exact `example.com` name always did.
+- **Mutation checks**: `## Tests` marks no behaviour for one, so none were run.
+- **External facts**: checked once against the live services on 2026-11-11 (a single request each,
+  for `example.com`), after the build. HackerTarget (`host,addr` lines), Cert Spotter (a JSON array of
+  issuances with `id` and `dns_names`) and urlscan (`results[].page.domain` and `task.domain`) match the
+  parsers. Three differed from `# Design`:
+  - urlscan returned 100 of 7957 results with `has_more: false`, so the field does not signal
+    truncation. The stage now also compares `total` with the number of results.
+  - OTX answered 429 ("Anonymous access to this endpoint is limited. Please authenticate.") on two
+    requests, so the passive DNS endpoint is no longer usable without a key. With the shipped code the
+    stage aborts on its first check with the quota warning.
+  - `jldc.me` answers 301 to `jonlu.ca`, and both hosts returned a Cloudflare challenge (403) to
+    `curl`. Anubis is likely unusable from a plain client as it stands. The stage's check fails each run.
+
+## Known limitations
+
+- B3, urlscan: only the first page of results (the API's default of 100) is read and the rest are
+  not paged. The stage warns under `--verbose` when `has_more` is set or `total` exceeds the results
+  returned (the live service sets only `total`).
+- B6: reaching `certspotter.max_pages` warns even when the last page was also the final one, since
+  the stage cannot tell without another request.
+- B5: only the five new sources use `GetQuota`. The existing unkeyed sources (`crtsh`, `wayback`,
+  `commoncrawl`) still treat a 429 as a failed check.
+
+## Simplify
+
+Four reviewers (reuse, quality, efficiency, altitude). Fixed: `CleanName` leans on `ParseDomain`'s
+normalising and only strips `*.`; the optional-key test uses `run.Env.Key`; the runner's abort
+bookkeeping is one `abortFail` closure; `stageNames` is computed once in `runCommand`; `skipNone` is
+unexported; the new egress `KeyPrefix` and `Accept` have a test; the new tests share one `messages`
+helper, a named table type for the invalid `--skip` cases, and no longer repeat `resolveAll`. The reuse
+review's finding that the invalid-`--skip` test's network check could never fail is fixed (it now
+checks the fake DNS and source request counts).
+Skipped: trimming the per-source failure subtests (each pins that source's own wiring, and it saves
+about 3.5 s); the altitude findings below, which change seams that `# Design` decided and that spec 2
+re-checks after this merges.
+
+# Verification
+
+## Result
+
+Checked against the goal, B1–B9 and `## Out of scope`, by reading every changed file and running
+`make test` (passes). The goal is met: the five sources are `ThirdParty` fetchers on
+`subdomains.Stage`, they run under `--passive` with no keys, and a name only one of them returns
+reaches `subdomains.txt`. No new contact with the target is added.
+
+- **B1 met.** All five stages are registered, listed in `--help` and accepted by `--redo`.
+- **B2 met after one fix.** Skipping is checked first in `Runner.gate`, before `Checks`, so a
+  skipped stage runs no checks and retires nothing. Precedence is flag over `RECON_SKIP` (comma
+  list) over the file, and `none` clears the list. `acknowledge` ignores skipped target stages.
+  *Fixed:* naming a stage in both `--redo` and `--skip` exited 2 but did not list the stage names,
+  which B2 requires. The message now lists the stages that can be skipped, and
+  `TestSkip_InvalidExits2` checks for the list in that case too. Not in the spec, and kept:
+  `--skip none` together with a stage name is rejected as a contradiction.
+- **B3 partly met.** There is one check per in-scope input root, names outside the root are
+  dropped, and `CleanName` (`input.ParseDomain`) drops addresses and URLs. Scope picks the output
+  file. Known limitation: urlscan reads only its first results page (100), so roots with more scans
+  can miss names. `## Out of scope` does not cover this.
+- **B4 met after one fix.** `httpsrc.CleanName` lowercases, removes the trailing dot and a leading
+  `*.`, converts to punycode and drops invalid names. Every subdomain source goes through it, crt.sh
+  included. The ct-org root pivot and TLS SAN names already removed `*.`. *Fixed:* a HackerTarget
+  200 reply with an empty body was treated as unreadable and retried on every run. That is the
+  "returns no names" case of B4, so it now completes with zero observations (the B7 entry under
+  `## Known limitations` no longer applies). `TestUnkeyed_HackerTargetEmptyBodies` covers it.
+- **B5 met for the five new sources.** An unkeyed 429, or HackerTarget's `API count exceeded`, returns
+  `run.ErrQuota`. The stage stops, the checks it did not do count as failures (`failed` or `done`
+  by the existing arithmetic), and the runner gives one `--verbose` warning per stage per run.
+  Other stages are unaffected, and `Get` is unchanged for range publishers. Known limitation:
+  `crtsh`, `wayback` and `commoncrawl` still treat a 429 as one failed check. B5 says "a source",
+  but `# Design` limited `GetQuota` to the new sources, so this needs a decision (Follow-ups).
+- **B6 partly met.** Cert Spotter runs unkeyed. With `keys.certspotter` set it sends
+  `Authorization: Bearer <key>`, a 401 or 403 aborts the stage, and the key is in no output
+  (`w.anywhere`). The key is part of the check input, not its key, and `pages=N` is in the key.
+  Known limitation: when the cap is reached, the truncation warning is given even if the last page
+  read was the final one.
+- **B7 met.** 404 is empty. A wrong shape, an error object with status 200, any other status, a
+  network error and an oversized body are transient and retried. All of these are tested for each
+  source.
+- **B8 met.** The existing check keys are unchanged, and `TestUnkeyed_RerunResolvesOnlyAddedNames`
+  shows that crtsh is not repeated and that only the added name is resolved.
+- **B9 met.** The passive-boundary section names all five sources, and the keyed-sources entry
+  lists `certspotter` as optional.
+
+The source URLs and body formats follow the documented APIs but were not checked against the live
+services.
+
+## Code review
+
+A high-effort review fixed five issues and left five. *Fixed:* the README overstated which sources
+record only hostnames and stop on a spent quota (it is the five new ones); urlscan gave no warning
+when its first page was not the whole result; the unknown-stage message said `--skip` even for the
+setting or `RECON_SKIP`; `web.sanHost` was a copy of `CleanName` and now calls it; `validateSkip` built
+its stage list on every run. *Left:* the abort warning's fixed text drops the error that caused it
+(`# Design` fixes the wording); a Cert Spotter 429 on a late page discards the pages already read, so
+a large root can fail on every unkeyed run (needs a design change, such as keeping paging progress);
+`--redo` of a subdomain stage no longer lists an excluded root, so its earlier observations are
+swept (follows from querying in-scope roots only); the unskippable list is in `cli`; `Accept` has no
+caller yet.
+
+# Follow-ups
+
+- OTX no longer answers anonymous requests, and Anubis (`jldc.me`, moved to `jonlu.ca`) returns a
+  Cloudflare challenge. Decide whether to keep, key or drop each of the two stages; until then OTX
+  warns and aborts on its first check and Anubis fails one check per root on every run.
+- `golangci-lint` v1.64.8 on this machine is a v1 build (the config is v2) made with Go 1.26. Install a
+  v2 build made with the `go.mod` toolchain (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`).
+  With v2.15.0, `golangci-lint run ./...` reports only two ST1018 findings in
+  `internal/sanitize/sanitize_test.go`, which this work did not touch.
+- Altitude review, left as designed: an `Unskippable` interface in `run` in place of `cli`'s list of
+  four names; one limit field in `subdomains.Stage` in place of `archive` and `pageCap`; a
+  `View.InScopeRoots` shared with the email stage; `ThirdPartyRequest.KeyOptional` in place of the
+  stage deciding whether the optional key is sent. Revisit the second when spec 2 adds its paged stages.
+- `httpsrc.CleanName` and `web.sanHost` (and a variant in `orgpivot.rootObs`) are three helpers that turn a
+  reported name into a hostname. Merge them into one in `input` once the dependent specs have landed,
+  since specs 2, 4, 10, 13 and 17 name `httpsrc.CleanName`. The "in-scope input roots" loop is also
+  repeated in the email, wildcard and subdomain stages; a `View.InScopeRoots` would serve all three.
+- Decide whether `crtsh`, `wayback` and `commoncrawl` should also stop their stage on a 429 (B5 says
+  "a source"; `# Design` limited `GetQuota` to the five new sources).
+- A Cert Spotter check that hits its unkeyed quota partway through a large root restarts from page 1
+  on the next run and may never finish; consider keeping the pages already read.
+- `--redo <subdomain stage>` after excluding a root sweeps that root's earlier observations; decide
+  whether that is wanted.

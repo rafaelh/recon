@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/rafaelh/recon/internal/egress"
+	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/run"
 )
 
@@ -40,6 +42,19 @@ var ErrNotFound = errors.New("HTTP 404")
 // quota is spent, so nothing may be recorded as done. A 404 is ErrNotFound.
 // A truncated body or any other non-200 status is a transient error.
 func Get(ctx context.Context, c egress.Clients, req egress.ThirdPartyRequest) ([]byte, error) {
+	return get(ctx, c, req, false)
+}
+
+// GetQuota is Get for a source that answers 429 when its free quota is spent:
+// the 429 of an unkeyed request, which Get treats as a failed check, returns
+// run.ErrQuota, so the stage stops instead of sending the checks that remain.
+// Get is left alone because most sources' 429 is no reason to stop the stage
+// (one range publisher refusing must not stop the others).
+func GetQuota(ctx context.Context, c egress.Clients, req egress.ThirdPartyRequest) ([]byte, error) {
+	return get(ctx, c, req, true)
+}
+
+func get(ctx context.Context, c egress.Clients, req egress.ThirdPartyRequest, quota bool) ([]byte, error) {
 	resp, err := c.ThirdParty.Do(ctx, req)
 	if err != nil {
 		return nil, err
@@ -47,6 +62,8 @@ func Get(ctx context.Context, c egress.Clients, req egress.ThirdPartyRequest) ([
 	switch {
 	case req.KeySource != "" && (resp.Status == 401 || resp.Status == 403 || resp.Status == 429):
 		return nil, fmt.Errorf("HTTP %d (key rejected or quota exhausted): %w", resp.Status, run.ErrAbortStage)
+	case quota && resp.Status == 429:
+		return nil, fmt.Errorf("HTTP 429: %w", run.ErrQuota)
 	case resp.Status == 404:
 		return nil, ErrNotFound
 	case resp.Status != 200:
@@ -55,4 +72,14 @@ func Get(ctx context.Context, c egress.Clients, req egress.ThirdPartyRequest) ([
 		return nil, errors.New("response was larger than the 10 MiB limit")
 	}
 	return resp.Body, nil
+}
+
+// CleanName returns a name a source reported in canonical form: lower case,
+// punycode, with a trailing dot and a leading "*." removed, so a wildcard
+// certificate name yields its base name. It returns "" for anything that is not a
+// valid hostname: an address, a URL or a public suffix.
+func CleanName(n string) string {
+	n = strings.TrimPrefix(strings.TrimSpace(n), "*.") // ParseDomain does the rest of the normalising
+	d, _ := input.ParseDomain(n)
+	return d
 }

@@ -58,6 +58,13 @@ Results are written to `<output-dir>/<engagement>/` and summarised on the consol
   error, not a negative result) are retried on later runs. An interrupted run resumes the same way.
 - **`--redo <stage>`:** performs every check of one stage again. The stage names are listed in
   `recon --help`.
+- **`--skip <stage>`:** turns a stage off (repeatable; the `skip` setting, or `RECON_SKIP` as a
+  comma-separated list, does the same). A skipped stage is shown as `not-configured (skipped)`,
+  whatever else would stop it, and does nothing: results it found earlier stay in the files. The flag
+  replaces the setting for that run, and `--skip none` runs every stage. An unknown stage, a stage
+  also given to `--redo`, and `resolve`, `wildcard`, `ipowner` and `providerranges` (other stages'
+  safety depends on them) exit with code 2. When every stage that contacts the target is skipped,
+  there is no authorisation prompt.
 
 ## Configuration
 
@@ -71,7 +78,8 @@ Results are written to `<output-dir>/<engagement>/` and summarised on the consol
   environment. There are no key flags, so keys never appear in shell history or process lists.
   Keys are redacted from all output and files.
 - **Keyed sources:** `securitytrails`, `shodan`, `virustotal` and `whoisxml`. A stage whose key is
-  missing is shown as `not-configured`. The other sources need no key.
+  missing is shown as `not-configured`. `certspotter` takes an optional key: it runs without one,
+  and sends `keys.certspotter` when it is set. The other sources need no key.
 - **Settings:** all settings and their defaults are listed by `recon --help`.
 
 Example `config.yaml` (a leading `~/` in `output_dir`, `wordlist` or `sensitive_paths` is your home
@@ -104,9 +112,12 @@ recon limits what target-owned systems can receive. It sends only:
 
 It never sends credentials, submits forms, uses other HTTP methods, puts payloads in parameters or
 headers, or requests paths beyond those listed. UDP is not used. Candidate hosts (found but not in
-scope) and excluded hosts are never contacted. Everything else comes from third parties: CT logs,
-web archives, public DNS resolvers, RDAP/WHOIS, BGP data, keyed APIs and cloud-storage provider
-endpoints.
+scope) and excluded hosts are never contacted. Everything else comes from third parties: CT logs
+(crt.sh and Cert Spotter), web archives, passive DNS and search (AlienVault OTX, HackerTarget,
+urlscan.io and Anubis), public DNS resolvers, RDAP/WHOIS, BGP data, keyed APIs and cloud-storage
+provider endpoints. Only hostnames are recorded from Cert Spotter, OTX, HackerTarget, urlscan.io and
+Anubis. When one of these five reports that its free quota is spent, its stage alone stops, and its
+checks are retried on the next run.
 
 All network access goes through one package. On every supported platform, a test fails if any other
 package imports a network package or `syscall`, or uses `golang.org/x/sys/unix` for anything other

@@ -49,6 +49,16 @@ type Storage struct {
 	MaxNames int
 }
 
+// Certspotter holds the Cert Spotter settings.
+type Certspotter struct {
+	// MaxPages caps the result pages followed per root. It is part of the check,
+	// so raising it repeats the checks.
+	MaxPages int
+}
+
+// skipNone is the value of --skip that clears the skip setting for a run.
+const skipNone = "none"
+
 // Settings are the validated settings for a run.
 type Settings struct {
 	Keys                 map[string]Secret
@@ -74,6 +84,10 @@ type Settings struct {
 	CertExpiryDays int
 	OutputDir      string
 	NetblockLimit  int // IPv4 addresses
+	Certspotter    Certspotter
+	// Skip names the stages to turn off. It holds only stage names: "none" is
+	// resolved here, and whether each name is a stage is checked by the caller.
+	Skip []string
 }
 
 // Defaults returns the default settings. The limits and rates are reasonable
@@ -94,6 +108,7 @@ func Defaults() Settings {
 		OutputDir:       ".",
 		NetblockLimit:   4096,
 		Permutations:    Permutations{Enabled: true, MaxPerSeed: 200},
+		Certspotter:     Certspotter{MaxPages: 10},
 	}
 }
 
@@ -170,6 +185,7 @@ var settingTable = []setting{
 	{"crawl-pages", "crawl.max_pages"}, {"output-dir", "output_dir"}, {"netblock-limit", "netblock_limit"},
 	{"permutations-max", "permutations.max_per_seed"}, {"archive-max-urls", "archive.max_urls"},
 	{"storage-max-names", "storage.max_names"}, {"cert-expiry-days", "cert_expiry_days"},
+	{"skip", "skip"}, {"certspotter-max-pages", "certspotter.max_pages"},
 }
 
 // RegisterFlags adds one flag per setting to fs. There is deliberately no flag for API keys.
@@ -195,6 +211,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.Bool("no-permutations", false, "do not resolve permutations of discovered subdomain labels (default: on, including with --passive)")
 	fs.Int("permutations-max", d.Permutations.MaxPerSeed, "maximum permutations generated per discovered subdomain label")
 	fs.Int("netblock-limit", d.NetblockLimit, "IPv4 address count above which the run stops unless --allow-large-netblocks is given")
+	fs.StringArray("skip", nil, "stage to turn off for this run (repeatable; replaces the skip setting, and none clears it; see the stage list below)")
+	fs.Int("certspotter-max-pages", d.Certspotter.MaxPages, "result pages followed per root from Cert Spotter")
 }
 
 type rawSettings struct {
@@ -227,6 +245,10 @@ type rawSettings struct {
 		Enabled    string `mapstructure:"enabled"`
 		MaxPerSeed string `mapstructure:"max_per_seed"`
 	} `mapstructure:"permutations"`
+	Certspotter struct {
+		MaxPages string `mapstructure:"max_pages"`
+	} `mapstructure:"certspotter"`
+	Skip []string `mapstructure:"skip"`
 }
 
 // Load merges defaults, the config file, RECON_* environment variables and the
@@ -247,6 +269,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		"output_dir": d.OutputDir, "netblock_limit": d.NetblockLimit,
 		"storage.max_names": d.Storage.MaxNames, "cert_expiry_days": d.CertExpiryDays,
 		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed,
+		"certspotter.max_pages": d.Certspotter.MaxPages, "skip": []string{},
 	}
 	for k, val := range defaults {
 		v.SetDefault(k, val)
@@ -336,6 +359,12 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	posInt("storage.max_names", raw.Storage.MaxNames, 1, &s.Storage.MaxNames)
 	posInt("cert_expiry_days", raw.CertExpiryDays, 0, &s.CertExpiryDays)
 	posInt("permutations.max_per_seed", raw.Permutations.MaxPerSeed, 1, &s.Permutations.MaxPerSeed)
+	posInt("certspotter.max_pages", raw.Certspotter.MaxPages, 1, &s.Certspotter.MaxPages)
+	if skip, err := parseSkip(raw.Skip); err != nil {
+		bad("skip", strings.Join(raw.Skip, ","), err.Error())
+	} else {
+		s.Skip = skip
+	}
 	if enabled, err := strconv.ParseBool(strings.TrimSpace(raw.Permutations.Enabled)); err != nil {
 		bad("permutations.enabled", raw.Permutations.Enabled, "not true or false")
 	} else {
@@ -378,6 +407,28 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		return Settings{}, fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return s, nil
+}
+
+// parseSkip normalises the skip list: names are trimmed, lower-cased and
+// de-duplicated, and "none" alone gives an empty list. "none" beside a stage name
+// is a contradiction, not something to guess at.
+func parseSkip(items []string) ([]string, error) {
+	var out []string
+	none := false
+	for _, it := range items {
+		it = strings.ToLower(strings.TrimSpace(it))
+		switch {
+		case it == "":
+		case it == skipNone:
+			none = true
+		case !slices.Contains(out, it):
+			out = append(out, it)
+		}
+	}
+	if none && len(out) > 0 {
+		return nil, fmt.Errorf("%q cannot be combined with stage names", skipNone)
+	}
+	return out, nil
 }
 
 // expandHome replaces a leading "~" or "~/" with the user's home directory.

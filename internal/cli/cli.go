@@ -75,7 +75,7 @@ func DefaultDeps() Deps {
 // stages; storage follows the crawl so references found in the
 // same pass are checked, and the Target stages run before the port sweep.
 func defaultStages() []run.Stage {
-	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails
+	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails, otx, hackertarget, urlscan, anubis, certspotter
 	stages := []run.Stage{asn.New(), orgpivot.NewOrgASN(), orgpivot.NewCTOrg(), orgpivot.NewWhoisXML()}
 	stages = append(stages, sub...)
 	return append(stages,
@@ -216,7 +216,9 @@ Configuration:
 
 Findings and their default severities (fixed in code, not configurable; the summary lists high and medium):
 ` + findings.HelpTable() + `
-Stages accepted by --redo: ` + strings.Join(stageNames(stages), ", ") + "\n"
+Stages accepted by --redo: ` + strings.Join(stageNames(stages), ", ") + `
+--skip takes the same names, except ` + strings.Join(unskippable, ", ") + `, which other stages' safety depends on.
+`
 }
 
 func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o *options, d Deps) (code int) {
@@ -250,8 +252,12 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 			return bail(run.ExitInvalid, fmt.Errorf("%w; name the engagement with -e", err))
 		}
 	}
-	if names := stageNames(d.Stages); o.redo != "" && !slices.Contains(names, o.redo) {
+	names := stageNames(d.Stages)
+	if o.redo != "" && !slices.Contains(names, o.redo) {
 		return bail(run.ExitInvalid, fmt.Errorf("unknown stage %q for --redo (stages: %s)", o.redo, strings.Join(names, ", ")))
+	}
+	if err := validateSkip(settings.Skip, o.redo, names); err != nil {
+		return bail(run.ExitInvalid, err)
 	}
 
 	eng, err := engagement.Open(filepath.Join(settings.OutputDir, name), engagement.Options{Clock: d.Clock, Redactor: red})
@@ -276,7 +282,7 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 		return bail(run.ExitInvalid, fmt.Errorf("engagement %s has no scope; give domains, --org, --asn or --cidr", name))
 	}
 
-	if err := acknowledge(eng, o, d); err != nil {
+	if err := acknowledge(eng, o, d, settings.Skip); err != nil {
 		return bail(run.ExitFatal, err)
 	}
 
@@ -312,16 +318,43 @@ func runCommand(ctx context.Context, cmd *cobra.Command, positional []string, o 
 	return code
 }
 
+// unskippable are the stages other stages' safety depends on: resolve and
+// wildcard decide which names are real, ipowner and providerranges decide which
+// addresses are shared infrastructure that must not be port-checked.
+var unskippable = []string{"resolve", "wildcard", "ipowner", "providerranges"}
+
+// validateSkip rejects a --skip (or skip setting) that names an unknown stage,
+// a stage that is also being redone, or a stage that cannot be skipped.
+func validateSkip(skip []string, redo string, names []string) error {
+	skippable := func() string {
+		return strings.Join(slices.DeleteFunc(slices.Clone(names), func(s string) bool { return slices.Contains(unskippable, s) }), ", ")
+	}
+	for _, n := range skip {
+		switch {
+		case !slices.Contains(names, n):
+			return fmt.Errorf("unknown stage %q for --skip or the skip setting (stages: %s)", n, strings.Join(names, ", "))
+		case n == redo:
+			return fmt.Errorf("stage %q is named in both --redo and --skip (stages that can be skipped: %s)", n, skippable())
+		case slices.Contains(unskippable, n):
+			return fmt.Errorf("stage %q cannot be skipped: other stages' safety depends on it (stages that can be skipped: %s)", n, skippable())
+		}
+	}
+	return nil
+}
+
 // acknowledge records the operator's authorisation: by flag, or once per
-// engagement by prompt when there is a terminal.
-func acknowledge(eng *engagement.Engagement, o *options, d Deps) error {
+// engagement by prompt when there is a terminal. A skipped stage does not need
+// it, so the prompt is shown only when a stage that contacts the target will run.
+func acknowledge(eng *engagement.Engagement, o *options, d Deps, skip []string) error {
 	if o.authorised {
 		return eng.SetAck()
 	}
 	if eng.Acked() || o.passive || o.json || !d.StdinIsTTY() {
 		return nil
 	}
-	if !slices.ContainsFunc(d.Stages, func(s run.Stage) bool { return s.Contact() == run.Target }) {
+	if !slices.ContainsFunc(d.Stages, func(s run.Stage) bool {
+		return s.Contact() == run.Target && !slices.Contains(skip, s.Name())
+	}) {
 		return nil
 	}
 	fmt.Fprint(d.Stderr, ackPrompt)

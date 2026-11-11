@@ -15,6 +15,7 @@ import (
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/kinds"
 	"github.com/rafaelh/recon/internal/run"
+	"github.com/rafaelh/recon/internal/stages/httpsrc"
 )
 
 // maxHops is how many redirects a probe follows.
@@ -295,8 +296,8 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 // sanHost turns a certificate DNS name into a hostname: a wildcard contributes
 // its base name; malformed names, IP literals and public suffixes are skipped.
 func sanHost(name string) (string, bool) {
-	d, err := input.ParseDomain(strings.TrimPrefix(strings.TrimSpace(name), "*."))
-	return d, err == nil
+	d := httpsrc.CleanName(name)
+	return d, d != ""
 }
 
 // selfSigned reports whether the certificate was issued and signed by itself.
