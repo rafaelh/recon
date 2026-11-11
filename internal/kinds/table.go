@@ -48,7 +48,9 @@ var (
 	ProviderRange = define[ProviderRangeAttrs](Kind{Name: "provider_range"})
 )
 
-// ResolutionAttrs is one DNS answer: a name's A, AAAA or CNAME value.
+// ResolutionAttrs is one DNS answer: a name's A, AAAA or CNAME value, or a
+// root's NS, SOA, TXT or CAA value. Only A, AAAA and CNAME rows decide what is
+// resolved, contacted or checked for wildcards.
 type ResolutionAttrs struct {
 	Name  string `json:"name"`
 	Type  string `json:"type"`

@@ -106,3 +106,140 @@ platforms the organisation has verified domain ownership with.
 ## Out of scope
 
 SRV (Spec 19), SPF and DMARC third parties (Spec 9), using NS data for relatedness (Spec 16).
+
+# Implementation
+
+## Develop
+
+Built as designed, with these specifics:
+
+- **egress**: `TypeNS/SOA/CAA`; `rdata` writes SOA as `<mname> <mailbox>` (`mailbox` turns the first
+  unescaped dot into `@` and `\.` into `.`, lower-casing the domain half) and CAA as
+  `<flags> <tag> "<value>"`. `egresstest` gained `NS`, `SOA`, `CAA`, `RcodeType`/`ClearRcodeType`
+  (a response code for one type of one name, so SERVFAIL can hit TXT alone) and `ClearRoot`.
+- **`dnsroot`** (`internal/stages/dns/dnsroot.go`), registered after `ipowner`. Checks are keyed
+  `<root>|<TYPE>` and carry the scope. SERVFAIL returns an error; NODATA and NXDOMAIN are empty
+  results. An in-scope NS or SOA target is a `hostname`; an out-of-scope NS target is a `third_party`
+  keyed by its registrable domain (falling back to the host for a public suffix); an out-of-scope
+  SOA primary adds nothing.
+- **Kinds**: `third_party` (`HostAttr: "root"`, `OutsideAttr: "domain"`, `Found`), `Kind.OutsideAttr`
+  evaluated in `Visibility.shown`, and `Kind.Found` used by the runner's `onNewRecord`. `Kind` now
+  holds a func, so it is no longer comparable; the one `kind == kinds.ExcludedKind` comparison in
+  `output.go` compares names. `ThirdPartyOf` fills root, mechanism and domain/provider from the key,
+  because the store keeps attributes only from current observations.
+- **provider**: `txt:` and `domains:` in `providers.yaml`, `DB.Verification` and `DB.DomainOwner`
+  (methods on `DB`, like `CNAME`, reached through `provider.Default()`).
+- **Output/report**: `third-parties.csv` (own file, one line in `Default()`); the console prints
+  `+ <text>` when a found event carries `text`.
+- **Wildcard** reads only A, AAAA and CNAME rows.
+
+Fixes beyond the design:
+
+- The store drops the attributes of records that are no longer current, which `--redo` (behaviour 6)
+  exposes: `resolutionRows` reads name, type and value from the key when the attributes are empty,
+  and `thirdPartyRows` asks the showing rule with the root and domain the key gives back.
+- An NS or SOA answer whose owner is not the root (the root is an alias, so the resolver followed it
+  to the target's zone) is skipped, so a root is never recorded as depending on its alias target's
+  name servers. TXT and CAA answers are kept.
+
+Tests, all in `internal/cli/dnsroot_test.go` unless stated: record formats and the SOA mailbox
+cases (behaviour 2); in-scope and out-of-scope name servers, no candidate, no resolution of an
+out-of-scope server, port eligibility (3); one row per platform and root for every prefix in both
+cases, in chunks of five because the fake DNS server answers over UDP only and fourteen TXT records
+overflow a datagram (4); an unmatched TXT (5); file columns, not written when empty, redo marks
+vanished rows not current (6); NODATA, NXDOMAIN, SERVFAIL for one type and its retry, `--passive`,
+excluded roots (1, 7); the `+` line, the `found` fields and no repeat announcement (8); the summary
+count and the read-time hide when a root later covers the domain. `internal/inventory`: the new row
+types change nothing; `internal/cli`: they create no wildcard checks; `internal/egress`: AXFR and
+IXFR refused and the new types queryable; `internal/provider`, `internal/kinds` and
+`internal/report` unit tests. The inventory, AXFR/IXFR and registry-order tests pin existing
+behaviour and passed before the code was written.
+
+The Salesforce prefix is not confirmed against a live record (noted in `providers.yaml`).
+
+Simplification: the CAA `rdata` case went (miekg's own text is the same and escapes target-supplied
+bytes), the SOA mailbox uses `dns.NextLabel`, `Kind.Found` returns one map with `text` in it, and the
+stage's NS and SOA cases are merged.
+
+Mutation checks (`## Tests` marks none, so these are the riskiest guards): removing the wildcard
+row-type filter fails `TestDNSRoot_RowsCreateNoWildcardChecks`; treating SERVFAIL as a result fails
+`TestDNSRoot_Outcomes`; dropping the outside-domain rule fails `TestThirdPartyShown`,
+`TestThirdPartyCountedAndPrinted` and `TestDNSRoot_DomainInScopeHidesRow`.
+
+## Known limitations
+
+- **Behaviour 3**: Amazon Route 53 name servers (`awsdns-NN.<tld>`) have no provider name, because
+  the `domains:` list matches suffixes and the number is in the label; they are recorded by domain.
+- **Behaviours 1 and 3**: the check key `<root>|<TYPE>` does not include the scope, so a name server
+  that a root added later brings into scope does not become a hostname until `--redo dnsroot`.
+- **Behaviour 3**: the `domains:` lookup is given the name server's registrable domain, so a suffix
+  deeper than that (`dns.hoster.com`) never matches.
+- **Behaviour 4**: a TXT value split over several strings is matched on the strings joined (egress
+  joins them); a prefix split across strings still matches.
+
+# Verification
+
+## Result
+
+Checked against the goal, behaviours 1 to 8 and `## Out of scope` by reading every changed file and
+running `make test` (passes). The goal is met. For each in-scope input root, `dnsroot` records NS,
+SOA, TXT and CAA answers as `resolution` rows. Those rows cannot change what is contacted (the
+inventory and the wildcard stage read only A, AAAA and CNAME rows, and both are pinned by tests).
+TXT verification records become `third-parties.csv` rows naming the platform. The stage order
+matches the build-order registry, and the `third-parties.csv` columns match its column order.
+
+- **B1 met.** `dnsroot` is a `ThirdParty` stage registered after `ipowner`, so it runs under
+  `--passive`. Its checks are keyed `<root>|<TYPE>` over `Inputs().Roots` that classify as in scope
+  (an excluded root is not queried). Queries go through `egress` like `resolve`'s, and egress still
+  refuses AXFR and IXFR.
+- **B2 met.** CAA is miekg's presentation text (`0 issue "letsencrypt.org"`). SOA is
+  `<mname> <mailbox>`, with the first unescaped dot turned into `@` and `\.` turned into `.`. Both
+  are tested, including a mailbox with several escaped dots.
+- **B3 met after one fix.** An in-scope NS target or SOA primary becomes a `hostname` and is then
+  resolved, probed and made port-eligible (tested). An out-of-scope NS target becomes a `third_party`
+  row keyed by its registrable domain, with the provider when `domains:` knows it. It is not a
+  candidate and is never resolved. Known limitation 1 stands: Route 53 name servers are listed by
+  domain with no provider name. B3 allows this ("the provider name when known and the domain
+  otherwise"), so it is not a gap. *Fixed:* known limitation 2, where a not-current `ns` row stayed
+  in `third-parties.csv` after a later root brought its domain into scope. `thirdPartyRows` now
+  applies the showing rule using the root and domain recovered from the key when the record has no
+  attributes. `TestDNSRoot_DomainInScopeHidesNotCurrentRow` covers this, and it fails without the fix.
+- **B4 met.** All fourteen platforms are in `providers.yaml` and in the README, and matching is
+  case-insensitive. Each root gets one row per platform, even when a platform has two tokens, and the
+  token appears only in `resolutions.csv` (tested in both cases). Most prefixes match published
+  formats. A web search showed Zoom records as `zoom-domain-verification=ZOOM_verify_…`, which the
+  prefix matches. The Salesforce prefix is still unconfirmed (Follow-ups). Known limitation 3 (a TXT
+  split over several strings is matched after joining) matches how DNS clients read TXT, so it is
+  not a gap.
+- **B5 met.** An unmatched TXT is a `resolutions.csv` row only (tested).
+- **B6 met.** `third-parties.csv` is written only when it has rows, and its header ends with
+  `current, first_seen, last_seen`. After `--redo dnsroot`, vanished TXT and NS rows are marked not
+  current, and their key-derived columns are filled in (tested).
+- **B7 met.** NODATA and NXDOMAIN complete with no rows. SERVFAIL, and REFUSED (which egress maps to
+  SERVFAIL), return an error for that type's check alone, and it is retried on the next run (tested).
+  A timeout is an egress error and therefore transient. This path is shared with `resolve` and has
+  no separate test.
+- **B8 met.** The console prints `+ third-party <platform> via <mechanism> on <root>`. The `found`
+  event carries `platform`, `mechanism`, `root` and `text`. A known third party is not announced
+  again (tested).
+
+*Also changed:* the `ResolutionAttrs` doc comment in `internal/kinds/table.go` said it held only A,
+AAAA and CNAME values. It now names the root types and says only A, AAAA and CNAME rows decide what
+is resolved, contacted or checked for wildcards.
+
+Not covered by the spec, and left alone: answers are not filtered by owner name. If an input root is
+itself a CNAME, the target's TXT (and NS) answers are recorded as the root's, which is what any
+verifying service following the CNAME would also see.
+
+# Follow-ups
+
+- **Store keeps no attributes for a record that is no longer current.** This feature adds three
+  key-parsing fallbacks for it (`ThirdPartyOf`, `splitResolutionKey`, the key-derived root and domain in
+  `thirdPartyRows`), beside the existing ones in `findings`. Keeping a record's last attributes when it
+  loses its last observation (a `records.attrs` column and one migration) would remove all of them
+  It changes store semantics, so land it as its own `fix:`.
+- **`Kind` is no longer comparable** (it holds `Found`). Comparing two `kinds.Named` values with `==`,
+  or using one as a map key, compiles but panics at runtime. Nothing does either today; specs that
+  build on `Kind.Found` should compare `Name()`.
+- Writing NS, SOA, TXT and CAA rows as `resolution` records raises that kind's version, so the
+  runner rebuilds the scope and inventory after a pass that wrote them, though they cannot change it.

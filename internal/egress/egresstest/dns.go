@@ -27,7 +27,18 @@ type DNS struct {
 	ptr      map[string][]string
 	txt      map[string][]string
 	mx       map[string][]mxRecord
+	ns       map[string][]string
+	soa      map[string]soaRecord
+	caa      map[string][]caaRecord
+	typeRC   map[string]int // "name|TYPE" -> rcode
 	queries  map[string]int
+}
+
+type soaRecord struct{ mname, rname string }
+
+type caaRecord struct {
+	flags      uint8
+	tag, value string
 }
 
 type mxRecord struct {
@@ -47,6 +58,7 @@ func NewDNS(t testing.TB) *DNS {
 		addrs: map[string][]netip.Addr{}, cnames: map[string]string{}, rcodes: map[string]int{},
 		sufRcode: map[string]int{}, drop: map[string]bool{}, wild: map[string]wildcard{},
 		ptr: map[string][]string{}, txt: map[string][]string{}, mx: map[string][]mxRecord{}, queries: map[string]int{},
+		ns: map[string][]string{}, soa: map[string]soaRecord{}, caa: map[string][]caaRecord{}, typeRC: map[string]int{},
 	}
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
@@ -155,7 +167,55 @@ func (d *DNS) MX(name string, pref int, host string) {
 	d.mx[norm(name)] = append(d.mx[norm(name)], mxRecord{uint16(pref), host})
 }
 
-// Count is how many queries of the type ("A", "AAAA", "PTR", "TXT", "MX") were made for name.
+// NS makes name answer NS queries with a name server.
+func (d *DNS) NS(name, host string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.ns[norm(name)] = append(d.ns[norm(name)], norm(host))
+}
+
+// SOA makes name answer SOA queries. rname is in DNS form, so an escaped dot in
+// the local part is written `john\.doe.example.com`.
+func (d *DNS) SOA(name, mname, rname string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.soa[norm(name)] = soaRecord{norm(mname), rname}
+}
+
+// CAA makes name answer CAA queries with a record.
+func (d *DNS) CAA(name string, flags int, tag, value string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.caa[norm(name)] = append(d.caa[norm(name)], caaRecord{uint8(flags), tag, value})
+}
+
+// RcodeType forces a response code for queries of one type ("TXT", "NS", ...)
+// for name, leaving its other types alone.
+func (d *DNS) RcodeType(name, qtype string, rcode int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.typeRC[norm(name)+"|"+qtype] = rcode
+}
+
+// ClearRcodeType removes the response code forced by RcodeType.
+func (d *DNS) ClearRcodeType(name, qtype string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	delete(d.typeRC, norm(name)+"|"+qtype)
+}
+
+// ClearRoot removes the NS, SOA, TXT and CAA records of name.
+func (d *DNS) ClearRoot(name string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	n := norm(name)
+	delete(d.ns, n)
+	delete(d.soa, n)
+	delete(d.txt, n)
+	delete(d.caa, n)
+}
+
+// Count is how many queries of the type ("A", "AAAA", "PTR", "TXT", "MX", "NS", "SOA", "CAA") were made for name.
 func (d *DNS) Count(name, qtype string) int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -193,7 +253,10 @@ func (d *DNS) known(name string) bool {
 	_, p := d.ptr[name]
 	_, x := d.txt[name]
 	_, m := d.mx[name]
-	return a || c || p || x || m
+	_, n := d.ns[name]
+	_, s := d.soa[name]
+	_, k := d.caa[name]
+	return a || c || p || x || m || n || s || k
 }
 
 func (d *DNS) serve(w mdns.ResponseWriter, r *mdns.Msg) {
@@ -222,6 +285,10 @@ func (d *DNS) serve(w mdns.ResponseWriter, r *mdns.Msg) {
 // answer fills m. The caller holds d.mu.
 func (d *DNS) answer(m *mdns.Msg, name string, qtype uint16, hdr func(uint16) mdns.RR_Header) {
 	if rc, ok := d.rcodes[name]; ok {
+		m.Rcode = rc
+		return
+	}
+	if rc, ok := d.typeRC[name+"|"+mdns.TypeToString[qtype]]; ok {
 		m.Rcode = rc
 		return
 	}
@@ -288,6 +355,19 @@ func (d *DNS) answer(m *mdns.Msg, name string, qtype uint16, hdr func(uint16) md
 				host = mdns.Fqdn(host)
 			}
 			m.Answer = append(m.Answer, &mdns.MX{Hdr: h, Preference: x.pref, Mx: host})
+		}
+	case mdns.TypeNS:
+		for _, n := range d.ns[cur] {
+			m.Answer = append(m.Answer, &mdns.NS{Hdr: h, Ns: mdns.Fqdn(n)})
+		}
+	case mdns.TypeSOA:
+		if s, ok := d.soa[cur]; ok {
+			m.Answer = append(m.Answer, &mdns.SOA{Hdr: h, Ns: mdns.Fqdn(s.mname), Mbox: mdns.Fqdn(s.rname),
+				Serial: 1, Refresh: 7200, Retry: 3600, Expire: 1209600, Minttl: 300})
+		}
+	case mdns.TypeCAA:
+		for _, c := range d.caa[cur] {
+			m.Answer = append(m.Answer, &mdns.CAA{Hdr: h, Flag: c.flags, Tag: c.tag, Value: c.value})
 		}
 	}
 }

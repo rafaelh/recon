@@ -19,6 +19,9 @@ const (
 	TypePTR   = dns.TypePTR
 	TypeTXT   = dns.TypeTXT
 	TypeMX    = dns.TypeMX
+	TypeNS    = dns.TypeNS
+	TypeSOA   = dns.TypeSOA
+	TypeCAA   = dns.TypeCAA
 )
 
 // DNS response codes returned in DNSResult.RCode.
@@ -129,6 +132,8 @@ func rdata(rr dns.RR) string {
 		return input.NormaliseHost(v.Ptr)
 	case *dns.TXT:
 		return strings.Join(v.Txt, "")
+	case *dns.SOA:
+		return input.NormaliseHost(v.Ns) + " " + mailbox(v.Mbox)
 	case *dns.MX:
 		host := "."
 		if v.Mx != "." {
@@ -141,4 +146,16 @@ func rdata(rr dns.RR) string {
 		return parts[4]
 	}
 	return rr.String()
+}
+
+// mailbox writes an SOA responsible-person name as an email address: the first
+// unescaped dot is the @, and an escaped dot in the local part is a plain dot
+// (`john\.doe.example.com` is john.doe@example.com).
+func mailbox(mbox string) string {
+	mbox = strings.TrimSuffix(mbox, ".")
+	i, end := dns.NextLabel(mbox, 0)
+	if end {
+		return strings.ReplaceAll(mbox, `\.`, ".")
+	}
+	return strings.ReplaceAll(mbox[:i-1], `\.`, ".") + "@" + strings.ToLower(mbox[i:])
 }

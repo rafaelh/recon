@@ -161,7 +161,7 @@ func TestTotals(t *testing.T) {
 		"hostname": {rec("www.example.com"), rec("www.other.org")},
 		"url":      {rec("https://www.example.com/a"), rec("https://www.other.org/a"), gone},
 	})
-	want := map[string]int{kinds.Hosts: 1, kinds.Candidates: 1, "urls": 1, "ips": 0, "unresolved names": 0, "web services": 0, "open ports": 0, "findings": 0}
+	want := map[string]int{kinds.Hosts: 1, kinds.Candidates: 1, "urls": 1, "ips": 0, "unresolved names": 0, "web services": 0, "open ports": 0, "findings": 0, "third parties": 0}
 	if len(got) != len(want) {
 		t.Errorf("totals = %v, want %v", got, want)
 	}

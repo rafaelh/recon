@@ -18,6 +18,8 @@ import (
 //   - a port record (PortKey) is shown while its address is port-eligible, so a
 //     reassigned cloud address is not reported as the target's;
 //   - a record keyed by a hostname (HostKey) is shown while that name is in scope;
+//   - a record with an OutsideAttr is shown only while the domain it names is
+//     not in scope, on top of any other rule;
 //   - an entity record is never hidden: it is classified as in scope, a
 //     candidate or excluded, which decides its summary category;
 //   - a record of any other kind is always shown.
@@ -48,6 +50,13 @@ func (v *Visibility) shown(k Kind, r store.Record) bool {
 		return true
 	case v == nil:
 		return !k.scoped()
+	}
+	return v.hostShown(k, r) && v.outside(k, r)
+}
+
+// hostShown applies a kind's rule for the host or address a record belongs to.
+func (v *Visibility) hostShown(k Kind, r store.Record) bool {
+	switch {
 	case k.PortKey:
 		ap, err := netip.ParseAddrPort(r.Key)
 		return err == nil && v.inv.PortEligible(ap.Addr(), v.sc)
@@ -57,6 +66,16 @@ func (v *Visibility) shown(k Kind, r store.Record) bool {
 		return v.sc.ClassifyHost(r.Key).Class == scope.InScope
 	}
 	return true
+}
+
+// outside reports whether the domain a record names is outside the scope, or
+// the record names none.
+func (v *Visibility) outside(k Kind, r store.Record) bool {
+	if k.OutsideAttr == "" {
+		return true
+	}
+	d := r.Str(k.OutsideAttr)
+	return d == "" || v.sc.ClassifyHost(d).Class != scope.InScope
 }
 
 func (v *Visibility) webHostInScope(host string) bool {

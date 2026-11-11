@@ -51,7 +51,13 @@ func (*Wildcard) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, er
 			zones[input.NormaliseHost(r)] = true
 		}
 		for _, rec := range v.Records(kinds.Resolution) {
-			name := input.NormaliseHost(kinds.Resolution.Attrs(rec).Name)
+			a := kinds.Resolution.Attrs(rec)
+			// Only the types that say a name exists as a host name a zone; the
+			// root records (NS, SOA, TXT, CAA) belong to a zone already known.
+			if a.Type != "A" && a.Type != "AAAA" && a.Type != "CNAME" {
+				continue
+			}
+			name := input.NormaliseHost(a.Name)
 			if v.Scope().ClassifyHost(name).Class != scope.InScope {
 				continue
 			}

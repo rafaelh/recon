@@ -41,10 +41,19 @@ type Kind struct {
 	// HostKey kinds are keyed by a hostname. Such a record is shown only while
 	// that name is in scope, decided when it is read.
 	HostKey bool
+	// OutsideAttr names an attribute holding a domain. A record that has one is
+	// shown only while that domain is not in scope (an empty value counts as
+	// outside), decided when it is read, on top of any other rule.
+	OutsideAttr string
+	// Found, if set, describes a new record's found line: its fields are added
+	// to the found event, and its "text" is what the console prints after "+".
+	Found func(store.Record) map[string]any
 }
 
 // scoped reports whether showing a record of k depends on the scope.
-func (k Kind) scoped() bool { return k.Entity || k.HostAttr != "" || k.PortKey || k.HostKey }
+func (k Kind) scoped() bool {
+	return k.Entity || k.HostAttr != "" || k.PortKey || k.HostKey || k.OutsideAttr != ""
+}
 
 // Summary categories of entity kinds.
 const (

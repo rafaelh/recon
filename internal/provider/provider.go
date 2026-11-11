@@ -126,11 +126,19 @@ type addrRange struct {
 	class string
 }
 
+// txtPrefix is a TXT value prefix (lower case) and the platform it verifies ownership for.
+type txtPrefix struct{ prefix, platform string }
+
+// domainOwner is a domain suffix (lower case) and the provider that operates it.
+type domainOwner struct{ suffix, provider string }
+
 // DB is the parsed providers.yaml.
 type DB struct {
-	cnames []Entry
-	asns   map[int]struct{ provider, class string }
-	ranges []addrRange
+	cnames  []Entry
+	asns    map[int]struct{ provider, class string }
+	ranges  []addrRange
+	txt     []txtPrefix
+	domains []domainOwner
 }
 
 var (
@@ -164,6 +172,8 @@ func Parse(b []byte) (*DB, error) {
 		Ranges []struct {
 			CIDR, Provider, Service, Class string
 		}
+		TXT     []struct{ Prefix, Platform string }
+		Domains []struct{ Suffix, Provider string }
 	}
 	if err := yaml.Unmarshal(b, &raw); err != nil {
 		return nil, err
@@ -192,6 +202,20 @@ func Parse(b []byte) (*DB, error) {
 		}
 		db.ranges = append(db.ranges, addrRange{prefix: p.Masked(), Match: Match{r.Provider, r.Service}, class: r.Class})
 	}
+	for _, t := range raw.TXT {
+		if t.Prefix == "" || t.Platform == "" {
+			return nil, fmt.Errorf("txt entry %+v needs a prefix and a platform", t)
+		}
+		db.txt = append(db.txt, txtPrefix{strings.ToLower(t.Prefix), t.Platform})
+	}
+	for _, d := range raw.Domains {
+		if d.Suffix == "" || d.Provider == "" {
+			return nil, fmt.Errorf("domains entry %+v needs a suffix and a provider", d)
+		}
+		db.domains = append(db.domains, domainOwner{dnsname.Normalise(d.Suffix), d.Provider})
+	}
+	// Longest suffix first, as for CNAMEs, so a specific service wins.
+	sort.SliceStable(db.domains, func(i, j int) bool { return len(db.domains[i].suffix) > len(db.domains[j].suffix) })
 	return db, nil
 }
 
@@ -270,4 +294,28 @@ func (db *DB) Classify(a netip.Addr, owner Owner, ranges *Ranges) Result {
 		return Result{Known: true}
 	}
 	return Result{}
+}
+
+// Verification returns the platform a root TXT record is a domain-ownership
+// verification for: the value starts with a listed prefix, in any case.
+func (db *DB) Verification(value string) (string, bool) {
+	v := strings.ToLower(strings.TrimSpace(value))
+	for _, t := range db.txt {
+		if strings.HasPrefix(v, t.prefix) {
+			return t.platform, true
+		}
+	}
+	return "", false
+}
+
+// DomainOwner returns the provider that operates a domain, such as a managed
+// DNS service for its name servers, matching on label boundaries.
+func (db *DB) DomainOwner(name string) (string, bool) {
+	n := dnsname.Normalise(name)
+	for _, d := range db.domains {
+		if dnsname.Under(n, d.suffix) {
+			return d.provider, true
+		}
+	}
+	return "", false
 }

@@ -165,7 +165,11 @@ func (c *Console) Emit(ev Event) {
 		}
 		b.WriteString(line)
 	case "found":
-		line := c.st("2", false).Render("+") + " " + str(f, "category") + ": " + str(f, "value")
+		body := str(f, "category") + ": " + str(f, "value")
+		if text := str(f, "text"); text != "" {
+			body = text
+		}
+		line := c.st("2", false).Render("+") + " " + body
 		if sev := str(f, "severity"); sev != "" {
 			line += " " + c.st(severityColor(sev), true).Render("["+sev+"]")
 		}

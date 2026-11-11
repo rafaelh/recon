@@ -108,3 +108,16 @@ func TestRedactingEmitter(t *testing.T) {
 		t.Errorf("expected mask: %s", buf.String())
 	}
 }
+
+// A found event that carries text prints as "+ <text>"; one without keeps the category: value form.
+func TestConsoleFoundText(t *testing.T) {
+	var buf bytes.Buffer
+	c := report.NewConsole(&buf, false, clk)
+	c.Emit(report.Event{Type: "found", Fields: map[string]any{"category": "third party", "value": "example.com|ns|x",
+		"text": "third-party Google via txt-verification on example.com\x1b[31m"}})
+	c.Emit(report.Event{Type: "found", Fields: map[string]any{"category": "host", "value": "a.example.com"}})
+	got := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(got) != 2 || got[0] != "+ third-party Google via txt-verification on example.com" || got[1] != "+ host: a.example.com" {
+		t.Errorf("console = %q", got)
+	}
+}

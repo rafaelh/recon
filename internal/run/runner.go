@@ -668,6 +668,9 @@ func (r *Runner) onNewRecord(kind, key string, attrs map[string]any) {
 	}
 	k, _ := kinds.Get(kind)
 	f := map[string]any{"category": k.Singular, "value": key}
+	if k.Found != nil {
+		maps.Copy(f, k.Found(store.Record{Kind: kind, Key: key, Attrs: attrs}))
+	}
 	if kind == kinds.Finding.Name() {
 		fd := findings.FromRecord(store.Record{Key: key, Attrs: attrs})
 		f["category"], f["value"] = k.Singular+" "+fd.Category, fd.Target

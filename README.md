@@ -155,6 +155,33 @@ If the in-scope IPv4 address count (ASN-expanded netblocks included) exceeds `ne
 recon stops before contacting any address in them, shows the total and exits with code 3. Re-run
 with `--allow-large-netblocks` to proceed. The approval is remembered with the engagement.
 
+## Root DNS records and third parties
+
+For each in-scope input root the `dnsroot` stage asks the public resolvers for its NS, SOA, TXT
+and CAA records, one check per type, so a type that keeps failing does not block the others. It runs
+under `--passive`. Zone transfers are never attempted. Each answer is a row in `resolutions.csv`: a
+CAA value is written `<flags> <tag> "<value>"`, and an SOA value is the primary name server and
+the administrative mailbox as an email address (`john\.doe.example.com` is `john.doe@example.com`).
+
+- A name server (or SOA primary) inside the scope is a hostname, resolved, probed and port-checked
+  like any other. A name server outside it is a `third-parties.csv` row with mechanism `ns`, and is
+  never a candidate or contacted.
+- A root TXT record that starts with one of these prefixes (in any case) is one `txt-verification`
+  row per platform and root, naming the platform that domain ownership was verified with:
+  `google-site-verification=` (Google), `MS=` (Microsoft 365), `atlassian-domain-verification=`
+  (Atlassian), `docusign=` (DocuSign), `facebook-domain-verification=` (Facebook),
+  `apple-domain-verification=` (Apple), `stripe-verification=` (Stripe),
+  `adobe-idp-site-verification=` (Adobe), `hubspot-developer-verification=` (HubSpot),
+  `zoom-domain-verification=` (Zoom), `dropbox-domain-verification=` (Dropbox),
+  `salesforce-domain-verification=` (Salesforce), `have-i-been-pwned-verification=` (Have I Been
+  Pwned) and `webexdomainverification.` (Cisco Webex). The token is public DNS, so it is in
+  `resolutions.csv`, but not in `third-parties.csv`. A TXT record that matches nothing is only a row
+  in `resolutions.csv`.
+
+The `+` line for a new third party reads `third-party <platform> via txt-verification on <root>`,
+and its `--json` `found` event carries `platform`, `mechanism` and `root`. The prefix list and the
+name-server provider names are in the embedded `providers.yaml`.
+
 ## Console and JSON
 
 The console shows each stage's state as it changes: `running`, `done` (with the number of checks and
@@ -174,7 +201,7 @@ Everything is in `<output-dir>/<engagement>/`:
 | `candidates.csv` | Related domains, organisations and netblocks found but not in scope; pass one as an input to promote it |
 | `excluded.csv` | Excluded items and the reason |
 | `subdomains.txt` | In-scope hostnames |
-| `resolutions.csv` | DNS records for in-scope names, with a `source` column: `resolve` (recon's own lookup), `shodan` (reported by Shodan only) or `resolve;shodan`. Records only Shodan reports decide nothing: they never make a name resolved or an address contacted, port-checked or probed. |
+| `resolutions.csv` | DNS records for in-scope names (A, AAAA and CNAME, and the NS, SOA, TXT and CAA records of each root, see below), with a `source` column: `resolve` (recon's own lookup), `shodan` (reported by Shodan only) or `resolve;shodan`. Records only Shodan reports decide nothing: they never make a name resolved or an address contacted, port-checked or probed. |
 | `unresolved.txt` | In-scope names that did not resolve |
 | `wildcard-excluded.txt` | Names dropped because their domain answers every name (wildcard DNS) |
 | `ips.csv` | Addresses with ASN, owner, hosting provider, scope, port eligibility and hostnames |
@@ -183,6 +210,7 @@ Everything is in `<output-dir>/<engagement>/`:
 | `urls.csv` | URLs from crawling and web archives, with status and source |
 | `open-ports.csv` | Open TCP ports with the banner the service sent, if any |
 | `email-posture.csv` | SPF, DMARC and MX results per root domain |
+| `third-parties.csv` | Organisations a root depends on, with the `root`, the `mechanism` (`ns` or `txt-verification`), the `domain` (a name server's registrable domain), the `provider` (when known) and the `depth` (0 for the root's own records) |
 | `storage-unattributed.csv` | Guessed cloud-storage buckets that nothing in scope references |
 | `risk-takeover.csv` | Subdomain takeover findings |
 | `risk-storage.csv` | Cloud-storage findings: buckets that exist, are public or are listable |

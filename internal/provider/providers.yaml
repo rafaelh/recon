@@ -11,6 +11,13 @@
 #   nxdomain: true   a chain that dangles into the suffix can be claimed by anyone (a takeover)
 #   body: <RE2>      matches the page an unclaimed resource serves; a takeover when a probe sees it
 # and a `ranges:` list of static CIDRs (SaaS reached by apex A records).
+#
+# txt:     a root TXT record that starts with `prefix` (case-insensitive) is a domain-ownership
+#          verification for `platform`. Only the platform is reported; the token is not.
+# domains: a domain that ends with `suffix` (on a label boundary) is operated by `provider`, such
+#          as the managed DNS service behind a name server.
+# The Salesforce prefix has not been re-confirmed against a live record. Amazon Route 53 name servers
+# (awsdns-NN.com, .net, .org and .co.uk) are not listed: their number is in the label, so a suffix cannot match them.
 # The fingerprints, ASNs and ranges below are a hand-curated starter set; they change only with the binary.
 # The Squarespace and Wix ASNs and the Squarespace ranges were taken from the providers' published
 # documentation and have not been re-confirmed against live data.
@@ -88,3 +95,40 @@ ranges:
   - {cidr: 185.199.108.0/22, provider: github, service: Pages, class: saas}
   - {cidr: 198.185.159.144/28, provider: squarespace, service: Squarespace, class: saas}
   - {cidr: 198.49.23.144/28, provider: squarespace, service: Squarespace, class: saas}
+txt:
+  - {prefix: 'google-site-verification=', platform: Google}
+  - {prefix: 'MS=', platform: Microsoft 365}
+  - {prefix: 'atlassian-domain-verification=', platform: Atlassian}
+  - {prefix: 'docusign=', platform: DocuSign}
+  - {prefix: 'facebook-domain-verification=', platform: Facebook}
+  - {prefix: 'apple-domain-verification=', platform: Apple}
+  - {prefix: 'stripe-verification=', platform: Stripe}
+  - {prefix: 'adobe-idp-site-verification=', platform: Adobe}
+  - {prefix: 'hubspot-developer-verification=', platform: HubSpot}
+  - {prefix: 'zoom-domain-verification=', platform: Zoom}
+  - {prefix: 'dropbox-domain-verification=', platform: Dropbox}
+  - {prefix: 'salesforce-domain-verification=', platform: Salesforce}
+  - {prefix: 'have-i-been-pwned-verification=', platform: Have I Been Pwned}
+  - {prefix: 'webexdomainverification.', platform: Cisco Webex}
+domains:
+  - {suffix: cloudflare.com, provider: Cloudflare}
+  - {suffix: domaincontrol.com, provider: GoDaddy}
+  - {suffix: azure-dns.com, provider: Microsoft Azure DNS}
+  - {suffix: azure-dns.net, provider: Microsoft Azure DNS}
+  - {suffix: azure-dns.org, provider: Microsoft Azure DNS}
+  - {suffix: azure-dns.info, provider: Microsoft Azure DNS}
+  - {suffix: googledomains.com, provider: Google Cloud DNS}
+  - {suffix: nsone.net, provider: NS1}
+  - {suffix: dynect.net, provider: Oracle Dyn}
+  - {suffix: ultradns.net, provider: UltraDNS}
+  - {suffix: ultradns.com, provider: UltraDNS}
+  - {suffix: ultradns.org, provider: UltraDNS}
+  - {suffix: akam.net, provider: Akamai}
+  - {suffix: edgedns.net, provider: Akamai}
+  - {suffix: dnsimple.com, provider: DNSimple}
+  - {suffix: dnsmadeeasy.com, provider: DNS Made Easy}
+  - {suffix: digitalocean.com, provider: DigitalOcean}
+  - {suffix: registrar-servers.com, provider: Namecheap}
+  - {suffix: gandi.net, provider: Gandi}
+  - {suffix: he.net, provider: Hurricane Electric}
+  - {suffix: ovh.net, provider: OVHcloud}

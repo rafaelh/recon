@@ -72,15 +72,16 @@ func DefaultDeps() Deps {
 // late discoveries are picked up. The port sweep is last so that probing
 // hostnames on 80 and 443 does not wait for a sweep that can take hours; the
 // pass after it probes the ports it found. The email stage follows the DNS
-// stages; storage follows the crawl so references found in the
-// same pass are checked, and the Target stages run before the port sweep.
+// stages (dnsroot, which records a root's own NS, SOA, TXT and CAA, among
+// them); storage follows the crawl so references found in the same pass are
+// checked, and the Target stages run before the port sweep.
 func defaultStages() []run.Stage {
 	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails, otx, hackertarget, urlscan, anubis, certspotter, censys, chaos
 	stages := []run.Stage{asn.New(), orgpivot.NewOrgASN(), orgpivot.NewCTOrg(), orgpivot.NewWhoisXML()}
 	stages = append(stages, sub...)
 	return append(stages,
 		shodan.New(), shodan.NewDNS(), providerranges.New(),
-		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner(),
+		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner(), dns.NewDNSRoot(),
 		risk.NewEmail(), web.NewProbe(), web.NewCrawl(),
 		risk.NewStorage(), risk.NewTakeover(), risk.NewSensitivePaths(), ports.New())
 }

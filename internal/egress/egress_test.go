@@ -129,6 +129,14 @@ func TestResolverHasNoZoneTransfer(t *testing.T) {
 	if _, err := eg.Clients("t", false, nil).DNS.Query(context.Background(), "example.com", mdns.TypeAXFR); err == nil {
 		t.Error("AXFR must be refused")
 	}
+	if _, err := eg.Clients("t", false, nil).DNS.Query(context.Background(), "example.com", mdns.TypeIXFR); err == nil {
+		t.Error("IXFR must be refused")
+	}
+	for _, qt := range []uint16{egress.TypeNS, egress.TypeSOA, egress.TypeCAA} {
+		if _, err := eg.Clients("t", false, nil).DNS.Query(context.Background(), "example.com", qt); err != nil {
+			t.Errorf("query type %d: %v", qt, err)
+		}
+	}
 }
 
 // --- TCP ---

@@ -265,7 +265,7 @@ func TestRiskStageRegistry(t *testing.T) {
 		contact[s.Name()] = s.Contact()
 	}
 	tail := names[slices.Index(names, "ipowner"):]
-	if want := []string{"ipowner", "email", "httpprobe", "crawl", "storage", "takeover", "sensitive-paths", "ports"}; !slices.Equal(tail, want) {
+	if want := []string{"ipowner", "dnsroot", "email", "httpprobe", "crawl", "storage", "takeover", "sensitive-paths", "ports"}; !slices.Equal(tail, want) {
 		t.Errorf("stage order tail = %v, want %v", tail, want)
 	}
 	for name, want := range map[string]run.Contact{"email": run.ThirdParty, "storage": run.ThirdParty, "takeover": run.Target, "sensitive-paths": run.Target} {

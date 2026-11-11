@@ -1,5 +1,5 @@
 // Package dns has the stages that talk DNS through the public resolvers:
-// resolve, wildcard, permutations, rdns and ipowner. All are ThirdParty
+// resolve, wildcard, permutations, rdns, ipowner and dnsroot. All are ThirdParty
 // stages, so all run under --passive.
 package dns
 

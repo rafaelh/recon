@@ -203,6 +203,7 @@ func Default() []File {
 		{Name: "urls.csv", Format: CSV, Columns: []string{"url", "host", "status", "found_by"}, Rows: urlRows},
 		{Name: "open-ports.csv", Format: CSV, Columns: []string{"ip", "port", "banner", "hostnames"}, Rows: openPortRows},
 		{Name: "email-posture.csv", Format: CSV, Columns: emailPostureColumns, Rows: emailPostureRows},
+		{Name: "third-parties.csv", Format: CSV, Columns: thirdPartyColumns, Rows: thirdPartyRows},
 	}
 	for _, f := range findings.Files() {
 		files = append(files, findingsFile(f))
@@ -334,7 +335,7 @@ func excludedRows(s Snapshot) []Row {
 				continue
 			}
 			reason := s.Scope.ClassifyHost(r.Key).Reason
-			if kind == kinds.ExcludedKind {
+			if kind.Name() == kinds.ExcludedKind.Name() {
 				reason = kinds.ExcludedKind.Attrs(r).Reason
 			}
 			row := recordRow(r, r.Key, reason)
@@ -381,6 +382,9 @@ func resolutionRows(s Snapshot) []Row {
 	at := map[string]int{}
 	for _, r := range s.of(kinds.Resolution) {
 		a := kinds.Resolution.Attrs(r)
+		if a.Name == "" { // no longer current: the store keeps no attributes, the key has them
+			a.Name, a.Type, a.Value = splitResolutionKey(r.Key)
+		}
 		at[r.Key] = len(rows)
 		rows = append(rows, recordRow(r, a.Name, a.Type, a.Value, "resolve"))
 	}
@@ -393,6 +397,16 @@ func resolutionRows(s Snapshot) []Row {
 		rows = append(rows, recordRow(r, a.Name, a.Type, a.Value, a.Source))
 	}
 	return rows
+}
+
+// splitResolutionKey reads a resolution's "name|TYPE|value" key. The value may
+// contain a bar (a TXT record); the name and type cannot.
+func splitResolutionKey(key string) (name, typ, value string) {
+	parts := strings.SplitN(key, "|", 3)
+	if len(parts) != 3 {
+		return key, "", ""
+	}
+	return parts[0], parts[1], parts[2]
 }
 
 // derivedRows builds rows computed from the inventory. Each is dated by the
