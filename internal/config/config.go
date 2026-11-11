@@ -49,8 +49,8 @@ type Storage struct {
 	MaxNames int
 }
 
-// Certspotter holds the Cert Spotter settings.
-type Certspotter struct {
+// PagedSource holds the settings of a source that follows result pages.
+type PagedSource struct {
 	// MaxPages caps the result pages followed per root. It is part of the check,
 	// so raising it repeats the checks.
 	MaxPages int
@@ -84,10 +84,13 @@ type Settings struct {
 	CertExpiryDays int
 	OutputDir      string
 	NetblockLimit  int // IPv4 addresses
-	Certspotter    Certspotter
+	Certspotter    PagedSource
 	// Skip names the stages to turn off. It holds only stage names: "none" is
 	// resolved here, and whether each name is a stage is checked by the caller.
-	Skip []string
+	Skip      []string
+	ShodanDNS PagedSource
+	Censys    PagedSource
+	Chaos     PagedSource
 }
 
 // Defaults returns the default settings. The limits and rates are reasonable
@@ -108,7 +111,10 @@ func Defaults() Settings {
 		OutputDir:       ".",
 		NetblockLimit:   4096,
 		Permutations:    Permutations{Enabled: true, MaxPerSeed: 200},
-		Certspotter:     Certspotter{MaxPages: 10},
+		Certspotter:     PagedSource{MaxPages: 10},
+		ShodanDNS:       PagedSource{MaxPages: 10},
+		Censys:          PagedSource{MaxPages: 10},
+		Chaos:           PagedSource{MaxPages: 10},
 	}
 }
 
@@ -186,6 +192,7 @@ var settingTable = []setting{
 	{"permutations-max", "permutations.max_per_seed"}, {"archive-max-urls", "archive.max_urls"},
 	{"storage-max-names", "storage.max_names"}, {"cert-expiry-days", "cert_expiry_days"},
 	{"skip", "skip"}, {"certspotter-max-pages", "certspotter.max_pages"},
+	{"shodan-dns-max-pages", "shodan_dns.max_pages"}, {"censys-max-pages", "censys.max_pages"}, {"chaos-max-pages", "chaos.max_pages"},
 }
 
 // RegisterFlags adds one flag per setting to fs. There is deliberately no flag for API keys.
@@ -213,6 +220,14 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.Int("netblock-limit", d.NetblockLimit, "IPv4 address count above which the run stops unless --allow-large-netblocks is given")
 	fs.StringArray("skip", nil, "stage to turn off for this run (repeatable; replaces the skip setting, and none clears it; see the stage list below)")
 	fs.Int("certspotter-max-pages", d.Certspotter.MaxPages, "result pages followed per root from Cert Spotter")
+	fs.Int("shodan-dns-max-pages", d.ShodanDNS.MaxPages, "result pages followed per root from Shodan's DNS data (one query credit each)")
+	fs.Int("censys-max-pages", d.Censys.MaxPages, "result pages followed per root from Censys")
+	fs.Int("chaos-max-pages", d.Chaos.MaxPages, "result pages followed per root from Chaos (it answers in one page, so this is not reached)")
+}
+
+// rawPages is the raw form of a PagedSource.
+type rawPages struct {
+	MaxPages string `mapstructure:"max_pages"`
 }
 
 type rawSettings struct {
@@ -245,10 +260,11 @@ type rawSettings struct {
 		Enabled    string `mapstructure:"enabled"`
 		MaxPerSeed string `mapstructure:"max_per_seed"`
 	} `mapstructure:"permutations"`
-	Certspotter struct {
-		MaxPages string `mapstructure:"max_pages"`
-	} `mapstructure:"certspotter"`
-	Skip []string `mapstructure:"skip"`
+	Certspotter rawPages `mapstructure:"certspotter"`
+	Skip        []string `mapstructure:"skip"`
+	ShodanDNS   rawPages `mapstructure:"shodan_dns"`
+	Censys      rawPages `mapstructure:"censys"`
+	Chaos       rawPages `mapstructure:"chaos"`
 }
 
 // Load merges defaults, the config file, RECON_* environment variables and the
@@ -270,6 +286,7 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		"storage.max_names": d.Storage.MaxNames, "cert_expiry_days": d.CertExpiryDays,
 		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed,
 		"certspotter.max_pages": d.Certspotter.MaxPages, "skip": []string{},
+		"shodan_dns.max_pages": d.ShodanDNS.MaxPages, "censys.max_pages": d.Censys.MaxPages, "chaos.max_pages": d.Chaos.MaxPages,
 	}
 	for k, val := range defaults {
 		v.SetDefault(k, val)
@@ -360,6 +377,9 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	posInt("cert_expiry_days", raw.CertExpiryDays, 0, &s.CertExpiryDays)
 	posInt("permutations.max_per_seed", raw.Permutations.MaxPerSeed, 1, &s.Permutations.MaxPerSeed)
 	posInt("certspotter.max_pages", raw.Certspotter.MaxPages, 1, &s.Certspotter.MaxPages)
+	posInt("shodan_dns.max_pages", raw.ShodanDNS.MaxPages, 1, &s.ShodanDNS.MaxPages)
+	posInt("censys.max_pages", raw.Censys.MaxPages, 1, &s.Censys.MaxPages)
+	posInt("chaos.max_pages", raw.Chaos.MaxPages, 1, &s.Chaos.MaxPages)
 	if skip, err := parseSkip(raw.Skip); err != nil {
 		bad("skip", strings.Join(raw.Skip, ","), err.Error())
 	} else {

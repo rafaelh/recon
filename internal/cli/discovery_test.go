@@ -860,7 +860,7 @@ func TestPlumbing_FilesAndCounts(t *testing.T) {
 	if snapshot["provider-hosts.csv"] != "" || snapshot["wildcard-excluded.txt"] != "" {
 		t.Errorf("files with no rows were written: %q %q", snapshot["provider-hosts.csv"], snapshot["wildcard-excluded.txt"])
 	}
-	if hdr := strings.SplitN(snapshot["resolutions.csv"], "\n", 2)[0]; hdr != "name,type,value,current,first_seen,last_seen" {
+	if hdr := strings.SplitN(snapshot["resolutions.csv"], "\n", 2)[0]; hdr != "name,type,value,source,current,first_seen,last_seen" {
 		t.Errorf("resolutions.csv header = %q", hdr)
 	}
 	if r := find(w.table(eng, "ips.csv"), "ip", "203.0.113.5"); r == nil || r["first_seen"] != "2026-11-01" || r["asn"] != "AS64500" {

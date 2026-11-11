@@ -83,3 +83,16 @@ func CleanName(n string) string {
 	d, _ := input.ParseDomain(n)
 	return d
 }
+
+// JoinLabels turns labels relative to root ("www", "*.cfe") into names. An empty
+// label and the bare wildcard "*" are the root itself, which is not a new name.
+func JoinLabels(root string, labels []string) []string {
+	var names []string
+	for _, l := range labels {
+		if l = strings.TrimSuffix(strings.TrimSpace(l), "."); l == "" || l == "*" {
+			continue
+		}
+		names = append(names, l+"."+root)
+	}
+	return names
+}

@@ -25,6 +25,7 @@ var sourcePatterns = []string{
 	"crt.sh", "web.archive.org", "index.commoncrawl.org", "www.virustotal.com", "api.securitytrails.com",
 	"api.shodan.io", "reverse-whois.whoisxmlapi.com", "stat.ripe.net", "ip-ranges.amazonaws.com", "www.gstatic.com",
 	"otx.alienvault.com", "api.hackertarget.com", "urlscan.io", "jldc.me", "api.certspotter.com",
+	"api.platform.censys.io", "dns.projectdiscovery.io",
 	// The storage stage's; their default answer is "no such bucket".
 	"s3.amazonaws.com", "s3.*.amazonaws.com", "storage.googleapis.com", "*.blob.core.windows.net",
 }

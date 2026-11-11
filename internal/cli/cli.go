@@ -75,11 +75,11 @@ func DefaultDeps() Deps {
 // stages; storage follows the crawl so references found in the
 // same pass are checked, and the Target stages run before the port sweep.
 func defaultStages() []run.Stage {
-	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails, otx, hackertarget, urlscan, anubis, certspotter
+	sub := subdomains.New() // crtsh, wayback, commoncrawl, virustotal, securitytrails, otx, hackertarget, urlscan, anubis, certspotter, censys, chaos
 	stages := []run.Stage{asn.New(), orgpivot.NewOrgASN(), orgpivot.NewCTOrg(), orgpivot.NewWhoisXML()}
 	stages = append(stages, sub...)
 	return append(stages,
-		shodan.New(), providerranges.New(),
+		shodan.New(), shodan.NewDNS(), providerranges.New(),
 		dns.NewResolve(), dns.NewWildcard(nil), dns.NewPermutations(), dns.NewRDNS(), dns.NewIPOwner(),
 		risk.NewEmail(), web.NewProbe(), web.NewCrawl(),
 		risk.NewStorage(), risk.NewTakeover(), risk.NewSensitivePaths(), ports.New())

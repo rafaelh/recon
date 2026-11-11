@@ -723,19 +723,7 @@ func TestReadme_NamesTheNewSources(t *testing.T) {
 			t.Errorf("the passive-boundary section does not name %q", src)
 		}
 	}
-	// The bullet may wrap onto indented continuation lines.
-	var keyed string
-	in := false
-	for line := range strings.SplitSeq(readme, "\n") {
-		switch {
-		case strings.HasPrefix(line, "- **Keyed sources:**"):
-			in, keyed = true, line
-		case in && strings.HasPrefix(line, "  "):
-			keyed += " " + strings.TrimSpace(line)
-		default:
-			in = false
-		}
-	}
+	keyed := keyedSourcesBullet(readme)
 	if !strings.Contains(keyed, "certspotter") || !strings.Contains(keyed, "optional") {
 		t.Errorf("the keyed-sources entry must name certspotter as optional: %q", keyed)
 	}
@@ -772,4 +760,22 @@ func TestUrlscan_WarnsWhenResultsAreCutShort(t *testing.T) {
 			}
 		})
 	}
+}
+
+// keyedSourcesBullet is the README's "Keyed sources" bullet, which may wrap onto
+// indented continuation lines, as one line.
+func keyedSourcesBullet(readme string) string {
+	var keyed string
+	in := false
+	for line := range strings.SplitSeq(readme, "\n") {
+		switch {
+		case strings.HasPrefix(line, "- **Keyed sources:**"):
+			in, keyed = true, line
+		case in && strings.HasPrefix(line, "  "):
+			keyed += " " + strings.TrimSpace(line)
+		default:
+			in = false
+		}
+	}
+	return keyed
 }

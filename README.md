@@ -77,9 +77,17 @@ Results are written to `<output-dir>/<engagement>/` and summarised on the consol
 - **API keys:** set only as `keys.<source>` in the file or `RECON_KEYS_<SOURCE>` in the
   environment. There are no key flags, so keys never appear in shell history or process lists.
   Keys are redacted from all output and files.
-- **Keyed sources:** `securitytrails`, `shodan`, `virustotal` and `whoisxml`. A stage whose key is
-  missing is shown as `not-configured`. `certspotter` takes an optional key: it runs without one,
-  and sends `keys.certspotter` when it is set. The other sources need no key.
+- **Keyed sources:** `securitytrails`, `shodan`, `virustotal`, `whoisxml`, `censys` and `chaos`. A
+  stage whose key is missing is shown as `not-configured`. `keys.shodan` also turns on `shodan-dns`,
+  which lists each in-scope root's subdomains and their A, AAAA, CNAME, MX and NS records; it costs
+  one Shodan query credit per result page, for each root. `keys.censys` is a Censys personal access
+  token and searches certificates for names under each root. `keys.chaos` is a ProjectDiscovery
+  Chaos key. A 401, 403 or 429 stops that stage for the run. Each of these three follows result pages
+  up to `shodan_dns.max_pages`, `censys.max_pages` or `chaos.max_pages` (default 10; raising one
+  repeats the stage's checks, and reaching one is reported with `--verbose`). Chaos answers with the
+  whole list in one page, so its cap is not reached. `certspotter` takes an
+  optional key: it runs without one, and sends `keys.certspotter` when it is set. The other sources
+  need no key.
 - **Settings:** all settings and their defaults are listed by `recon --help`.
 
 Example `config.yaml` (a leading `~/` in `output_dir`, `wordlist` or `sensitive_paths` is your home
@@ -166,7 +174,7 @@ Everything is in `<output-dir>/<engagement>/`:
 | `candidates.csv` | Related domains, organisations and netblocks found but not in scope; pass one as an input to promote it |
 | `excluded.csv` | Excluded items and the reason |
 | `subdomains.txt` | In-scope hostnames |
-| `resolutions.csv` | DNS records for in-scope names |
+| `resolutions.csv` | DNS records for in-scope names, with a `source` column: `resolve` (recon's own lookup), `shodan` (reported by Shodan only) or `resolve;shodan`. Records only Shodan reports decide nothing: they never make a name resolved or an address contacted, port-checked or probed. |
 | `unresolved.txt` | In-scope names that did not resolve |
 | `wildcard-excluded.txt` | Names dropped because their domain answers every name (wildcard DNS) |
 | `ips.csv` | Addresses with ASN, owner, hosting provider, scope, port eligibility and hostnames |

@@ -1,6 +1,6 @@
 // Package subdomains has the per-source stages that list subdomains of an
 // in-scope root: crtsh, wayback, commoncrawl, virustotal, securitytrails, otx,
-// hackertarget, urlscan, anubis and certspotter. They share one check and
+// hackertarget, urlscan, anubis, certspotter, censys and chaos. They share one check and
 // enumeration type; each source is a fetcher.
 package subdomains
 
@@ -77,6 +77,10 @@ func New() []run.Stage {
 		&Stage{name: "anubis", sources: []string{"jldc.me"}, fetch: anubis},
 		&Stage{name: "certspotter", sources: []string{"api.certspotter.com"}, optionalKey: true,
 			pageCap: func(c config.Settings) int { return c.Certspotter.MaxPages }, fetch: certspotter},
+		&Stage{name: "censys", sources: []string{"api.platform.censys.io"}, keyed: true,
+			pageCap: func(c config.Settings) int { return c.Censys.MaxPages }, fetch: censys},
+		&Stage{name: "chaos", sources: []string{"dns.projectdiscovery.io"}, keyed: true,
+			pageCap: func(c config.Settings) int { return c.Chaos.MaxPages }, fetch: chaos},
 	}
 }
 
@@ -375,9 +379,5 @@ func securitytrails(ctx context.Context, in rootInput, c egress.Clients) (result
 	if err := json.Unmarshal(body, &r); err != nil {
 		return result{}, fmt.Errorf("unreadable SecurityTrails response: %v", err)
 	}
-	names := make([]string, len(r.Subdomains))
-	for i, l := range r.Subdomains {
-		names[i] = l + "." + root
-	}
-	return result{names: names}, nil
+	return result{names: httpsrc.JoinLabels(root, r.Subdomains)}, nil
 }

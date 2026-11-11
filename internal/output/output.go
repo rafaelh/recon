@@ -194,7 +194,7 @@ func Default() []File {
 		{Name: "candidates.csv", Format: CSV, Columns: []string{"type", "value", "found_by"}, Rows: candidateRows},
 		{Name: "excluded.csv", Format: CSV, Columns: []string{"value", "reason"}, Rows: excludedRows},
 		{Name: "subdomains.txt", Format: TXT, Rows: inScopeHostRows(false)},
-		{Name: "resolutions.csv", Format: CSV, Columns: []string{"name", "type", "value"}, Rows: resolutionRows},
+		{Name: "resolutions.csv", Format: CSV, Columns: []string{"name", "type", "value", "source"}, Rows: resolutionRows},
 		{Name: "unresolved.txt", Format: TXT, Rows: unresolvedRows},
 		{Name: "wildcard-excluded.txt", Format: TXT, Rows: inScopeHostRows(true)},
 		{Name: "ips.csv", Format: CSV, Columns: []string{"ip", "asn", "owner", "provider", "service", "in_scope", "port_eligible", "hostnames"}, Rows: ipRows},
@@ -372,11 +372,25 @@ func unresolvedRows(s Snapshot) []Row {
 	return rows
 }
 
+// resolutionRows merges recon's own DNS answers with the records third parties
+// reported, by key. source is "resolve" for a record recon's lookup holds,
+// the reporting source for a claim alone, and both, joined with ";", when both
+// hold it. A record recon holds takes its dates and currency from recon.
 func resolutionRows(s Snapshot) []Row {
 	var rows []Row
+	at := map[string]int{}
 	for _, r := range s.of(kinds.Resolution) {
 		a := kinds.Resolution.Attrs(r)
-		rows = append(rows, recordRow(r, a.Name, a.Type, a.Value))
+		at[r.Key] = len(rows)
+		rows = append(rows, recordRow(r, a.Name, a.Type, a.Value, "resolve"))
+	}
+	for _, r := range s.of(kinds.DNSClaim) {
+		a := kinds.DNSClaim.Attrs(r)
+		if i, ok := at[r.Key]; ok {
+			rows[i].Cells[3] += ";" + a.Source
+			continue
+		}
+		rows = append(rows, recordRow(r, a.Name, a.Type, a.Value, a.Source))
 	}
 	return rows
 }
