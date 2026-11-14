@@ -24,7 +24,7 @@ func TestWebPlumbing_FilesAreSortedSafeDatedAndCounted(t *testing.T) {
 	x.mustRun()
 
 	if hdr := strings.SplitN(x.file(eng, "web-services.csv"), "\n", 2)[0]; hdr !=
-		"url,host,port,scheme,status,title,server,technologies,redirect,final_url,tls_subject,tls_sans,tls_issuer,tls_expiry,tls_error,tls_self_signed,current,first_seen,last_seen" {
+		"url,host,port,scheme,status,title,server,technologies,redirect,final_url,tls_subject,tls_sans,tls_issuer,tls_expiry,tls_error,tls_self_signed,hsts,insecure_cookies,directory_listing,version_disclosure,current,first_seen,last_seen" {
 		t.Errorf("web-services.csv header = %q", hdr)
 	}
 	if hdr := strings.SplitN(x.file(eng, "urls.csv"), "\n", 2)[0]; hdr != "url,host,status,found_by,current,first_seen,last_seen" {

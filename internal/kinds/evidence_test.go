@@ -8,7 +8,7 @@ import (
 
 // The evidence kinds are internal, with no category, so totals count findings only.
 func TestEvidenceKinds(t *testing.T) {
-	for _, name := range []string{"takeover_http", "storage", "storage_account", "storage_object", "storage_ref", "sensitive_hit", "email_posture"} {
+	for _, name := range []string{"takeover_http", "storage", "storage_account", "storage_object", "storage_ref", "sensitive_hit", "email_posture", "web_posture"} {
 		k, ok := kinds.Get(name)
 		if !ok {
 			t.Errorf("kind %s not registered", name)
@@ -24,6 +24,10 @@ func TestEvidenceKinds(t *testing.T) {
 	}
 	if k, _ := kinds.Get("email_posture"); !k.HostKey {
 		t.Errorf("email_posture = %+v, want HostKey", k)
+	}
+	// Web posture is keyed by its service and shown while the service's host is in scope.
+	if k, _ := kinds.Get("web_posture"); k.HostAttr != "host" {
+		t.Errorf("web_posture = %+v, want HostAttr \"host\"", k)
 	}
 	if k, _ := kinds.Get("finding"); !k.Printed || k.Category != "findings" {
 		t.Errorf("finding = %+v", k)

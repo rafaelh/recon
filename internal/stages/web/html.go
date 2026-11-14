@@ -36,12 +36,12 @@ func text(n *html.Node, b *strings.Builder) {
 	}
 }
 
-// title is the first <title>, with whitespace collapsed, invalid UTF-8
-// replaced and at most 200 runes.
-func (p page) title() string {
+// firstText is the text of the first element match accepts, in document order,
+// with whitespace collapsed and invalid UTF-8 replaced; "" if there is none.
+func (p page) firstText(match func(*html.Node) bool) string {
 	var find func(*html.Node) (string, bool)
 	find = func(n *html.Node) (string, bool) {
-		if n.Type == html.ElementNode && n.Data == "title" {
+		if n.Type == html.ElementNode && match(n) {
 			var b strings.Builder
 			text(n, &b)
 			return b.String(), true
@@ -54,7 +54,13 @@ func (p page) title() string {
 		return "", false
 	}
 	raw, _ := find(p.doc)
-	t := strings.Join(strings.Fields(strings.ToValidUTF8(raw, "�")), " ")
+	return strings.Join(strings.Fields(strings.ToValidUTF8(raw, "�")), " ")
+}
+
+// title is the first <title>, with whitespace collapsed, invalid UTF-8
+// replaced and at most 200 runes.
+func (p page) title() string {
+	t := p.firstText(func(n *html.Node) bool { return n.Data == "title" })
 	if utf8.RuneCountInString(t) > maxTitleRunes {
 		t = string([]rune(t)[:maxTitleRunes])
 	}

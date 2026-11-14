@@ -14,6 +14,7 @@ const (
 	Email               = "email"
 	Ports               = "ports"
 	Certificates        = "certificates"
+	WebPosture          = "web-posture"
 )
 
 // Severities.
@@ -54,6 +55,10 @@ var table = []Row{
 	{Certificates, "expired", Medium, "the certificate has expired"},
 	{Certificates, "expiring", Low, "the certificate expires within --cert-expiry-days"},
 	{Certificates, "self-signed", Low, "the certificate is self-signed"},
+	{WebPosture, "missing-hsts", Low, "an HTTPS service's first response has no Strict-Transport-Security header"},
+	{WebPosture, "insecure-cookie", Low, "a cookie set over HTTPS lacks Secure"},
+	{WebPosture, "directory-listing", Low, "the service's page is an automatic directory listing (Index of /)"},
+	{WebPosture, "version-disclosure", Low, "a Server or X-Powered-By header carries a version (Apache/2.4.41)"},
 }
 
 // SeverityTable is the documented default severity of every finding type.

@@ -213,18 +213,19 @@ func otherHost(host, self string) (string, bool) {
 func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first egress.Response, e egress.Clients) ([]run.Observation, error) {
 	obs := newObsSet()
 	last := first
+	chain := []*hop{newHop(first)}
 	visited := map[string]bool{}
 	if u, ok := NormaliseURL(first.URL()); ok {
 		visited[u] = true
 	}
-	for hop := 0; hop < maxHops && isRedirect(last.Status) && last.Location != ""; hop++ {
+	for n := 0; n < maxHops && isRedirect(last.Status) && last.Location != ""; n++ {
 		target, ok := redirectTarget(last)
 		if !ok {
 			break
 		}
 		host := HostOfURL(target)
 		hopURL := kinds.URLAttrs{URL: target, Host: host}
-		hopAt := obs.add(kinds.URL.Obs(target, hopURL))
+		hopIdx := obs.add(kinds.URL.Obs(target, hopURL))
 		if d, ok := otherHost(host, in.host); ok {
 			obs.add(kinds.Hostname.Obs(d, kinds.HostnameAttrs{}))
 		}
@@ -250,11 +251,12 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 		if !ok { // out of scope, excluded, unresolved or not answering: the chain stops here
 			break
 		}
-		if hopAt >= 0 { // a fetched url carries its status
+		if hopIdx >= 0 { // a fetched url carries its status
 			hopURL.Status = next.Status
-			obs.list[hopAt] = kinds.URL.Obs(target, hopURL)
+			obs.list[hopIdx] = kinds.URL.Obs(target, hopURL)
 		}
 		last = next
+		chain = append(chain, newHop(next))
 	}
 
 	attrs := kinds.WebServiceAttrs{
@@ -266,10 +268,8 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 	if u, ok := NormaliseURL(last.URL()); ok {
 		attrs.FinalURL = u
 	}
-	if last.ContentType() == "text/html" {
-		if pg, ok := parsePage(last.Body); ok {
-			attrs.Title = pg.title()
-		}
+	if pg, ok := chain[len(chain)-1].page(); ok {
+		attrs.Title = pg.title()
 	}
 	if len(first.PeerCerts) > 0 {
 		leaf := first.PeerCerts[0]
@@ -290,7 +290,7 @@ func (p *Probe) service(ctx context.Context, in probeInput, scheme string, first
 			}
 		}
 	}
-	return append([]run.Observation{kinds.WebService.Obs(attrs.URL, attrs)}, obs.list...), nil
+	return append([]run.Observation{kinds.WebService.Obs(attrs.URL, attrs), kinds.WebPosture.Obs(attrs.URL, posture(in.host, chain))}, obs.list...), nil
 }
 
 // sanHost turns a certificate DNS name into a hostname: a wildcard contributes

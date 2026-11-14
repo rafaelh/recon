@@ -118,6 +118,8 @@ var riskFiles = []struct {
 		}},
 	{Certificates, []string{"severity", "url", "type", "tls_subject", "tls_issuer", "tls_expiry"},
 		func(_, target string) map[string]string { return map[string]string{"url": target} }},
+	{WebPosture, []string{"severity", "url", "type", "detail"},
+		func(_, target string) map[string]string { return map[string]string{"url": target} }},
 }
 
 // Files are the findings files: storage-unattributed.csv, then one

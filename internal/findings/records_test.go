@@ -41,7 +41,7 @@ func TestFiles(t *testing.T) {
 		names = append(names, f.Name)
 	}
 	want := []string{"storage-unattributed.csv", "risk-takeover.csv", "risk-storage.csv", "risk-sensitive-paths.csv",
-		"risk-email.csv", "risk-ports.csv", "risk-certificates.csv"}
+		"risk-email.csv", "risk-ports.csv", "risk-certificates.csv", "risk-web-posture.csv"}
 	if !slices.Equal(names, want) {
 		t.Errorf("files = %v, want %v", names, want)
 	}

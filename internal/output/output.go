@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"maps"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -212,16 +213,52 @@ func Default() []File {
 }
 
 var webServiceColumns = []string{"url", "host", "port", "scheme", "status", "title", "server", "technologies", "redirect",
-	"final_url", "tls_subject", "tls_sans", "tls_issuer", "tls_expiry", "tls_error", "tls_self_signed"}
+	"final_url", "tls_subject", "tls_sans", "tls_issuer", "tls_expiry", "tls_error", "tls_self_signed",
+	"hsts", "insecure_cookies", "directory_listing", "version_disclosure"}
 
-// webServiceCells are a web service's cells, in webServiceColumns order.
-func webServiceCells(key string, a kinds.WebServiceAttrs) []string {
+// webServiceCells are a web service's cells, in webServiceColumns order. p is
+// the service's posture evidence, or nil for a service probed before posture
+// was recorded (its posture cells are blank until httpprobe is redone).
+func webServiceCells(key string, a kinds.WebServiceAttrs, p *kinds.WebPostureAttrs) []string {
 	selfSigned := ""
 	if a.TLSSelfSigned != nil {
 		selfSigned = strconv.FormatBool(*a.TLSSelfSigned)
 	}
-	return []string{key, a.Host, strconv.Itoa(a.Port), a.Scheme, strconv.Itoa(a.Status), a.Title, a.Server, a.Technologies,
+	cells := []string{key, a.Host, strconv.Itoa(a.Port), a.Scheme, strconv.Itoa(a.Status), a.Title, a.Server, a.Technologies,
 		a.Redirect, a.FinalURL, a.TLSSubject, a.TLSSANs, a.TLSIssuer, a.TLSExpiry, a.TLSError, selfSigned}
+	if p == nil {
+		return append(cells, "", "", "", "")
+	}
+	hsts := ""
+	if p.HSTS != nil {
+		hsts = yesNo(*p.HSTS)
+	}
+	return append(cells, hsts, insecureCookies(*p), yesNo(p.DirectoryListing), p.VersionDisclosure)
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
+// insecureCookies lists each cookie lacking a flag with the flags it lacks:
+// "sid(secure)(httponly)", ";"-joined, sorted by name.
+func insecureCookies(p kinds.WebPostureAttrs) string {
+	lacks := map[string]string{}
+	for n := range strings.SplitSeq(p.CookiesNoSecure, ";") {
+		lacks[n] += "(secure)"
+	}
+	for n := range strings.SplitSeq(p.CookiesNoHTTPOnly, ";") {
+		lacks[n] += "(httponly)"
+	}
+	delete(lacks, "")
+	var out []string
+	for _, n := range slices.Sorted(maps.Keys(lacks)) {
+		out = append(out, n+lacks[n])
+	}
+	return strings.Join(out, ";")
 }
 
 // vis is the snapshot's Visibility. Render always sets one; a file's Rows
@@ -236,9 +273,17 @@ func (s Snapshot) vis() *kinds.Visibility {
 func webServiceRows(s Snapshot) []Row {
 	var rows []Row
 	vis := s.vis()
+	// A posture record belongs to the service of the same key and is read while it is current.
+	posture := map[string]*kinds.WebPostureAttrs{}
+	for _, r := range s.of(kinds.WebPosture) {
+		if r.Current {
+			a := kinds.WebPosture.Attrs(r)
+			posture[r.Key] = &a
+		}
+	}
 	for _, r := range s.of(kinds.WebService) {
 		if vis.Shown(kinds.WebService, r) {
-			rows = append(rows, recordRow(r, webServiceCells(r.Key, kinds.WebService.Attrs(r))...))
+			rows = append(rows, recordRow(r, webServiceCells(r.Key, kinds.WebService.Attrs(r), posture[r.Key])...))
 		}
 	}
 	return rows

@@ -182,6 +182,32 @@ The `+` line for a new third party reads `third-party <platform> via txt-verific
 and its `--json` `found` event carries `platform`, `mechanism` and `root`. The prefix list and the
 name-server provider names are in the embedded `providers.yaml`.
 
+## Web posture
+
+From the responses `httpprobe` already receives, with no further request, recon records a few
+obvious weaknesses of each live in-scope web service, and reports each as a low finding in
+`risk-web-posture.csv`, one row per service and condition:
+
+- `missing-hsts`: the first response of an HTTPS service has no `Strict-Transport-Security` header.
+- `insecure-cookie`: a cookie set over HTTPS by any response in the redirect chain of an HTTPS
+  service lacks `Secure` (a response received over plain HTTP is not judged for `Secure`). The
+  cookie names (never their values) are in the row's `detail`, `;`-joined.
+- `directory-listing`: the last page of the chain that the service itself served is an automatic
+  directory listing (its title or first heading begins `Index of /`).
+- `version-disclosure`: the first response's `Server` or `X-Powered-By` header carries a version, a
+  `/` followed by a digit (`Apache/2.4.41` does; `nginx` and `ASP.NET` do not).
+
+`web-services.csv` has the evidence in its `hsts` (`yes` or `no`, blank for HTTP), `insecure_cookies`
+(each cookie name followed by `(secure)`, `(httponly)` or both, for the flag it lacks),
+`directory_listing` (`yes` or `no`) and `version_disclosure` columns. A cookie that lacks only
+`HttpOnly` is listed there but is not a finding. A service addressed by an IP literal or served by a
+SaaS platform has the columns but no finding. Other headers, such as `Content-Security-Policy` and
+`X-Frame-Options`, are not assessed.
+
+An engagement probed by an earlier version has these columns blank, and none of these findings,
+until you run `--redo httpprobe`. A condition that is gone after a redo marks its finding not
+current.
+
 ## Console and JSON
 
 The console shows each stage's state as it changes: `running`, `done` (with the number of checks and
@@ -206,7 +232,7 @@ Everything is in `<output-dir>/<engagement>/`:
 | `wildcard-excluded.txt` | Names dropped because their domain answers every name (wildcard DNS) |
 | `ips.csv` | Addresses with ASN, owner, hosting provider, scope, port eligibility and hostnames |
 | `provider-hosts.csv` | Names that point at shared cloud or SaaS providers, with the evidence |
-| `web-services.csv` | Web services found: status, title, server, technologies, redirects and TLS details |
+| `web-services.csv` | Web services found: status, title, server, technologies, redirects, TLS details and web posture evidence (see Web posture above) |
 | `urls.csv` | URLs from crawling and web archives, with status and source |
 | `open-ports.csv` | Open TCP ports with the banner the service sent, if any |
 | `email-posture.csv` | SPF, DMARC and MX results per root domain |
@@ -218,6 +244,7 @@ Everything is in `<output-dir>/<engagement>/`:
 | `risk-email.csv` | SPF and DMARC weaknesses |
 | `risk-ports.csv` | Open ports on the risky-port list |
 | `risk-certificates.csv` | Expired or soon-to-expire certificates |
+| `risk-web-posture.csv` | Low findings from web responses: missing HSTS, cookies without `Secure`, directory listings and disclosed versions |
 
 A file is only written when it has rows, so a missing `risk-*.csv` means no findings of that kind
 (a file that later has no rows is removed). Files are sorted. Every CSV ends with `current`, `first_seen` and `last_seen` columns, and records
