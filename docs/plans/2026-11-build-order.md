@@ -6,6 +6,7 @@ plumbing, and how to keep parallel branches from colliding. Each design repeats 
 applies to it; this file is the whole picture.
 
 Updated 2026-11-14: Specs 1, 2 and 3 have merged, and their files are in `docs/specs/done/`.
+Spec 22 (log colours) was added the same day; it has no `# Design` yet.
 
 ## Waves
 
@@ -14,13 +15,14 @@ on each other.
 
 | Wave | Specs | Why they wait |
 |---|---|---|
-| 1 | ~~1~~, ~~3~~, 5, 6, 12, 15, 18, 21 | Nothing. Each owns a shared seam or is self-contained. |
+| 1 | ~~1~~, ~~3~~, 5, 6, 12, 15, 18, 21, 22 | Nothing. Each owns a shared seam or is self-contained. |
 | 2 | ~~2~~, 4, 8, 9, 10, 11, 13, 17, 19 | Use seams from wave 1 (see the table below). |
 | 3 | 7, 14, 16, 20 | Use kinds, files or stages from wave 2, or (Spec 20) the final set of kinds. |
 
 Struck-through specs are built. What can be built now:
 
 - **Ready now:** 5, 6, 12, 15, 18, 21 (the rest of wave 1), and 11 and 17 (they waited only on 1).
+  Spec 22 depends on nothing but needs `/spec-design` first.
 - **Waiting on 6:** 4, 19.
 - **Waiting on 15:** 8, 9, 10. Spec 13 waits on 6, 12 and 15.
 - **Wave 3** is unchanged: 7 waits on 5, 6 and 18; 14 on 4; 16 on 9 and 15; 20 on all others.
@@ -50,6 +52,7 @@ Per-spec dependencies. "Still waits on" leaves out the specs already built:
 | 19 SRV records | 3, 6 | 6 | ready; `dnsroot` is built as designed (checks keyed `<root>\|<TYPE>`) |
 | 20 changes report | all others | all unbuilt | **review before building** |
 | 21 export | none | none | ready |
+| 22 log colours | none | none | **not designed**; build early (see `report.go` below) |
 
 ## Shared seams and their owners
 
@@ -61,7 +64,7 @@ once their owner merges.
 |---|---|---|---|
 | `--skip` and the `skip` setting (read from `Settings.Skip`; there is no `Config.Skip`) | 1 | all later stages (they are skippable for free) | **built** |
 | `run.ErrQuota` and `httpsrc.GetQuota`: a spent quota aborts the stage with one warning | 1 | 8, 10, 13, 16, 17 | **built** |
-| `run.Warnf(ctx, …)`: a `--verbose` warning from inside `Run` | 1 | 8, 10, 11, 13, 16, 17 | **built** |
+| `run.Warnf(ctx, …)`: a `--verbose` warning from inside `Run` (a WARN line shown by default once 22 merges) | 1 | 8, 10, 11, 13, 16, 17 | **built** |
 | `httpsrc.CleanName` (lower-case, strip `*.`, validate) | 1 | 4, 10, 13, 17 | **built** |
 | `ThirdPartyRequest.KeyPrefix` (`Bearer `) and `Accept` | 1 | 17 | **built** |
 | `third_party` kind, `third-parties.csv`, `OutsideAttr` showing rule | 3 | 9, 19 | **built** |
@@ -76,6 +79,7 @@ once their owner merges.
 | Wider TLS offer for target requests, `Response.TLSVersion/TLSCipher/CertTrust` | 18 | 7 | |
 | Provider class passed through for every class (`cdn`) | 5 | 7 | |
 | `run.BuildScope` (scope and inventory from records, outside the Runner) | 21 | 20 | |
+| Console streams and levels: log lines on stderr, the summary alone on stdout, `--quiet` and `--debug` in place of `--verbose`, the palette and severity badges | 22 | 4, 6, 7, 15, 20 (each adds a `+` line or a summary line) | |
 
 Notes from the builds that later specs should know:
 
@@ -111,6 +115,12 @@ These rules make almost every conflict a keep-both conflict.
 - **`probe.go` in wave 1.** Specs 12 and 18 both edit `service()`; each adds its own helper call,
   and 18 replaces two `web-services.csv` columns while 12 appends four. Merge 18 first.
 - **`crawl.go` in wave 2.** Specs 11 and 13 each add one emit to `observations()`.
+- **`report.go` and console text.** Spec 22 rewrites the console renderer: stage, `+` and warning
+  lines become levelled log lines on stderr, the summary stays on stdout, and `--verbose` goes.
+  Specs 4 and 7 add `+` lines, and 4, 6, 15 and 20 add summary lines. Merge 22 before them where
+  possible. A spec that merges before 22 asserts its console text on stdout, and 22 then moves
+  those assertions. A spec that merges after 22 writes its `+` lines through the log formatter,
+  asserts them on stderr, and reads "shown with `--verbose`" in its design as "a WARN line".
 - **Tests.** Each spec adds its behaviour tests in a new `internal/cli/<feature>_test.go`.
 - **README.** One table row or bullet per addition; keep lists in the order of the stage registry.
 
