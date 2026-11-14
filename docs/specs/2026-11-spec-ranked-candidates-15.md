@@ -25,8 +25,8 @@ because each shows how many independent signals support it and a confidence leve
    are not current sort last and show the confidence they last had.
 4. The console summary lists up to 20 `high` candidates with the input that promotes each (a root
    or hostname as a positional domain, a netblock as `--cidr`, an autonomous system as `--asn`, an
-   organisation as `--org`), then `and N more in candidates.csv`. `--verbose` also lists `medium`
-   candidates. `--json` emits one `candidate` event per high candidate.
+   organisation as `--org`), then `and N more in candidates.csv`. `medium` and `low` candidates
+   are listed only in `candidates.csv`. `--json` emits one `candidate` event per high candidate.
 5. Confidence is recomputed on every run from current evidence. After `--redo` of the stage that
    found a candidate's support, a candidate no longer supported drops a level.
 
@@ -74,7 +74,7 @@ evidence, `internal/candidates`, `internal/orgname`, the derived-records hook, `
   `Order func(a, b Row) int` so this file can sort by confidence instead of by cells; not-current
   rows sort last.
 - **Summary**: the `summary` event gains `candidates` (the high ones, with `promote`); the console
-  lists 20 and `and N more in candidates.csv`; `--verbose` adds medium. `--json` emits one
+  lists 20 and `and N more in candidates.csv`. `--json` emits one
   `candidate` event per high candidate before the summary.
 
 ## Changes
@@ -95,7 +95,7 @@ evidence, `internal/candidates`, `internal/orgname`, the derived-records hook, `
 - `internal/cli/candidates_test.go` (fake stages): columns and order; a not-current row sorts last
   with its last confidence; `--redo` of a supporting stage lowers a level; a hostname's evidence raises its root; findings
   are still re-derived when only an evidence kind changed; the console list, the
-  `N more` line, `--verbose` medium list and `candidate` events.
+  `N more` line and `candidate` events.
 
 ## Out of scope
 
