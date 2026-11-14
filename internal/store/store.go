@@ -584,6 +584,34 @@ func (s *Store) Observations(kind, stage string) ([]ObsRow, error) {
 	return out, rows.Err()
 }
 
+// Observer is a completed check that observes a record.
+type Observer struct{ Stage, CheckKey string }
+
+// Observers lists, per record key, the completed checks that observe a record
+// of the kind now, by stage and then check key. An observation whose check is
+// not completed (a redo has forgotten it, and its stale observation awaits the
+// check running again) does not count: the support is what a check found, not
+// what an earlier run left behind.
+func (s *Store) Observers(kind string) (map[string][]Observer, error) {
+	rows, err := s.db.Query(`SELECT o.key, o.stage, o.check_key FROM observations o
+		JOIN checks c ON c.stage = o.stage AND c.key = o.check_key
+		WHERE o.kind = ? ORDER BY o.key, o.stage, o.check_key`, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]Observer{}
+	for rows.Next() {
+		var key string
+		var o Observer
+		if err := rows.Scan(&key, &o.Stage, &o.CheckKey); err != nil {
+			return nil, err
+		}
+		out[key] = append(out[key], o)
+	}
+	return out, rows.Err()
+}
+
 // Meta reads a metadata value.
 func (s *Store) Meta(key string) (string, bool) {
 	var v string
@@ -630,13 +658,32 @@ func (s *Store) Inputs() ([]Input, error) {
 }
 
 // Redo forgets every completed check of a stage and marks the redo as pending.
+// The records its observations belong to keep them until the checks run again,
+// but they no longer count in Observers, so the version of each such kind moves.
 func (s *Store) Redo(stage string) error {
 	return s.update(func(tx *sql.Tx) (map[string]bool, error) {
 		if _, err := tx.Exec("DELETE FROM checks WHERE stage=?", stage); err != nil {
 			return nil, err
 		}
-		_, err := tx.Exec(setMetaSQL, "redo:"+stage, s.today())
-		return nil, err
+		rows, err := tx.Query("SELECT DISTINCT kind FROM observations WHERE stage=?", stage)
+		if err != nil {
+			return nil, err
+		}
+		kinds := map[string]bool{}
+		for rows.Next() {
+			var k string
+			if err := rows.Scan(&k); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			kinds[k] = true
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		_, err = tx.Exec(setMetaSQL, "redo:"+stage, s.today())
+		return kinds, err
 	})
 }
 

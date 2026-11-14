@@ -69,6 +69,38 @@ func TestTXTAndCSV(t *testing.T) {
 	}
 }
 
+// A file's Order replaces the sort by cells; without one the cells decide.
+func TestFileOrder(t *testing.T) {
+	dir := newDir(t)
+	rs := rows(
+		output.Row{Cells: []string{"b", "1"}, Current: true},
+		output.Row{Cells: []string{"a", "3"}, Current: true},
+		output.Row{Cells: []string{"c", "2"}, Current: false},
+	)
+	byNumberDesc := func(a, b output.Row) int { return strings.Compare(b.Cells[1], a.Cells[1]) }
+	files := []output.File{
+		{Name: "ordered.csv", Format: output.CSV, Columns: []string{"v", "n"}, Rows: rs, Order: byNumberDesc},
+		{Name: "plain.csv", Format: output.CSV, Columns: []string{"v", "n"}, Rows: rs},
+	}
+	if err := output.Render(dir, files, output.Snapshot{}); err != nil {
+		t.Fatal(err)
+	}
+	firstCells := func(name string) string {
+		var out []string
+		recs, _ := csv.NewReader(strings.NewReader(read(t, dir, name))).ReadAll()
+		for _, r := range recs[1:] {
+			out = append(out, r[0])
+		}
+		return strings.Join(out, "")
+	}
+	if got := firstCells("ordered.csv"); got != "acb" {
+		t.Errorf("ordered.csv order = %s, want acb", got)
+	}
+	if got := firstCells("plain.csv"); got != "abc" {
+		t.Errorf("plain.csv order = %s, want abc", got)
+	}
+}
+
 // A file with no rows is not written, and one that had rows is removed once it has none.
 // A TXT file lists current rows only, so one with no current rows counts as empty.
 func TestEmptyFilesNotWritten(t *testing.T) {

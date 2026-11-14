@@ -4,6 +4,7 @@
 package run
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rafaelh/recon/internal/candidates"
 	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/engagement"
@@ -95,6 +97,9 @@ type Runner struct {
 	derivedSig     string                          // what the findings were last derived from (see deriveFindings)
 	attribution    map[string]findings.StorageAttr // the storage attribution of that derivation
 	storedFindings string                          // the date and findings last stored (see deriveFindings)
+
+	derivers   []*deriver           // the derived records other than findings (see deriveRecords)
+	evidencers map[string]Evidencer // the stages that account for their own candidate evidence
 }
 
 // recordsCache holds the records of a kind, and the current ones among them,
@@ -114,9 +119,14 @@ func New(cfg Config) *Runner {
 		last: map[string]string{}, counts: map[string]int{}, aborted: map[string]bool{},
 		recs: map[string]recordsCache{},
 	}
+	r.evidencers = map[string]Evidencer{}
 	for _, s := range cfg.Stages {
 		r.order = append(r.order, s.Name())
+		if e, ok := s.(Evidencer); ok {
+			r.evidencers[s.Name()] = e
+		}
 	}
+	r.derivers = r.newDerivers()
 	if cfg.Clock == nil {
 		r.cfg.Clock = time.Now
 	}
@@ -199,7 +209,7 @@ func (r *Runner) passes(ctx context.Context) (int, error) {
 				}
 				// Findings follow every stage that did work, so a finding's
 				// found line is printed as soon as its evidence is stored.
-				if err := r.deriveFindings(); err != nil {
+				if err := r.derive(); err != nil {
 					return ExitFatal, err
 				}
 			}
@@ -658,7 +668,46 @@ func (r *Runner) emitSummary() {
 	for _, f := range findings.Headline(recs) {
 		listed = append(listed, map[string]any{"category": f.Category, "severity": f.Severity, "target": f.Target, "detail": f.Detail})
 	}
-	r.emit("summary", map[string]any{"totals": r.lastTot, "failed": failed, "findings": listed})
+	high, medium := r.rankedCandidates()
+	for _, c := range high {
+		r.emit("candidate", c)
+	}
+	fields := map[string]any{"totals": r.lastTot, "failed": failed, "findings": listed, "candidates": high}
+	if r.cfg.Verbose {
+		fields["medium_candidates"] = medium
+	}
+	r.emit("summary", fields)
+}
+
+// rankedCandidates are the current candidates of high and of medium confidence,
+// best first, each with the input that promotes it. A candidate that is no
+// longer current keeps its rank for candidates.csv but is not listed.
+func (r *Runner) rankedCandidates() (high, medium []map[string]any) {
+	high, medium = []map[string]any{}, []map[string]any{}
+	recs, _ := r.currentRecords(kinds.CandidateRank)
+	var ranked []kinds.CandidateRankAttrs
+	for _, rec := range recs {
+		if a := kinds.CandidateRank.Attrs(rec); a.Current {
+			ranked = append(ranked, a)
+		}
+	}
+	entry := func(a kinds.CandidateRankAttrs) candidates.Entry {
+		return candidates.Entry{Value: a.Value, Current: true, Confidence: candidates.Confidence(a.Confidence), Count: a.EvidenceCount}
+	}
+	slices.SortFunc(ranked, func(a, b kinds.CandidateRankAttrs) int {
+		return cmp.Or(candidates.Compare(entry(a), entry(b)), strings.Compare(a.Type, b.Type))
+	})
+	for _, a := range ranked {
+		c := map[string]any{"kind": a.Type, "value": a.Value, "sources": a.Sources, "evidence_count": a.EvidenceCount,
+			"confidence": a.Confidence, "promote": candidates.Promote(a.Type, a.Value)}
+		switch candidates.Confidence(a.Confidence) {
+		case candidates.High:
+			high = append(high, c)
+		case candidates.Medium:
+			medium = append(medium, c)
+		}
+	}
+	return high, medium
 }
 
 // onNewRecord prints records of Printed kinds the first time the engagement sees them.
@@ -690,7 +739,7 @@ func (r *Runner) render() (output.Snapshot, error) {
 	}
 	// Findings are derived before the files are written on every path that renders,
 	// including an interrupt, so the files and the totals never lag the evidence.
-	if err := r.deriveFindings(); err != nil {
+	if err := r.derive(); err != nil {
 		return output.Snapshot{}, err
 	}
 	eng := r.cfg.Engagement
@@ -797,13 +846,19 @@ func (r *Runner) cached(kind string) (recordsCache, error) {
 	return c, nil
 }
 
-// derivationSignature changes whenever a record of any kind but "finding", the
-// date or the engagement's inputs change. The Scope and Inventory are built
-// from nothing else, and the settings are fixed for the Runner's life.
+// derivationSignature changes whenever a record of any kind but the derived
+// kinds ("finding" and those the derivers write), the date or the engagement's
+// inputs change. The Scope and Inventory are built from nothing else, and the
+// settings are fixed for the Runner's life. The findings do not read the
+// derived records, so storing them must not derive the findings again.
 func (r *Runner) derivationSignature() string {
+	derived := map[string]bool{kinds.Finding.Name(): true}
+	for _, d := range r.derivers {
+		derived[d.writes.Name()] = true
+	}
 	var b strings.Builder
 	for _, k := range kinds.All() {
-		if k.Name != kinds.Finding.Name() {
+		if !derived[k.Name] {
 			fmt.Fprintf(&b, "%s=%d;", k.Name, r.st.KindVersion(k.Name))
 		}
 	}

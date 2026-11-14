@@ -116,6 +116,12 @@ type CandidateExempt interface {
 	CandidateExemptSources() []string
 }
 
+// Evidencer is implemented by a stage that says what supports a candidate its
+// check found.
+type Evidencer interface {
+	Evidence(checkKey string) (source, item string)
+}
+
 // Retiring is implemented by a stage whose check keys carry a hash of the
 // entry a check applies (a fingerprint, a sensitive-path signature, the DKIM
 // selector list). After every pass that enumerated cleanly, the runner retires

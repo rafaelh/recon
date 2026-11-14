@@ -219,10 +219,63 @@ current.
 
 The console shows each stage's state as it changes: `running`, `done` (with the number of checks and
 failures), `done-previously`, `failed` or `not-configured` (with the reason). A `+` line is printed
-for each find, with its severity for findings. A summary lists counts and the high and medium
-findings. `--verbose` also shows warnings, including failed checks.
+for each find, with its severity for findings. A summary lists counts, the high and medium
+findings, and the high-confidence candidates (see [Ranked candidates](#ranked-candidates)).
+`--verbose` also shows warnings, including failed checks, and lists the medium-confidence
+candidates.
 
-`--json` prints one JSON event per line on stdout, with no styling or prompts.
+`--json` prints one JSON event per line on stdout, with no styling or prompts. A `candidate` event
+for each high-confidence candidate comes before the `summary` event. It has `kind` (`root`,
+`hostname` or `netblock`), `value`, `sources`, `evidence_count`, `confidence` and `promote`. The
+`summary` event's `candidates` field lists the same candidates, and with `--verbose` its
+`medium_candidates` field lists the medium ones.
+
+## Ranked candidates
+
+`candidates.csv` lists the roots, hostnames and netblocks that were found but are not in scope.
+Each row says how well supported it is, so you can tell which are worth promoting to scope:
+
+| Column | Meaning |
+|---|---|
+| `type` | `root`, `hostname` or `netblock` |
+| `value` | The candidate |
+| `sources` | The distinct stages or mechanisms that found it, joined with `;` (listed below) |
+| `evidence_count` | The number of distinct pairs of a source and the item that linked the candidate: the address, root, name server, netblock, service or organisation the source was asked about |
+| `confidence` | `low`, `medium` or `high` |
+
+The `sources` values are the stages and mechanisms that can find a candidate. Each belongs to one
+family: certificate transparency (`crtsh`, `certspotter`, `censys`, `ct-org`), web archive
+(`wayback`, `commoncrawl`), passive DNS (`otx`, `virustotal`, `securitytrails`, `shodan`,
+`shodan-dns`, `chaos`, `urlscan`, `anubis`, `hackertarget`) and registrant (`whoisxml`,
+`org-asn`). `httpprobe`, `rdns` and `crawl` are each a family of their own, and so is any other
+source. The names `rdap` (registrant), `reverseip` (reverse IP), `nsreverse` (shared
+infrastructure) and `identifier-pivot` (web identifier) are reserved for stages that are not built
+yet.
+
+The confidence follows from the families that agree:
+
+- **high**: a registrant match of an `--org` input is joined by any other family, or three or more
+  families agree.
+- **medium**: two families agree, or a shared self-hosted name server or mail host, or reverse IP on
+  two or more addresses, or a registrant match alone.
+- **low**: anything else.
+
+A registrant match is evidence from a registrant-family source that was asked about one of the
+`--org` inputs. (`org-asn` keeps an autonomous system only if its holder's name contains every word
+of the organisation, ignoring legal suffixes such as `Pty` and `Ltd`; `whoisxml` takes the
+organisations its reverse WHOIS search returns as they come.) Without an `--org` input no candidate has one, so
+a registrant source counts as one family like any other. A candidate root also counts the evidence of
+the candidate hostnames under it, so a root found by reverse WHOIS and a hostname under it found by
+a redirect support each other. A hostname keeps its own rank.
+
+Confidence is worked out again on every run from the checks that currently support the candidate.
+After `--redo` of a stage whose results no longer support a candidate, it drops. Rows are sorted by
+confidence (high first), then by evidence count (most first), then by value. A row that is not
+current sorts last and shows the confidence it last had.
+
+The summary lists up to 20 `high` candidates with the input that promotes each (a root or hostname
+as a positional domain, a netblock as `--cidr`), then `and N more in candidates.csv`. `--verbose`
+adds the medium ones the same way.
 
 ## Output files
 
@@ -231,7 +284,7 @@ Everything is in `<output-dir>/<engagement>/`:
 | File | Contents |
 |---|---|
 | `scope.csv` | Inputs and the netblocks and roots in scope, and where each came from |
-| `candidates.csv` | Related domains, organisations and netblocks found but not in scope; pass one as an input to promote it |
+| `candidates.csv` | Related domains, hostnames and netblocks found but not in scope, ranked by how many independent sources support each (see [Ranked candidates](#ranked-candidates)); pass one as an input to promote it |
 | `excluded.csv` | Excluded items and the reason |
 | `subdomains.txt` | In-scope hostnames |
 | `resolutions.csv` | DNS records for in-scope names (A, AAAA and CNAME, and the NS, SOA, TXT and CAA records of each root, see below), with a `source` column: `resolve` (recon's own lookup), `shodan` (reported by Shodan only) or `resolve;shodan`. Records only Shodan reports decide nothing: they never make a name resolved or an address contacted, port-checked or probed. |
@@ -254,7 +307,8 @@ Everything is in `<output-dir>/<engagement>/`:
 | `risk-web-posture.csv` | Low findings from web responses: missing HSTS, cookies without `Secure`, directory listings and disclosed versions |
 
 A file is only written when it has rows, so a missing `risk-*.csv` means no findings of that kind
-(a file that later has no rows is removed). Files are sorted. Every CSV ends with `current`, `first_seen` and `last_seen` columns, and records
+(a file that later has no rows is removed). Files are sorted, except `candidates.csv`, which is
+sorted by confidence. Every CSV ends with `current`, `first_seen` and `last_seen` columns, and records
 that were not found by a later run are kept and marked not current. The `.recon/` directory holds
 the state database and the run lock. Don't edit it. Finding severities are listed by
 `recon --help`.

@@ -69,7 +69,7 @@ func TestRedirect_OutOfScopeRedirectIsACandidateAndNotRequested(t *testing.T) {
 		t.Errorf("an out-of-scope redirect target was requested %d times", evil.hits())
 	}
 	c := find(x.table(eng, "candidates.csv"), "value", "evil.example.net")
-	if c == nil || c["type"] != "hostname" || !strings.Contains(c["found_by"], "httpprobe") {
+	if c == nil || c["type"] != "hostname" || !strings.Contains(c["sources"], "httpprobe") {
 		t.Errorf("candidates.csv = %s", x.file(eng, "candidates.csv"))
 	}
 	r := x.service("http://a.example.com")
@@ -221,7 +221,7 @@ func TestCertificateSANsFlowThroughOrBecomeCandidates(t *testing.T) {
 	}
 	cands := x.table(eng, "candidates.csv")
 	for _, n := range []string{"other.example.org", "sub.example.org"} {
-		if r := find(cands, "value", n); r == nil || !strings.Contains(r["found_by"], "httpprobe") {
+		if r := find(cands, "value", n); r == nil || !strings.Contains(r["sources"], "httpprobe") {
 			t.Errorf("%s should be a candidate found by httpprobe: %s", n, x.file(eng, "candidates.csv"))
 		}
 	}

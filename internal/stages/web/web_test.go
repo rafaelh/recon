@@ -2,6 +2,17 @@ package web
 
 import "testing"
 
+// The crawl's check key carries its limits; the evidence it gives for a
+// candidate is the service alone, so changing a limit never counts twice.
+func TestCrawlEvidenceDropsTheLimits(t *testing.T) {
+	var s *Crawl
+	for _, key := range []string{"https://a.example.com|depth=2|pages=100", "https://a.example.com|depth=3|pages=50"} {
+		if src, item := s.Evidence(key); src != "crawl" || item != "https://a.example.com" {
+			t.Errorf("Evidence(%q) = %q, %q", key, src, item)
+		}
+	}
+}
+
 func TestNormaliseURLCanonicalisesIPLiteralsAndPorts(t *testing.T) {
 	for raw, want := range map[string]string{
 		"http://[2001:db8:0:0::1]:8080/x": "http://[2001:db8::1]:8080/x",
