@@ -37,9 +37,10 @@ support for its release cycle is reported as a finding, from versions recon alre
 # Design
 
 **Status: review before building (wave 3).** The parts that read Shodan's ports depend on Spec 4,
-which is not built yet. Everything else is complete; after Spec 4 merges, re-read the items marked
-*Review*. **Depends on:** Spec 4 (`reported_port`, the `confirmed` column and the "one step lower"
-rule, `open-ports.csv`'s merged rows).
+which is not built yet. Everything else is complete, and was re-checked against the built specs on
+2026-11-14 with no correction; after Spec 4 merges, re-read the items marked *Review*. **Depends
+on:** Spec 4 (`reported_port`, the `confirmed` column and the "one step lower" rule,
+`open-ports.csv`'s merged rows).
 
 ## Decisions
 
@@ -90,6 +91,23 @@ rule, `open-ports.csv`'s merged rows).
   and under `--passive` from stored records; `--redo httpprobe` with a new version marks the old
   finding not current; `open-ports.csv` columns on an existing engagement; the stale-data warning;
   `--help` and the README table.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **A finding that is no longer derived keeps only what its key holds (Specs 3 and 12).** The
+  store keeps attributes only from current observations. The key
+  `eol-software|<type>|<target>|<product>` gives such a row its type, target and product; its
+  version, end date and severity are blank, as in every risk file.
+- **Version banners are not a source (Spec 12).** `web-services.csv` has a `version_disclosure`
+  column read from `Server` and `X-Powered-By`. Versions come only from Wappalyzer technologies
+  and port banners here, as `## Out of scope` says; do not read that column.
+- **Findings layout (Spec 12).** A category is its own file in `internal/findings`, with its
+  rows appended to `table`, one entry in `riskFiles` and one line in `deriver.findings()`.
+- **`Kind` is not comparable (Spec 3).** Compare `Name()`.
+- **Console text (Spec 22).** If Spec 22 has merged, the stale-data warning is a WARN line. It is
+  already meant to show without a flag.
 
 ## Out of scope
 

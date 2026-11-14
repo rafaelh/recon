@@ -35,8 +35,10 @@ certificate for the wrong name, are low findings.
 
 # Design
 
-**Status:** ready to build (wave 1). **Depends on:** nothing. **Used by:** Spec 7 (its origin
-check goes through the same target client). **Shares with Specs 12 and 13:** `web-services.csv`.
+**Status:** ready to build (wave 1). **Depends on:** nothing. Spec 12 merged first, and the
+design was re-checked against it on 2026-11-14: the column and probe seams below are as built.
+**Used by:** Spec 7 (its origin check goes through the same target client). **Shares with Specs
+12 and 13:** `web-services.csv`.
 
 ## Decisions
 
@@ -56,7 +58,14 @@ check goes through the same target client). **Shares with Specs 12 and 13:** `we
 - **Old records get a trust value on read**: `kinds.TLSTrust(attrs)` returns `tls_trust` when set
   and otherwise maps the old `tls_error` text and `tls_self_signed` to the same five values.
   `web-services.csv` shows `tls_version`, `tls_cipher`, `tls_trust` in place of `tls_error` and
-  `tls_self_signed`.
+  `tls_self_signed`. As built, the columns are `webServiceColumns` and the cells
+  `webServiceCells` in `internal/output/output.go`, and the list ends with Spec 12's `hsts`,
+  `insecure_cookies`, `directory_listing` and `version_disclosure`. The three new columns take
+  the place of the two old ones, before `hsts`, not the end of the list.
+- **The probe seam as built.** `service()` in `probe.go` sets `TLSError` from
+  `first.CertVerifyErr()` and `TLSSelfSigned` from its own `selfSigned(leaf)`. Both move behind
+  `first.CertTrust()`. The values come from `first`, the service's own response, which is also
+  `chain[0]` of the `hop` chain Spec 12 added; the posture call beside it is not touched.
 - **Findings** extend the `certificates` category: `legacy-tls` (low) when `tls_version` is
   `TLS 1.0` or `TLS 1.1`; `hostname-mismatch` (low) when trust is `hostname-mismatch`, the host is
   not an IP literal and `inv.ProviderServed(host)` is false (a new inventory method: a provider
@@ -82,6 +91,26 @@ check goes through the same target client). **Shares with Specs 12 and 13:** `we
 - `internal/cli/tls_test.go`: a legacy service is recorded, crawled and checked for sensitive
   paths; columns; old records show a derived `tls_trust` and empty version until
   `--redo httpprobe`; findings go not current after a redo against a fixed service.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **Posture on legacy services (Spec 12).** A service that only speaks TLS 1.0 or 1.1 is now
+  recorded as an HTTPS service, so the probe also stores its `web_posture` and it can get the
+  HSTS and cookie findings. That follows from behaviour 1 and needs no code.
+- **Two provider tests (Spec 12).** Posture findings are skipped for a host `SaaSServed` says a
+  SaaS platform serves. The `hostname-mismatch` exception is wider (CDN or SaaS), which is why it
+  needs the new `ProviderServed`. Keep both; do not widen `SaaSServed`.
+- **Akamai addresses in Linode's list (Spec 5, follow-up 1).** Those addresses classify as
+  dedicated, so a host on one, with no Akamai CNAME, is not `ProviderServed` and can get a
+  `hostname-mismatch` finding for a CDN certificate. Spec 7's design asks the user to settle
+  that classification; nothing is decided here.
+- **A finding that is no longer derived keeps only what its key holds (Specs 3 and 12).** A
+  not-current `risk-certificates.csv` row has blank cells beyond its key, as today.
+- **New fields go at the end.** The three fields are appended to `WebServiceAttrs`, and Spec 7's
+  `body_len` follows them.
+- **`Kind` is not comparable (Spec 3).** Compare `Name()`.
 
 ## Out of scope
 

@@ -29,8 +29,9 @@ in the matched code become hostname observations, so forgotten internal hostname
 
 # Design
 
-**Status:** ready to build (wave 2). **Depends on:** Spec 1 (`KeyPrefix`, `Accept`, `Warnf`,
-`CleanName`).
+**Status:** ready to build (wave 2). Spec 1 has merged, and the design was re-checked against
+the built specs on 2026-11-14 with no correction. **Depends on:** Spec 1 (`KeyPrefix`, `Accept`,
+`Warnf`, `CleanName`).
 
 ## Decisions
 
@@ -74,6 +75,36 @@ in the matched code become hostname observations, so forgotten internal hostname
   completed roots kept; a longer reset, a 401 and a plain 403 stop the stage.
 - `--redo github` marks vanished matches not current; the key appears nowhere; `--passive` runs
   the stage; nothing becomes a finding.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **Failures every source shares (Spec 1).** The stage calls `ThirdParty.Do` itself, so it does
+  not get `httpsrc.Get`'s mapping. It must repeat the two parts that still apply: a truncated
+  body is a transient error, and any status other than 200 that the rate-limit rule does not
+  handle is one too.
+- **Paged sources (Spec 2, follow-up 3).** Cert Spotter, Censys and `shodan-dns` each hand-roll
+  their page cap and truncation warning, with two rules between them. The behaviours here ask
+  for no truncation warning. If one is added, use the rule Censys and `shodan-dns` share (warn
+  only when the source reports more than was read) and do not add a third.
+- **In-scope input roots (Spec 1, follow-up 4).** Several stages already walk `v.Inputs().Roots`
+  and keep the in-scope ones. Add `View.InScopeRoots()` (the in-scope input roots, sorted) in
+  `internal/run/stage.go` and use it here. The existing loops move to it in one later change,
+  because Specs 9, 16 and 19 are editing three of those files.
+- **`Evidencer` (Spec 15).** The key carries `max=`, but the stage records only names under an
+  in-scope root, so it finds no candidate and needs none.
+- **The check key does not carry the scope (Specs 2 and 3)**, as for `shodan-dns` and `dnsroot`.
+  A hostname in a fragment that is under another root the user adds later was ignored, so it is
+  recorded only after `--redo github`. The README says so.
+- **A record that is no longer current has no attributes (Spec 3, follow-up 1).** The key is the
+  match's URL, so a `code-mentions.csv` row whose match is gone shows `url` and blank
+  `repository`, `path`, `hostnames` and `root`. The URL names the repository and the path, so
+  that is accepted; do not add a key-parsing fallback. The README says a not-current row keeps
+  only its URL.
+- **Hostname cleaning (Spec 1).** `httpsrc.CleanName` strips `*.` before it validates. The
+  hostname helpers are merged in one change after Specs 4, 10, 13 and 17.
+- **`Kind` is not comparable (Spec 3).** Compare `Name()`.
 
 ## Out of scope
 

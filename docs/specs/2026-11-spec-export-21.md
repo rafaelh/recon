@@ -32,7 +32,9 @@ other tooling, without the CSV columns having to stay stable.
 # Design
 
 **Status:** ready to build (wave 1). **Depends on:** nothing; it reads kinds generically, so later
-kinds are exported without change. **Owns for Spec 20:** `run.BuildScope`.
+kinds are exported without change. It was re-checked against the built specs on 2026-11-14: the
+functions it moves have the names given below, and one shared list was added to the move.
+**Owns for Spec 20:** `run.BuildScope`.
 
 ## Decisions
 
@@ -50,8 +52,12 @@ kinds are exported without change. **Owns for Spec 20:** `run.BuildScope`.
   `Runner.buildScope`, `inventoryData` and `asnNetblocks` moves to `run.BuildScope(src)`, where
   `src` gives the inputs, the records of a kind merged in the registry's stage order, and the
   observations of a kind by stage (ASN-expanded netblocks are found that way). The runner and
-  `export` both call it, so the export cannot classify differently from a run. What stays in the
-  runner: the netblock-limit approval (a write) and building the egress policy. No egress is
+  `export` both call it, so the export cannot classify differently from a run. `buildScope` also
+  builds the `kinds.Visibility` from the scope and inventory; `BuildScope` returns it, since the
+  export's `shown` is that same decision. The list of kinds the build reads, `scopeKinds`, is now
+  also the `reads` of the `candidate-rank` deriver in `derive.go`. It moves with the code and stays
+  one list, or a kind added to the build later would stop re-ranking the candidates. What stays in
+  the runner: the netblock-limit approval (a write) and building the egress policy. No egress is
   created by `export`: the command makes no network requests by construction.
 - **Lines** are written in kind order, then key order: `kind`, `key`, `attrs`, `current`,
   `first_seen`, `last_seen`, `stages`, and `scope` for entity kinds or `shown` otherwise. Inputs
@@ -88,6 +94,21 @@ kinds are exported without change. **Owns for Spec 20:** `run.BuildScope`.
 
 Opening a WAL database read-only may create `-shm` when no run is active. If it does, open with
 `immutable=1` when no `-wal` file exists, so the "never writes" test holds.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **A record that is no longer current has no attributes (Spec 3, follow-up 1).** The store keeps
+  them only from current observations, so such a record is exported with empty `attrs`. The
+  README says so beside the field list. Do not rebuild them from the key.
+- **Derived records (Spec 15).** `finding` and `candidate_rank` records are exported like any
+  other, and their `stages` name a pseudo-stage (`candidate-rank`), not a stage the user can
+  `--redo`. The README's note on finding attributes covers both: they are derived and may change.
+- **`Kind` is not comparable (Spec 3).** It holds `Found`. Match `--kind` values against
+  `Name()`; never compare two `kinds.Named` values or use one as a map key.
+- **Merge order (build-order plan).** Specs 8, 11 and 16 each add a kind to the scope build.
+  Merge this spec before them, so they edit `run.BuildScope` and not the runner.
 
 ## Out of scope
 

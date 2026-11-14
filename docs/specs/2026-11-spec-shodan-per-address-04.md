@@ -45,9 +45,12 @@ alongside its own handshakes without Shodan's claims ever widening what recon co
 
 # Design
 
-**Status:** ready to build (wave 2). **Depends on:** Spec 6 (`run.Budgeted`), Spec 1
-(`CleanName`, `ErrQuota`), Spec 3 (`Kind.Found`, for the reported-port line). Re-check the budget interface once Spec 6 has
-merged. **Owns for Spec 14:** the `reported_port` kind, the `confirmed` notion, `run.Noter`.
+**Status:** ready to build (wave 2). Every spec it depends on has merged, and the design was
+re-checked against them on 2026-11-14. **Depends on:** Spec 6 (`run.Budgeted`, built as
+`Budget(config.Settings) int` with `Check.Cost`), Spec 1 (`CleanName`, `ErrQuota`), Spec 3
+(`Kind.Found`, for the reported-port line) and Spec 15 (candidate evidence, for the candidate
+roots of behaviour 4). **Owns for Spec 14:** the `reported_port` kind, the `confirmed` notion,
+`run.Noter`.
 
 ## Decisions
 
@@ -61,9 +64,15 @@ merged. **Owns for Spec 14:** the `reported_port` kind, the `confirmed` notion, 
 - **`shodan-host`** (`internal/stages/shodan/host.go`) yields, in address order, each
   port-eligible address that is outside every in-scope netblock, or inside one whose
   `shodan_netblock` is truncated and for which no `reported_port` from the `shodan` stage exists.
-  It is `Budgeted` by `shodan.max_hosts` (default 500, minimum 1). A 404 completes with nothing.
+  It is `Budgeted` by `shodan.max_hosts` (default 500, minimum 1): `Budget` returns the setting,
+  and each check is keyed by its address and has `Cost` 1. A 404 completes with nothing.
   TCP services become `reported_port`; UDP is dropped; hostnames under an in-scope root become
   `hostname` and `ip_hostname`, others become a `root` candidate (registrable domain).
+- **Candidate evidence.** The check key is the address and carries no setting, so the default
+  evidence (the stage name and the check key) is right and the stage needs no `Evidencer`.
+  `shodan-host` joins the family table in `internal/candidates` as passive DNS, beside `shodan`
+  and `shodan-dns`. A source the table does not list is a family of its own, so without the entry
+  Shodan agreeing with Shodan would count as two families and raise a candidate's confidence.
 - **Closed versus silent** (decided with the user: one extra handshake). The ports stage records
   the outcome only for ports Shodan reported, as `port_check` (`result`: `closed` or `silent`):
   - a port check that has not run yet carries `reported` in its input and records the outcome
@@ -89,7 +98,9 @@ merged. **Owns for Spec 14:** the `reported_port` kind, the `confirmed` notion, 
   `open ports (third-party reported)` (reported, shown, not confirmed, not closed) and
   `unconfirmed_risky_ports`, printed as `N risky ports reported by Shodan, unconfirmed`. Stages may
   add summary lines through `run.Noter.Notes(View) []string`; `shodan` uses it for truncated
-  searches. Deferred lookups use Spec 6's count.
+  searches. Deferred lookups need no code here: the runner's `Deferred to the next run` block
+  shows the deferred cost beside `shodan-host`, which is a number of addresses, and the README
+  names that unit.
 
 ## Changes
 
@@ -99,7 +110,9 @@ merged. **Owns for Spec 14:** the `reported_port` kind, the `confirmed` notion, 
 - `internal/run/runner.go`: severity-raise event, summary counts and notes.
 - `internal/output/ports.go` (moved from `output.go`). `internal/findings/findings.go`,
   `records.go` (`confirmed` column), `table.go`. `internal/config/config.go`: `shodan.max_hosts`.
-- `README.md`: passive-boundary text, columns, the `--redo shodan` note.
+- `internal/candidates/candidates.go`: `shodan-host` in the family table, as passive DNS.
+- `README.md`: passive-boundary text, columns, the `--redo shodan` and `--redo shodan-host` notes,
+  `shodan-host` in the passive DNS list of `sources` values, the unit of the deferred number.
 
 ## Tests
 
@@ -119,11 +132,41 @@ merged. **Owns for Spec 14:** the `reported_port` kind, the `confirmed` notion, 
   `open-ports.csv` row is not current.
 - Banner cut to one line or 256 characters and sanitised; UDP not recorded; out-of-root hostnames
   are candidate roots; the split open-port counts in console and `--json`.
+- A candidate root that `shodan` and `shodan-host` both report, and nothing else, has one family
+  and is `low`.
 
 ## To verify while building
 
 Whether `shodan/host/<ip>` costs query credits under Shodan's current terms (behaviour 8); the
 README sentence is written from that answer.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **Budget rules (Spec 6).** The first pending check of a run is always sent, and a budget below
+  1 counts as 1. A lookup that fails still spends its share of the budget, so a run with many
+  failures looks up fewer than `shodan.max_hosts` addresses.
+- **A 402 from Shodan is an ordinary failed check (Spec 2).** `httpsrc.Get` aborts a keyed stage
+  on a 401, 403 or 429 only. Behaviour 7 keeps that for the netblock search. If the check under
+  "To verify while building" finds that host lookups do cost credits, make a 402 from
+  `shodan-host` wrap `run.ErrAbortStage`, so one spent balance does not fail every remaining
+  address.
+- **Truncation (Spec 2).** The `shodan` stage has no truncation warning today: it stops at its
+  page constant, or once it has read `total` matches. Set `truncated` by that same test (the page
+  cap was reached with fewer than `total` matches read), which is the rule Censys and `shodan-dns`
+  use. Do not add another rule.
+- **The check key does not carry the scope (Specs 2 and 3)**, as for `shodan-dns` and `dnsroot`.
+  A hostname under a root the user promotes later was recorded only as that candidate root, so it
+  becomes a hostname only after `--redo shodan-host`. Putting the scope in the key would repeat
+  every lookup on every scope change. The README's `--redo shodan-host` note says so.
+- **`Kind` is not comparable (Spec 3).** It holds `Found`. Compare `Name()`; never compare two
+  `kinds.Named` values with `==` or use one as a map key.
+- **Hostname cleaning (Spec 1).** `httpsrc.CleanName` strips `*.` before it validates. The
+  `shodan` stage uses `input.NormaliseHost` today. Use `CleanName` in the new stage and leave the
+  old call alone: the hostname helpers are merged in one change after Specs 4, 10, 13 and 17.
+- **Console text (Spec 22).** If Spec 22 has merged, the severity-raise `+` line goes through its
+  log formatter and is asserted on stderr. If not, assert it on stdout.
 
 ## Out of scope
 

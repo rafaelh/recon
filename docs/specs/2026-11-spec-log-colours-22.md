@@ -103,3 +103,36 @@ B14. **Docs.** README and `--help` describe `--quiet` and `--debug`, the two str
 - Repeating INFO and WARN lines on stderr under `--json --debug`: they would duplicate the stdout
   events.
 - Making each stage skipped for lack of authorisation a WARN line: one line per run names them all.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one. This spec has no
+`# Design` yet; `/spec-design` settles each of these, and the ones that would change a behaviour
+are the user's to decide.
+
+- **Units in the deferred block (Spec 6, follow-up 5).** The summary's `Deferred to the next run`
+  block shows a bare number per stage, in that stage's own unit (names for `permutations`,
+  requests for `sensitive-paths`; Specs 4, 7 and 13 add addresses, hostnames and searches). The
+  README names the units. B8 keeps the summary's content as today, so decide here whether the
+  block should label them. The place is `Console.summary` in `internal/report/report.go`, and a
+  label needs the unit from the stage (one more method beside `run.Budgeted`).
+- **The medium candidate list (Spec 15).** As built, `--verbose` adds the medium candidates to
+  the summary. Removing `--verbose` (B5) removes that list and its tests, which is what Spec 15's
+  amended behaviour 4 and this spec's `## Out of scope` already say.
+- **"and N more" (Spec 15, follow-up).** The line under the candidate list is printed only when
+  there are more than 20 high candidates, and N counts those. Behaviour 4 of Spec 15 can also be
+  read as every candidate not listed. Decide which while the summary is being rewritten.
+- **Summary lines already on stdout (Specs 6 and 15).** The candidate list and the deferred block
+  are asserted on stdout today and stay there (B1, B8). Tests that assert stage lines, `+` lines
+  and warnings on stdout move to stderr.
+- **Two warning paths (Spec 1).** Stages warn through `View.Warn` from `Checks` and through
+  `run.Warnf(ctx, …)` from `Run`. Both are shown only with `--verbose` today, and both become
+  WARN lines (B3).
+- **OTX and Anubis (Spec 1, follow-up 1).** OTX no longer answers anonymous requests, so its
+  stage warns and aborts on its first check, and Anubis answers with a Cloudflare challenge, so
+  it fails one check per root, on every run. Once warnings show without a flag (B3) the OTX line
+  is printed on every run, and Anubis is listed under the failed checks every time. Decide
+  whether to keep, key or drop each stage before this spec is built, or with it.
+- **Text that names `--verbose`.** B14 covers the README and `--help`. In the code, the doc
+  comments of `View.Warn` and `run.Warnf` in `internal/run/stage.go` say "shown only with
+  `--verbose`" and need the same change; no stage's message string names the flag.

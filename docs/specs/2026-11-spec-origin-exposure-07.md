@@ -55,26 +55,45 @@ confirmed by one GET to an address recon is already allowed to contact.
 
 # Design
 
-**Status: review before building (wave 3).** This design depends on four specs that are not built
-yet. It is filled in as far as the current code allows; after Specs 2, 5, 6 and 18 merge, re-read
-the sections marked *Review* and confirm them against what was built. **Depends on:** Spec 5
-(Cloudflare and Fastly ranges, provider class `cdn`), Spec 6 (`run.Budgeted`), Spec 18 (the
-target TLS configuration and `Response` TLS accessors), Spec 2
-(the `resolutionRows` merge it extends).
+**Status: review before building (wave 3).** Specs 2, 5 and 6 have merged, and the items that
+waited on them were settled against the code on 2026-11-14. Spec 18 has not merged: after it
+does, re-read the one item still marked *Review*. The point under "Settle before building" needs
+an answer first. **Depends on:** Spec 5 (Cloudflare and Fastly ranges, the class passed through
+as `Result.Class`, `provider.ClassCDN`), Spec 6 (`run.Budgeted`), Spec 18 (the target TLS
+configuration and `Response` TLS accessors), Spec 2 (the `resolutionRows` merge it extends).
+
+## Settle before building
+
+**Akamai addresses in Linode's published list (Spec 5, follow-up 1).** A published range beats
+the ASN, and Linode's list holds about 739 /24s in 104.64.0.0/10 that AS20940 (Akamai, class
+`cdn`) announces. Those addresses are therefore dedicated. That is wrong twice for this spec. A
+hostname whose A record is one of them is not `Fronted` by the address test. And such an address
+counts as "not provider infrastructure", so it can be chosen as an origin candidate, be contacted
+(it is port-eligible) and confirm an exposure that is not one, because the CDN edge serves the
+fronted site's own title. Recommended: in `provider.Classify`, an address whose ASN entry has
+class `cdn` stays shared, with that class, even inside a dedicated published range. That amends
+behaviour 2 of Spec 5, so it is the user's decision. If the answer is no, this spec needs another
+way to keep those addresses out of the origin candidates, and a test either way.
 
 ## Decisions
 
 - **"Behind a CDN or WAF" is an inventory question.** `inventory.Fronted(host) (provider string,
   ok bool)` is true when a CNAME on the host's chain matches an entry of class `cdn` or `waf`, or
   one of its addresses classifies as `cdn`. CNAME entries in `providers.yaml` gain those classes
-  (CloudFront, Azure Front Door, Cloudflare, Fastly, Akamai, and WAF providers). *Review:* the
-  class values Spec 5 gave `Result.Class`, and that it passes `cdn` through for ASN entries.
-- **`dnshistory`** (`internal/stages/dnshistory`, keyed on `securitytrails`, third-party) yields
-  one check per fronted in-scope hostname in name order, `Budgeted` by `dnshistory.max_hosts`
-  (default 200). It records `historical_address` (`host`, `addr`, `type`, `first_seen`,
-  `last_seen`) and an `ip` observation for each address. Nothing that decides contact reads
-  `historical_address`; the `ip` record makes the address appear in `ips.csv` and get an owner
-  lookup, and it stays ineligible for ports and probing unless the existing rules already allow it.
+  (CloudFront, Azure Front Door, Cloudflare, Fastly, Akamai, and WAF providers). As built,
+  `Result.Class` carries the class of the range rule or ASN entry that classified the address
+  (`provider.ClassCDN` for Cloudflare's and Fastly's ranges and for every `cdn` ASN entry), so the
+  address test is `Class == provider.ClassCDN`. CNAME entries carry only `class: saas` today and
+  no `waf` class exists. This spec adds `provider.ClassWAF` and the `cdn` and `waf` classes on
+  CNAME entries. `SaaSServed` compares the class with `saas`, so the new classes change nothing
+  for sensitive paths. If an `asn:` entry is ever given `waf`, it must be shared, as `cdn` is.
+- **`dnshistory`** (`internal/stages/dnshistory`, keyed on `securitytrails`, third-party) yields one
+  check per fronted in-scope hostname in name order, `Budgeted` by `dnshistory.max_hosts` (default
+  200): `Budget` returns the setting and each check has `Cost` 1. It records `historical_address`
+  (`host`, `addr`, `type`, `first_seen`, `last_seen`) and an `ip` observation for each address.
+  Nothing that decides contact reads `historical_address`; the `ip` record makes the address appear
+  in `ips.csv` and get an owner lookup, and it stays ineligible for ports and probing unless the
+  existing rules already allow it.
 - **Candidate selection is pure**, in a new package `internal/origin`:
   `Candidates(fronted, historical, services, inv, scope, max)` returns, per fronted hostname, up
   to `origincheck.max_candidates` (default 5) addresses with how each was found and whether it may
@@ -100,7 +119,11 @@ target TLS configuration and `Response` TLS accessors), Spec 2
   may not be contacted. The finding carries a `line` attribute that the runner's finding
   announcement prints (findings cannot use `Kind.Found`: `kinds` cannot import `findings`).
 - **`resolutions.csv`** shows historical rows as `A-historical`/`AAAA-historical` with the two
-  date columns. *Review:* merge with Spec 2's `resolutionRows`.
+  date columns. As built, `resolutionRows` (`internal/output/output.go`) merges `resolution` and
+  `dns_claim` records by key into `name`, `type`, `value`, `source`. Historical rows are appended
+  from `historical_address`. Their type is their own, so they never share a key with either kind.
+  Their `source` is `dnshistory`. The two date columns are the last columns of the file, after
+  `source` and after Spec 16's `self_hosted` if that has merged, and are blank on every other row.
 
 ## Changes
 
@@ -126,6 +149,30 @@ target TLS configuration and `Response` TLS accessors), Spec 2
   re-checks; the HTTP fallback only when 443 does not answer; findings going not current for each
   reason in behaviour 7; no key leaves sibling candidates only; the `dnshistory` cap and its
   deferred count; `--passive` skips `origincheck` and runs `dnshistory`.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **Claim sources (Spec 2).** A second claim source that reports the same record would overwrite
+  the first one's `source` attribute. It does not arise here: historical addresses are their own
+  kind, `historical_address`, not `dns_claim`.
+- **Budget rules (Spec 6).** The first pending check of a run is always sent, a budget below 1
+  counts as 1, and a check that fails still spends its share. The `Deferred to the next run`
+  block shows a bare number beside `dnshistory`; the README names its unit (hostnames).
+- **Quota.** `httpsrc.Get` already aborts a keyed stage on a 401, 403 or 429, which is the rule
+  for the other keyed sources. `dnshistory` needs no quota code of its own.
+- **Linode object storage (Spec 5, follow-up 3).** While editing the `cname:` entries of
+  `providers.yaml`, add `{suffix: linodeobjects.com, provider: linode, service: Object Storage}`,
+  so a host on Linode object storage is shared, not dedicated.
+- **A finding that is no longer derived keeps only what its key holds (Specs 3 and 12).** The
+  store keeps attributes only from current observations. The key `origin-exposure|<host>|<addr>`
+  gives such a row its hostname and address; its other cells are blank, as in every risk file.
+- **New fields go at the end.** `body_len` is appended to `WebServiceAttrs` after the three
+  fields Spec 18 adds.
+- **`Kind` is not comparable (Spec 3).** Compare `Name()`.
+- **Console text (Spec 22).** If Spec 22 has merged, the `+` line goes through its log formatter
+  and is asserted on stderr. If not, assert it on stdout.
 
 ## Out of scope
 

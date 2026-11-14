@@ -39,8 +39,9 @@ inside a script is ever requested.
 
 # Design
 
-**Status:** ready to build (wave 2). **Depends on:** Spec 1 (`run.Warnf`). **Shares with Spec
-13:** `crawl.go` (each adds one emit in `observations()`); nothing in the probe.
+**Status:** ready to build (wave 2). Spec 1 has merged, and the design was re-checked against
+the built specs on 2026-11-14 with no correction. **Depends on:** Spec 1 (`run.Warnf`). **Shares
+with Spec 13:** `crawl.go` (each adds one emit in `observations()`); nothing in the probe.
 
 ## Decisions
 
@@ -94,6 +95,24 @@ inside a script is ever requested.
   `jsparse` and no status; in-scope hosts become hostnames; an HTML answer and a non-2xx record
   nothing; a truncated bundle records what was read and warns; a script dropped by a re-crawl
   retires its URLs; **canary:** no URL found in a script is ever requested.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **`Evidencer` (Spec 15).** A stage whose check key carries a setting and which can find
+  candidates must implement it. This key carries the parser hash, but the stage records only
+  names under an in-scope root, so it finds no candidate and needs none. If that ever changes,
+  it must implement `Evidencer` and drop the hash from the item.
+- **The check key does not carry the scope (Specs 2 and 3)**, as for `shodan-dns` and `dnsroot`.
+  A URL or hostname under a root the user adds later was ignored when its script was read, so it
+  is recorded only after `--redo jsparse`. The README says so beside the `--redo crawl` note.
+- **Merge order (build-order plan).** Spec 21 moves the scope and inventory construction to
+  `run.BuildScope`. If it has merged, `script` joins the kinds that function reads and
+  `Policy.Scripts` is built beside it, not in `runner.go`.
+- **`Kind` is not comparable (Spec 3).** Compare `Name()`.
+- **Console text (Spec 22).** If Spec 22 has merged, the `--verbose` warnings of behaviours 2, 4
+  and 5 are WARN lines, shown without a flag.
 
 ## Out of scope
 

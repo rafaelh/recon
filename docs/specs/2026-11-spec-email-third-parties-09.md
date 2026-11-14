@@ -8,13 +8,15 @@ root publishes an MTA-STS policy.
 
 ## Behaviours
 
-1. For each in-scope input root, every domain the SPF walk follows (`include:` and `redirect=`,
-   as far as the email check already goes) plus every domain named by `a:`, `mx:` or `exists:` at
-   any level is a row in `third-parties.csv` with mechanism `spf`, the root, and the depth (the
-   root's own record is depth 1). Arguments containing macros are skipped. A domain equal to or
-   under an in-scope root, or sharing the registrable domain of the root it was found on, is not a
-   third party. An include with no SPF record is still listed. A SERVFAIL on any include fails the
-   root's email check as today, so that run records no third parties for the root.
+1. For each in-scope input root, every domain the SPF walk follows (`include:` and `redirect=`, as
+   far as the email check already goes) plus every domain named by `a:`, `mx:` or `exists:` at any
+   level is a row in `third-parties.csv` with mechanism `spf`, the root, and the depth (0 for a
+   domain the root's own record names, 1 for one named by a record that record includes, and so on;
+   amended 2026-11-14 to count from 0, as the file built by Spec 3 does). Arguments containing
+   macros are skipped. A domain equal to or under an in-scope root, or sharing the registrable
+   domain of the root it was found on, is not a third party. An include with no SPF record is still
+   listed. A SERVFAIL on any include fails the root's email check as today, so that run records no
+   third parties for the root.
 2. Each DMARC `rua=` and `ruf=` URI (comma-separated, size suffix such as `!10m` removed,
    non-`mailto:` URIs ignored) contributes its mailbox domain with mechanism `dmarc`. The row
    belongs to the root whose policy it is, including when the policy came from the organisational
@@ -44,15 +46,19 @@ root publishes an MTA-STS policy.
 
 # Design
 
-**Status:** ready to build (wave 2). **Depends on:** Spec 3 (the `third_party` kind, its showing
-rule, `third-parties.csv`, `provider.DomainOwner`) and Spec 15 (the runner's derived-records
-hook); re-check both names once they have merged.
+**Status:** ready to build (wave 2). Specs 3 and 15 have merged, and the design was re-checked
+against them on 2026-11-14: the depth now counts from 0, the deriver goes in `derive.go`, and the
+rows use the `third_party` kind as built. **Depends on:** Spec 3 (the `third_party` kind, its
+showing rule, `third-parties.csv`, `provider.DomainOwner`) and Spec 15 (the runner's
+derived-records hook, `newDerivers()`).
 
 ## Decisions
 
 - **SPF, DMARC and MX third parties are observations of the email check.** `spfEval` already
   walks the record; it additionally collects `{domain, depth}` for each `include:` and
-  `redirect=` it follows and each `a:`, `mx:` and `exists:` argument, skipping macros. DMARC
+  `redirect=` it follows and each `a:`, `mx:` and `exists:` argument, skipping macros. The depth
+  is 0 in the root's own record and one more in each record followed, which is how the built file
+  counts it (`ns` rows are depth 0). DMARC
   `rua` and `ruf` are parsed from the record the check already holds. The check emits
   `third_party` observations beside `email_posture`, so a failed check records none (behaviour 1)
   and `--redo email` retires stale ones (the stage is already `Retiring`).
@@ -61,45 +67,78 @@ hook); re-check both names once they have merged.
   hides any domain that is, or later becomes, in scope.
 - **The domain is kept as written** for `spf` and `dmarc` rows (`_spf.google.com`), and is the
   registrable domain for `mx` rows. `provider` comes from `provider.DomainOwner`, whose
-  `domains:` list this spec extends with mail and SaaS providers.
+  `domains:` list this spec extends with mail and SaaS providers. `DomainOwner` matches by
+  suffix, so `_spf.google.com` matches a `google.com` entry. An `mx` row holds a registrable
+  domain, so each new entry is written at the registrable domain (`outlook.com`, not
+  `protection.outlook.com`), or it could never match an `mx` or `ns` row. The stage sets
+  `provider` when it records the row, as `dnsroot` does.
+- **Rows use the kind as built.** The key is `<root>|<mechanism>|<domain>`. The mechanisms `spf`,
+  `dmarc`, `mx` and `cname` become constants beside `MechanismNS`. `kinds.ThirdPartyOf` gains them
+  in its key fallback (the key's last part is the domain), so a row that is no longer current
+  still shows its root, mechanism and domain. Its depth is not in the key and shows 0.
 - **`cname` rows are derived, then stored**, so they are printed, counted and dated like the
-  others: a `thirdparty-cname` deriver on the runner's hook (its input signature is the `hostname`,
-  `resolution` and `wildcard` kinds and the inputs, not `third_party`, which stages also write) emits one `third_party` record per
+  others: a `thirdparty-cname` deriver, one entry in `newDerivers()` in `internal/run/derive.go`
+  (`reads`: the `hostname`, `resolution` and `wildcard` kinds, and not `third_party`, which it
+  writes and stages also write; `writes`: `kinds.ThirdParty`; `derive`: a call to the pure
+  `internal/thirdparty`), emits one `third_party` record per
   root and provider suffix for each in-scope, non-wildcard-only hostname whose CNAME chain ends at
   a SaaS-class entry. A row whose hostname stops pointing there loses its observation and goes not
-  current, which is what `--redo resolve` produces. `provider-hosts.csv` is not touched.
+  current, which is what `--redo resolve` produces. `provider-hosts.csv` is not touched. The
+  runner leaves every kind a deriver writes out of the findings' signature, so `third_party` will
+  be left out of it; no finding reads that kind, and a test pins that none does.
 - **MTA-STS is part of the email check**: when the root has a non-null MX, one TXT lookup at
   `_mta-sts.<root>`; `mta_sts` is `present` for exactly one `v=STSv1` record, else `absent`; a
-  timeout or SERVFAIL fails the check. The check key gains a `|mta-sts` token so existing
-  engagements run it once; the old checks are retired.
+  timeout or SERVFAIL fails the check. The check key, `<root>|dkim=<hash>` as built, gains a
+  `|mta-sts` token so existing engagements run it once; the old checks are retired.
 - **Finding**: `mta-sts-missing` (low) in the `email` category when `mta_sts` is `absent`.
 
 ## Changes
 
 - `internal/stages/risk/email.go`: SPF collection, DMARC URIs, MX domains, MTA-STS, key token.
 - `internal/kinds/table.go`: `MTASTS` at the end of `EmailPostureAttrs`.
-- `internal/thirdparty/` (pure): the `cname` derivation. `internal/run/runner.go`: one deriver.
+- `internal/thirdparty/` (pure): the `cname` derivation. `internal/run/derive.go`: one entry in
+  `newDerivers()`.
+- `internal/kinds/thirdparty.go`: the four mechanism constants and the `ThirdPartyOf` fallback.
 - `internal/provider/providers.yaml`: mail and SaaS `domains:` entries.
 - `internal/output/evidence.go`: `mta_sts` column. `internal/findings/findings.go`, `table.go`.
-- `README.md`: mechanisms, the provider list, `email-posture.csv` and `risk-email.csv` rows.
+- `README.md`: the new mechanisms in the `third-parties.csv` row, the depth of an included
+  record, the provider list, `email-posture.csv` and `risk-email.csv` rows.
 
 ## Tests
 
 `internal/cli/email_third_parties_test.go`, with `egresstest`:
 
-- Includes two deep give depths 1 and 2; `a:`, `mx:`, `exists:` are listed; macros are skipped; an
+- Includes two deep give depths 0 and 1; `a:`, `mx:`, `exists:` are listed; macros are skipped; an
   include with no SPF record is listed; a SERVFAIL on an include records nothing for the root.
 - `rua`/`ruf`: several URIs, a `!10m` suffix, a non-`mailto:` URI, and a policy inherited from
   the organisational domain (the row belongs to the root).
 - MX rows use the registrable domain; an in-scope MX host is not listed.
 - A domain under another in-scope root is hidden, including when that root is added later.
 - `cname` rows for SaaS chains only; wildcard-only and excluded names are not listed; the row goes
-  not current after the CNAME changes and `--redo resolve`.
+  not current after the CNAME changes and `--redo resolve`, and that row still shows its root,
+  mechanism and domain.
 - One row per root, mechanism and domain; the `provider` column; nothing in `candidates.csv`;
   the `+` line and the `N third parties` count; the stage runs under `--passive`.
 - MTA-STS: `present`, `absent`, empty without MX, no fallback for a subdomain root, SERVFAIL
   fails the check, the finding, and an existing engagement re-running its email checks once. The
   canaries see no HTTPS request for the policy file.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **A record that is no longer current has no attributes (Spec 3, follow-up 1).** The store keeps
+  them only from current observations, which is why `ThirdPartyOf` reads the key. If the store is
+  changed to keep a record's last attributes, the fallback added here goes with the others.
+- **The `domains:` lookup (Spec 3).** `dnsroot` asks `DomainOwner` about a name server's
+  registrable domain, so an entry deeper than a registrable domain never matches there. Route 53
+  name servers (`awsdns-NN.<tld>`) have no entry for the same reason. Neither changes here.
+- **`Kind` is not comparable (Spec 3).** Compare `Name()`.
+- **Derivers (Spec 15).** A deriver runs after every stage that did work and before every render,
+  and is skipped while its `reads`, the inputs and the date are unchanged. It must read nothing
+  outside `reads`, the scope and the inventory.
+- **Console text (Spec 22).** The `+` line of a new third party is the kind's own `Found` line,
+  already built. If Spec 22 has merged it is asserted on stderr; if not, on stdout.
 
 ## Out of scope
 

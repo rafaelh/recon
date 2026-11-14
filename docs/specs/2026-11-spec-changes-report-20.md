@@ -32,7 +32,9 @@ by hand.
 
 **Status: review before building (wave 3).** The mechanism is generic over kinds, so this design
 is complete, but its summary block and passive rule name kinds and stages other specs add. Build
-it last, and at review re-check the items marked *Review*. **Depends on:** Spec 21
+it last, and at review re-check the items marked *Review*. On 2026-11-14 it was re-checked
+against the seven specs built so far: the baseline table now keeps the scope and severity a
+`gone` row shows, and the candidate and deriver rules are written as built. **Depends on:** Spec 21
 (`run.BuildScope`), Spec 15 (`candidate_rank`), and in practice every spec that adds a kind.
 
 ## Decisions
@@ -45,14 +47,22 @@ it last, and at review re-check the items marked *Review*. **Depends on:** Spec 
 - **Which kinds are listed is a property of the kind**: `Kind.Change` is the label used in
   `changes.csv` (`hostname`, `address`, `web service`, `url`, `open port`, `third party`,
   `code mention`, `finding`, …); kinds without one (evidence and internal kinds) are skipped.
-  Candidates are their own label: an entity record the scope classifies as a candidate, plus the
-  other candidate types. *Review:* give a label to each kind the other specs added that has an
-  output file.
+  Candidates are their own label: as built, a candidate is a record of a kind in
+  `kinds.CandidateKinds` whose `Visibility.Category` is `candidates`, which is the test
+  `candidates.csv` uses, and Spec 8 adds its two types to that list. A candidate's rank is an
+  attribute, so `candidate_rank` has no label and a changed rank is not a change. *Review:* give
+  a label to each kind the other specs added that has an output file. Of the kinds built so far:
+  `third_party` is `third party`; `dns_claim` shares the `resolution` label, and a claim and a
+  resolution with one key are one `resolutions.csv` row, so they are one entry in the diff;
+  `web_posture`, `provider_range` and `candidate_rank` have none.
 - **The baseline is what the last render showed, saved, not recomputed.** Recomputing it when a
   run starts would use today's date, settings, binary and scope, and so absorb exactly the changes
   behaviour 6 asks for (a certificate that expired overnight would already be in the baseline).
   Every render, including the one an interrupt triggers, replaces a `shown` table in the state
-  database (`kind`, `key`, `stages`) in one transaction. A run reads it once, before its first
+  database (`kind`, `key`, `stages`, `scope`, `severity`) in one transaction. The last two are
+  kept because a `gone` row must show them and the store cannot give them back: it keeps a
+  record's attributes only from current observations, so a finding that is no longer derived has
+  lost its severity, and the scope may have changed since. A run reads it once, before its first
   derivation, and diffs every later render against that copy. A resumed run therefore compares
   against where the interrupted run stopped. If the store has no records the run is a first run
   and nothing below happens; an engagement last written by a binary without the table gets its
@@ -67,6 +77,9 @@ it last, and at review re-check the items marked *Review*. **Depends on:** Spec 
 - **Passive rule**: in a `--passive` run a record is not reported `gone` when every stage
   observing it at the baseline was a target-contact stage. Findings are exempt from the rule:
   they are re-derived with or without contact, so a finding that stops being derived is gone.
+  The same holds for any record a deriver stores (`newDerivers()` in `internal/run/derive.go`):
+  its observer is the deriver's pseudo-stage, which is not a target-contact stage, so the rule
+  as written already reports it gone. A test pins that with a derived record.
 - **Reporting**: the `summary` event gains `changes` (counts per label and change, and the new
   high and medium findings); the console prints the "since last run" block from it; `--json`
   emits one `change` event per row after the summary. *Review:* the six labels the block counts.
@@ -91,6 +104,22 @@ it last, and at review re-check the items marked *Review*. **Depends on:** Spec 
   console block and its omission on a first run; `change` events follow the summary.
 - `internal/cli/crash_test.go`: an interrupted run writes `changes.csv` for completed work and
   exits 130; the resumed run's baseline is the interrupted run's end state.
+
+## Carried from built specs
+
+Follow-ups and limits of the specs already built that bear on this one.
+
+- **A record that is no longer current has no attributes (Spec 3, follow-up 1; Spec 12).** This
+  is why the baseline keeps `scope` and `severity`. If the store is changed first to keep a
+  record's last attributes, read them from the record and drop the two columns.
+- **Deferred checks (Spec 6).** A budgeted stage's deferred checks are neither failed nor
+  retired, so the records they observed stay current and are never reported `gone`. A test pins
+  that with a deferring run.
+- **The summary as built (Specs 6 and 15).** The summary now ends with the candidate list and
+  the `Deferred to the next run` block. The "since last run" block comes after both.
+- **`Kind` is not comparable (Spec 3).** `Kind.Change` is one more field on it. Compare `Name()`.
+- **Console text (Spec 22).** If Spec 22 has merged, the block is part of the summary on stdout
+  and its findings carry the severity badge in place of `[high]`.
 
 ## Out of scope
 
