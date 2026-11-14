@@ -659,7 +659,7 @@ func TestProviderLabelsAndSharedInfrastructure(t *testing.T) {
 	for _, c := range []struct{ ip, provider, service, eligible string }{
 		{"203.0.113.5", "aws", "EC2", "true"},
 		{"192.0.2.5", "aws", "CLOUDFRONT", "false"},
-		{"100.64.1.1", "gcp", "", "false"},
+		{"100.64.1.1", "gcp", "europe-west1", "false"}, // no service is published: the region shows instead
 		{"20.1.1.1", "azure", "", "false"},
 		{"104.16.0.5", "cloudflare", "", "false"},
 		{"54.1.1.1", "aws", "", "false"},

@@ -47,19 +47,19 @@ func TestClassify(t *testing.T) {
 		want  provider.Result
 	}{
 		{"ec2 only is not shared", "203.0.113.5", provider.Owner{ASN: 16509, Holder: "AMAZON-02", Known: true},
-			provider.Result{Known: true, Shared: false, Provider: "aws", Service: "EC2", Evidence: "range"}},
+			provider.Result{Known: true, Shared: false, Provider: "aws", Service: "EC2", Region: "eu-west-1", Evidence: "range"}},
 		{"amazon superset only is shared, not labelled EC2", "198.18.0.5", provider.Owner{ASN: 16509, Known: true},
-			provider.Result{Known: true, Shared: true, Provider: "aws", Evidence: "range"}},
+			provider.Result{Known: true, Shared: true, Provider: "aws", Region: "us-east-1", Evidence: "range"}},
 		{"cloudfront range is shared", "198.51.100.7", provider.Owner{ASN: 16509, Known: true},
-			provider.Result{Known: true, Shared: true, Provider: "aws", Service: "CLOUDFRONT", Evidence: "range"}},
+			provider.Result{Known: true, Shared: true, Provider: "aws", Service: "CLOUDFRONT", Region: "GLOBAL", Evidence: "range"}},
 		{"gcp is shared, no service discrimination", "192.0.2.9", provider.Owner{ASN: 15169, Known: true},
-			provider.Result{Known: true, Shared: true, Provider: "gcp", Evidence: "range"}},
-		{"cdn asn is shared", "104.16.0.1", provider.Owner{ASN: 13335, Holder: "CLOUDFLARENET", Known: true},
-			provider.Result{Known: true, Shared: true, Provider: "cloudflare", Evidence: "asn"}},
+			provider.Result{Known: true, Shared: true, Provider: "gcp", Region: "europe-west1", Evidence: "range"}},
+		{"cdn asn is shared and reports its class", "104.16.0.1", provider.Owner{ASN: 13335, Holder: "CLOUDFLARENET", Known: true},
+			provider.Result{Known: true, Shared: true, Provider: "cloudflare", Evidence: "asn", Class: provider.ClassCDN}},
 		{"azure asn fails closed", "20.0.0.1", provider.Owner{ASN: 8075, Holder: "MICROSOFT", Known: true},
-			provider.Result{Known: true, Shared: true, Provider: "azure", Evidence: "asn"}},
+			provider.Result{Known: true, Shared: true, Provider: "azure", Evidence: "asn", Class: "hyperscaler"}},
 		{"hyperscaler address with no range data is shared", "54.0.0.1", provider.Owner{ASN: 16509, Known: true},
-			provider.Result{Known: true, Shared: true, Provider: "aws", Evidence: "asn"}},
+			provider.Result{Known: true, Shared: true, Provider: "aws", Evidence: "asn", Class: "hyperscaler"}},
 		{"ordinary owner is known, not shared", "100.64.0.1", provider.Owner{ASN: 64500, Holder: "ACME-NET", Known: true},
 			provider.Result{Known: true}},
 		{"no owner and no range is unknown", "100.64.0.2", provider.Owner{}, provider.Result{}},
@@ -89,37 +89,16 @@ func TestClassifyIndexMatchesLinearScan(t *testing.T) {
 		{Prefix: pfx("2001:db8:ff::/48"), Provider: "gcp"},
 		{Prefix: pfx("0.0.0.0/0"), Provider: "other"},
 	}
-	// The range half of the original linear Classify (owner is an AWS ASN, so
-	// with no covering range the result is the ASN's).
+	// A linear scan for the covering ranges, in order, classified by an index
+	// holding only those: the answer must not depend on how the index finds them.
 	linear := func(a netip.Addr, owner provider.Owner) provider.Result {
-		var ec2, amazon, gcp bool
+		var covering []provider.Range
 		for _, r := range ranges {
-			if !r.Prefix.Contains(a) {
-				continue
-			}
-			switch r.Provider {
-			case "aws":
-				switch r.Service {
-				case "EC2":
-					ec2 = true
-				case "AMAZON":
-					amazon = true
-				default:
-					return provider.Result{Known: true, Shared: true, Provider: "aws", Service: r.Service, Evidence: "range"}
-				}
-			case "gcp":
-				gcp = true
+			if r.Prefix.Contains(a) {
+				covering = append(covering, r)
 			}
 		}
-		switch {
-		case gcp:
-			return provider.Result{Known: true, Shared: true, Provider: "gcp", Evidence: "range"}
-		case ec2:
-			return provider.Result{Known: true, Provider: "aws", Service: "EC2", Evidence: "range"}
-		case amazon:
-			return provider.Result{Known: true, Shared: true, Provider: "aws", Evidence: "range"}
-		}
-		return db.Classify(a, owner, nil)
+		return db.Classify(a, owner, provider.NewRanges(covering))
 	}
 	idx := provider.NewRanges(ranges)
 	var addrs []netip.Addr

@@ -6,6 +6,7 @@
 package inventory
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"net/netip"
@@ -64,7 +65,8 @@ type ProviderHost struct {
 	Entry provider.Entry
 }
 
-// IPRow is one address in ips.csv.
+// IPRow is one address in ips.csv. Service is the provider's service where its
+// ranges name one, and otherwise the region they give.
 type IPRow struct {
 	IP                       netip.Addr
 	ASN                      int
@@ -389,7 +391,7 @@ func (i *Inventory) IPRows(sc *scope.Scope) []IPRow {
 	for a, names := range hostnames {
 		res := i.result(a)
 		owner := i.d.Owners[a]
-		row := IPRow{IP: a, Provider: res.Provider, Service: res.Service, InScope: sc.InScopeIP(a),
+		row := IPRow{IP: a, Provider: res.Provider, Service: cmp.Or(res.Service, res.Region), InScope: sc.InScopeIP(a),
 			PortEligible: i.PortEligible(a, sc), Hostnames: names}
 		switch {
 		case owner.Known:

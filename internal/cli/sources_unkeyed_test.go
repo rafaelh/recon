@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -420,11 +419,12 @@ func TestGet_RangePublisher429StaysAFailedCheck(t *testing.T) {
 	w := newWorld(t)
 	w.handle("ip-ranges.amazonaws.com", status(429))
 	w.handle("www.gstatic.com", jsonBody(`{"prefixes":[{"ipv4Prefix":"100.64.0.0/16","service":"Google Cloud","scope":"europe-west1"}]}`))
+	serveNewRanges(w)
 	if code := w.run("--passive", "--concurrency", "1", "example.com"); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if got := w.h.completed(eng, "providerranges"); !slices.Equal(got, []string{"gcp"}) {
-		t.Errorf("completed = %v, want only the list that answered", got)
+	if got, want := sorted(w.h.completed(eng, "providerranges")), allRangeChecksBut("aws"); !slices.Equal(got, want) {
+		t.Errorf("completed = %v, want every list but the one that answered 429", got)
 	}
 	if n := len(w.requests("www.gstatic.com")); n != 1 {
 		t.Errorf("the other publisher must still be asked: %d requests", n)
@@ -707,17 +707,7 @@ func TestCertSpotter_MaxPagesMustBePositive(t *testing.T) {
 // --- README ---
 
 func TestReadme_NamesTheNewSources(t *testing.T) {
-	b, err := os.ReadFile("../../README.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	readme := string(b)
-	start := strings.Index(readme, "## Passive boundary")
-	end := strings.Index(readme[start+1:], "\n## ")
-	if start < 0 || end < 0 {
-		t.Fatal("README has no Passive boundary section")
-	}
-	section := strings.ToLower(readme[start : start+1+end])
+	section, readme := readmeSection(t, "## Passive boundary")
 	for _, src := range []string{"alienvault otx", "hackertarget", "urlscan", "anubis", "cert spotter"} {
 		if !strings.Contains(section, src) {
 			t.Errorf("the passive-boundary section does not name %q", src)

@@ -1,0 +1,19 @@
+{
+    "last_updated_timestamp": "2026-10-28T02:47:53.012304",
+    "regions": [
+        {
+            "region": "mx-monterrey-1",
+            "cidrs": [
+                {"cidr": "40.233.0.0/19", "tags": ["OCI"]},
+                {"cidr": "64.181.146.0/23", "tags": ["OSN"]},
+                {"cidr": "134.70.200.0/23", "tags": ["OSN", "OBJECT_STORAGE"]}
+            ]
+        },
+        {
+            "region": "us-phoenix-1",
+            "cidrs": [
+                {"cidr": "129.146.0.0/21", "tags": ["OCI"]}
+            ]
+        }
+    ]
+}
