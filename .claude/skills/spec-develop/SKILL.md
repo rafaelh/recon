@@ -10,8 +10,8 @@ metadata:
 ---
 
 Implement a specification file into code and tests. The arguments are the specification file and,
-optionally, the `--wt` and `--writepr` flags. If a complete specification file is not supplied, ask
-the user to provide one and stop.
+optionally, the `--wt` flag. If a complete specification file is not supplied, ask the user to
+provide one and stop.
 
 For a specification file to be considered complete, it must have a `# Design` section with all
 decisions resolved. If the specification file is missing a `# Design` section, ask the user to run
@@ -71,18 +71,14 @@ Implement the specification file by:
 
 11. **Check the tests can fail.** Do this now, once the code has stopped moving, so each check runs
     once. For each behaviour `## Tests` marks for a mutation check, break the code that implements
-    it by hand, for example by removing a guard or inverting a condition. Run the tests with
-    `PYTHONDONTWRITEBYTECODE=1` and confirm at least one fails, then undo your edit by hand. Don't
-    undo it with git, which would also discard other uncommitted work. If no test fails, add one
-    that does. Record the results in `## Develop`.
+    it by hand, for example by removing a guard or inverting a condition. Run the tests and confirm
+    at least one fails, then undo your edit by hand. Don't undo it with git, which would also
+    discard other uncommitted work. If no test fails, add one that does. Record the results in
+    `## Develop`.
 
 12. **Verify the implementation.** Run `/spec-verify <spec file>` and show the user its summary of
     what was fixed and what was skipped, and its follow-ups list. If it returns before its
     sub-agents have reported, wait for their reports and handle the findings before continuing.
 
-13. **Raise the pull request.** Only if `--writepr` was passed: run `/spec-writepr <spec file>` and
-    show the user its summary, including each PR URL and anything it fixed or left unresolved.
-    Without the flag, skip this step.
-
-14. **Stop.** If `--wt` was passed, tell the user the worktree path and branch, and leave the
+13. **Stop.** If `--wt` was passed, tell the user the worktree path and branch, and leave the
     worktree in place. Then stop.

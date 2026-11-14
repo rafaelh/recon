@@ -20,7 +20,7 @@ should do, not how. You'll be given both in your prompt.
 For the **goal**:
 - Is it one goal, or several bundled together? Each extra goal is a finding.
 - Does it say why the change matters, or only what to build? A goal that restates a solution
-  ("add a cache") hides the real outcome ("look commands respond instantly").
+  ("add a cache") hides the real outcome ("searches return in under a second").
 - How would anyone tell the goal has been reached? If there's no observable answer, that's a finding.
 
 For the **behaviours**:
@@ -40,7 +40,7 @@ For **what's missing**:
 - What's out of scope? An unstated boundary is a finding when a reasonable reader could assume
   either way.
 - What existing behaviour must stay the same? If the change could plausibly break something
-  players or tests rely on, the spec should say it's preserved.
+  users or tests rely on, the spec should say it's preserved.
 
 ## Output
 
