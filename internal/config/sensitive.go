@@ -32,6 +32,21 @@ func (p SensitivePath) Hash() string {
 	return hex.EncodeToString(sum[:4])
 }
 
+// SeverityRank orders entries for requesting: 0 for high, 1 for medium, 2 for
+// low. Severities are validated when a list is read, so the last case is only a
+// guard: an entry with any other severity is requested last, never dropped.
+func (p SensitivePath) SeverityRank() int {
+	switch p.Severity {
+	case "high":
+		return 0
+	case "medium":
+		return 1
+	case "low":
+		return 2
+	}
+	return 3
+}
+
 // Describe is the signature recorded with a hit.
 func (p SensitivePath) Describe() string {
 	var parts []string

@@ -1,0 +1,1 @@
+<!DOCTYPE html><html><head><title>Login - Adminer</title></head><body><a href="https://www.adminer.org/">Adminer</a></body></html>

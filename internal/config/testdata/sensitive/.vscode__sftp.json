@@ -1,0 +1,6 @@
+{
+    "name": "prod",
+    "host": "ftp.example.com",
+    "protocol": "sftp",
+    "remotePath": "/var/www/"
+}

@@ -61,9 +61,11 @@ signals, exit codes) → `internal/run.Runner` → stages → `internal/store` (
 - `Run` reports negative results (NXDOMAIN, closed port) as completed checks with zero or more
   observations. A returned error means a transient failure: the check is retried on later runs.
   Wrap `run.ErrAbortStage` to abort the stage's remaining checks for this run.
-- Optional interfaces: `WorkerCounter` (a custom pool size, used by ports), `CandidateExempt`, and
+- Optional interfaces: `WorkerCounter` (a custom pool size, used by ports), `CandidateExempt`,
   `Retiring` (completed checks the stage no longer yields are retired, so their evidence stops
-  being current).
+  being current), and `Budgeted` (a per-run cap on the summed `Check.Cost` of the checks sent; the
+  runner defers the first check that would pass it and all after it, without failing or retiring
+  them, and the summary reports the deferred cost).
 - Stages read state only through `run.View`, which offers scope, inventory and cached current
   records. Web stages must use `ProbeHostnames()` (wildcard-aware), not `InScopeHostnames()`.
 - The registry order is `defaultStages()` in `internal/cli/cli.go`, and that order matters (see

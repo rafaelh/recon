@@ -127,24 +127,30 @@ func TestRepresentativeIsProbeable(t *testing.T) {
 	}
 }
 
-// Only names seen by a stage other than permutations are seeds.
+// Only names seen by a stage other than permutations are seeds, and none
+// directly under a wildcard zone: every name there exists, so permuting it finds nothing.
 func TestSeeds(t *testing.T) {
 	var d inventory.Data
 	d.Wildcards = []inventory.Wildcard{{Zone: "example.com", Addrs: ips("203.0.113.1")}}
 	d.Hosts = []inventory.Host{
-		{Name: "api.example.com", Stages: []string{"crtsh"}},
-		{Name: "api-dev.example.com", Stages: []string{"permutations"}},
-		{Name: "both.example.com", Stages: []string{"permutations", "rdns"}},
+		{Name: "api.corp.example.com", Stages: []string{"crtsh"}},
+		{Name: "api-dev.corp.example.com", Stages: []string{"permutations"}},
+		{Name: "both.corp.example.com", Stages: []string{"permutations", "rdns"}},
 		{Name: "wild.example.com", Stages: []string{"crtsh"}},
+		{Name: "real.example.com", Stages: []string{"crtsh"}}, // exists for real, but its parent is a wildcard zone
 		{Name: "x.example.org", Stages: []string{"crtsh"}},
 		{Name: "example.com", Stages: []string{"crtsh"}}, // the apex: its parent "com" is not in scope
 	}
 	resolve(&d, "wild.example.com", "203.0.113.1")
-	d.Hosts = d.Hosts[:len(d.Hosts)-1] // resolve() appended a duplicate record for wild
+	resolve(&d, "real.example.com", "203.0.113.2")
+	d.Hosts = d.Hosts[:len(d.Hosts)-2] // resolve() appended duplicate records for these two
 	inv := inventory.New(d, provider.Default())
 	got := inv.Seeds(newScope(inv, d), "permutations")
-	if !slices.Equal(got, []string{"api.example.com", "both.example.com"}) {
+	if !slices.Equal(got, []string{"api.corp.example.com", "both.corp.example.com"}) {
 		t.Errorf("seeds = %v", got)
+	}
+	if !inv.WildcardZone("example.com") || inv.WildcardZone("corp.example.com") {
+		t.Error("WildcardZone must be true for the recorded zone only")
 	}
 }
 

@@ -182,12 +182,57 @@ The `+` line for a new third party reads `third-party <platform> via txt-verific
 and its `--json` `found` event carries `platform`, `mechanism` and `root`. The prefix list and the
 name-server provider names are in the embedded `providers.yaml`.
 
+## Built-in lists and per-run limits
+
+Two stages work from lists built into the binary. `--wordlist` and `--sensitive-paths` each replace
+the list they name; neither adds to it.
+
+**Permutation wordlist.** The built-in list has 4860 lower-case labels, most common first. It is
+derived from `Discovery/DNS/subdomains-top1million-5000.txt` in
+[SecLists](https://github.com/danielmiessler/SecLists) (Daniel Miessler and contributors, MIT
+licence); the licence text is in the header of `internal/config/builtin/wordlist.txt`. Permutations
+stay on under `--passive`, because they send only DNS lookups to public resolvers.
+
+- **Volume.** The list costs 4860 lookups per root (one `A` query per word). Each seed (a
+  name another stage found) costs at most `permutations.max_per_seed` lookups (default 200, taken
+  from the front of the list). At the default `--rate-dns` of 50 queries a second, a root takes
+  about 97 seconds.
+- **Per-run cap.** `permutations.max_names` (`--permutations-max-names`, default 200000) caps the
+  names generated in one run. Roots are taken first, then seeds, each in name order. A root's or
+  seed's names are never split across runs: the first one that would pass the cap, and every one
+  after it, waits for the next run, though the first of a run is always taken even if it alone is
+  over the cap. A zone already known to be a wildcard is not permuted.
+- **After an upgrade.** A changed list repeats every permutation check once, on the first run
+  that uses it.
+
+**Sensitive paths.** The built-in list has 269 entries. Each one has a body signature or byte prefix
+and a severity (`high`, `medium` or `low`), so a site that answers 200 to everything is not flagged.
+Entries that were in earlier releases are unchanged, so their earlier results stay current and only
+new entries are requested on the first run after an upgrade.
+
+- **Volume.** Each path is requested once per live web service that is not served by a third-party
+  SaaS platform, so a run sends services × entries requests: 269 per service. At the default
+  `--rate-per-host` of 5 requests a second to an address, one service takes about 54 seconds. Services
+  on different addresses are checked in parallel, up to `--concurrency`; 100 services take about
+  9 minutes if each answers in 200 ms.
+- **Per-run cap.** `sensitive_path_max_requests` (`--sensitive-path-max-requests`, default 50000,
+  at least 1; a top-level setting, not part of `sensitive_paths`) caps the requests in one run.
+  Requests go entry by entry in severity order, then by service, so every service gets its
+  highest-severity paths first. The rest wait for later runs, and a hit from an earlier run stays
+  current while its neighbours wait.
+
+A cap that defers work is not a failure: the stage shows `done`, and the summary gives the amount
+deferred for each stage (names for permutations, requests for sensitive paths) under `Deferred to
+the next run`, and as `deferred` in the `--json` `summary` event. Run the same command again to do
+the rest.
+
 ## Console and JSON
 
 The console shows each stage's state as it changes: `running`, `done` (with the number of checks and
 failures), `done-previously`, `failed` or `not-configured` (with the reason). A `+` line is printed
-for each find, with its severity for findings. A summary lists counts and the high and medium
-findings. `--verbose` also shows warnings, including failed checks.
+for each find, with its severity for findings. A summary lists counts, the checks that failed, the
+work a per-run cap deferred, and the high and medium findings. `--verbose` also shows warnings,
+including failed checks.
 
 `--json` prints one JSON event per line on stdout, with no styling or prompts.
 

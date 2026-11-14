@@ -41,6 +41,7 @@ type Archive struct{ MaxURLs int }
 type Permutations struct {
 	Enabled    bool
 	MaxPerSeed int
+	MaxNames   int
 }
 
 // Storage holds the cloud-storage settings.
@@ -91,6 +92,8 @@ type Settings struct {
 	ShodanDNS PagedSource
 	Censys    PagedSource
 	Chaos     PagedSource
+	// SensitivePathMaxRequests caps the sensitive-path requests sent in one run.
+	SensitivePathMaxRequests int
 }
 
 // Defaults returns the default settings. The limits and rates are reasonable
@@ -110,11 +113,13 @@ func Defaults() Settings {
 		CertExpiryDays:  30,
 		OutputDir:       ".",
 		NetblockLimit:   4096,
-		Permutations:    Permutations{Enabled: true, MaxPerSeed: 200},
+		Permutations:    Permutations{Enabled: true, MaxPerSeed: 200, MaxNames: 200000},
 		Certspotter:     PagedSource{MaxPages: 10},
 		ShodanDNS:       PagedSource{MaxPages: 10},
 		Censys:          PagedSource{MaxPages: 10},
 		Chaos:           PagedSource{MaxPages: 10},
+
+		SensitivePathMaxRequests: 50000,
 	}
 }
 
@@ -193,6 +198,7 @@ var settingTable = []setting{
 	{"storage-max-names", "storage.max_names"}, {"cert-expiry-days", "cert_expiry_days"},
 	{"skip", "skip"}, {"certspotter-max-pages", "certspotter.max_pages"},
 	{"shodan-dns-max-pages", "shodan_dns.max_pages"}, {"censys-max-pages", "censys.max_pages"}, {"chaos-max-pages", "chaos.max_pages"},
+	{"permutations-max-names", "permutations.max_names"}, {"sensitive-path-max-requests", "sensitive_path_max_requests"},
 }
 
 // RegisterFlags adds one flag per setting to fs. There is deliberately no flag for API keys.
@@ -223,6 +229,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.Int("shodan-dns-max-pages", d.ShodanDNS.MaxPages, "result pages followed per root from Shodan's DNS data (one query credit each)")
 	fs.Int("censys-max-pages", d.Censys.MaxPages, "result pages followed per root from Censys")
 	fs.Int("chaos-max-pages", d.Chaos.MaxPages, "result pages followed per root from Chaos (it answers in one page, so this is not reached)")
+	fs.Int("permutations-max-names", d.Permutations.MaxNames, "maximum permutation names generated per run; the rest are deferred to later runs")
+	fs.Int("sensitive-path-max-requests", d.SensitivePathMaxRequests, "maximum sensitive-path requests sent per run; the rest are deferred to later runs")
 }
 
 // rawPages is the raw form of a PagedSource.
@@ -259,12 +267,15 @@ type rawSettings struct {
 	Permutations   struct {
 		Enabled    string `mapstructure:"enabled"`
 		MaxPerSeed string `mapstructure:"max_per_seed"`
+		MaxNames   string `mapstructure:"max_names"`
 	} `mapstructure:"permutations"`
 	Certspotter rawPages `mapstructure:"certspotter"`
 	Skip        []string `mapstructure:"skip"`
 	ShodanDNS   rawPages `mapstructure:"shodan_dns"`
 	Censys      rawPages `mapstructure:"censys"`
 	Chaos       rawPages `mapstructure:"chaos"`
+
+	SensitivePathMaxRequests string `mapstructure:"sensitive_path_max_requests"`
 }
 
 // Load merges defaults, the config file, RECON_* environment variables and the
@@ -284,9 +295,10 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 		"crawl.max_depth": d.Crawl.MaxDepth, "crawl.max_pages": d.Crawl.MaxPages, "archive.max_urls": d.Archive.MaxURLs,
 		"output_dir": d.OutputDir, "netblock_limit": d.NetblockLimit,
 		"storage.max_names": d.Storage.MaxNames, "cert_expiry_days": d.CertExpiryDays,
-		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed,
+		"permutations.enabled": d.Permutations.Enabled, "permutations.max_per_seed": d.Permutations.MaxPerSeed, "permutations.max_names": d.Permutations.MaxNames,
 		"certspotter.max_pages": d.Certspotter.MaxPages, "skip": []string{},
 		"shodan_dns.max_pages": d.ShodanDNS.MaxPages, "censys.max_pages": d.Censys.MaxPages, "chaos.max_pages": d.Chaos.MaxPages,
+		"sensitive_path_max_requests": d.SensitivePathMaxRequests,
 	}
 	for k, val := range defaults {
 		v.SetDefault(k, val)
@@ -376,6 +388,8 @@ func Load(fs *pflag.FlagSet, configPath string) (Settings, error) {
 	posInt("storage.max_names", raw.Storage.MaxNames, 1, &s.Storage.MaxNames)
 	posInt("cert_expiry_days", raw.CertExpiryDays, 0, &s.CertExpiryDays)
 	posInt("permutations.max_per_seed", raw.Permutations.MaxPerSeed, 1, &s.Permutations.MaxPerSeed)
+	posInt("permutations.max_names", raw.Permutations.MaxNames, 1, &s.Permutations.MaxNames)
+	posInt("sensitive_path_max_requests", raw.SensitivePathMaxRequests, 1, &s.SensitivePathMaxRequests)
 	posInt("certspotter.max_pages", raw.Certspotter.MaxPages, 1, &s.Certspotter.MaxPages)
 	posInt("shodan_dns.max_pages", raw.ShodanDNS.MaxPages, 1, &s.ShodanDNS.MaxPages)
 	posInt("censys.max_pages", raw.Censys.MaxPages, 1, &s.Censys.MaxPages)

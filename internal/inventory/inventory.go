@@ -80,6 +80,7 @@ type Inventory struct {
 	addr map[string][]netip.Addr // queried name -> addresses
 	cn   map[string][]string     // alias -> targets
 	wo   map[string]bool
+	zone map[string]bool // zones with a current wildcard record
 	// cnameShared holds the addresses of names whose CNAME chain ends on a known provider.
 	cnameShared map[netip.Addr]provider.Match
 
@@ -90,7 +91,7 @@ type Inventory struct {
 // New computes the inventory.
 func New(d Data, db *provider.DB) *Inventory {
 	i := &Inventory{d: d, db: db, addr: map[string][]netip.Addr{}, cn: map[string][]string{},
-		wo:    map[string]bool{},
+		wo: map[string]bool{}, zone: map[string]bool{},
 		class: map[netip.Addr]provider.Result{}, cnameShared: map[netip.Addr]provider.Match{}}
 	for _, r := range d.Resolutions {
 		switch r.Type {
@@ -105,6 +106,7 @@ func New(d Data, db *provider.DB) *Inventory {
 	wild := map[string]Wildcard{}
 	for _, w := range d.Wildcards {
 		wild[w.Zone] = w
+		i.zone[w.Zone] = true
 	}
 	// In name order, the first name to claim an address labels it, so the
 	// label is the same on every run.
@@ -199,14 +201,18 @@ func (i *Inventory) Representatives(sc *scope.Scope) map[string]string {
 	return reps
 }
 
+// WildcardZone reports whether name is a zone known to answer for every name
+// beneath it. Names under one all "exist", so a generator has nothing to find there.
+func (i *Inventory) WildcardZone(name string) bool { return i.zone[name] }
+
 // Seeds are the in-scope, non-wildcard-only hostnames that some stage other
 // than generator observes, whose parent name is also in scope (so an apex is
-// never split into a label and a public suffix). Names are never generated
-// from the generator's own output.
+// never split into a label and a public suffix) and is not a wildcard zone.
+// Names are never generated from the generator's own output.
 func (i *Inventory) Seeds(sc *scope.Scope, generator string) []string {
 	var out []string
 	for _, h := range i.d.Hosts {
-		if i.wo[h.Name] || sc.ClassifyHost(h.Name).Class != scope.InScope ||
+		if i.wo[h.Name] || i.zone[parent(h.Name)] || sc.ClassifyHost(h.Name).Class != scope.InScope ||
 			sc.ClassifyHost(parent(h.Name)).Class != scope.InScope {
 			continue
 		}

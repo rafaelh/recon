@@ -1,0 +1,8 @@
+Arguments: 
+  /usr/bin/node /usr/bin/yarn install
+
+PATH: 
+  /usr/bin
+
+Yarn version: 
+  1.22.19

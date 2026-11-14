@@ -43,12 +43,8 @@ func col(rows []map[string]string, name string) []string {
 // summaryFindings are the findings of the run's summary event.
 func (x *risk) summaryFindings() []map[string]any {
 	x.t.Helper()
-	sums := ofType(x.h.events(), "summary")
-	if len(sums) != 1 {
-		x.t.Fatalf("want one summary event, got %d\n%s", len(sums), x.h.stdout.String())
-	}
 	var out []map[string]any
-	list, _ := sums[0]["findings"].([]any)
+	list, _ := x.h.summaryEvent()["findings"].([]any)
 	for _, f := range list {
 		out = append(out, f.(map[string]any))
 	}

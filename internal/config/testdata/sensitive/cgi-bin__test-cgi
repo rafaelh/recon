@@ -1,0 +1,4 @@
+CGI/1.0 test script report:
+
+SERVER_SOFTWARE = Apache/2.4.57
+GATEWAY_INTERFACE = CGI/1.1

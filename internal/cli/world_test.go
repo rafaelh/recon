@@ -98,6 +98,15 @@ func newWorldWith(t *testing.T, keep ...string) *world {
 		return s.Name() == "ports" || slices.Contains(riskStages, s.Name()) && !slices.Contains(keep, s.Name())
 	})
 	w.h = newHarness(t, append(stages, w.probe)...)
+	// Worlds run the real permutations stage. Most tests are not about it, so they
+	// use a short list (the one the binary shipped with before the list grew)
+	// rather than the built-in thousands of words; a test of the built-in list
+	// clears this, and --wordlist overrides it.
+	words, err := filepath.Abs(filepath.Join("testdata", "words-default.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RECON_WORDLIST", words)
 	w.dns = egresstest.NewDNS(t)
 	// The input root is resolved too, like any in-scope name; give it an address.
 	w.dns.A("example.com", "203.0.113.250")
@@ -274,13 +283,7 @@ func (w *world) commonCrawl(id string, urls ...string) {
 
 func (w *world) file(eng, name string) string { return w.h.readOut(eng, name) }
 
-func (w *world) lines(eng, name string) []string {
-	s := strings.TrimSpace(w.file(eng, name))
-	if s == "" {
-		return nil
-	}
-	return strings.Split(s, "\n")
-}
+func (w *world) lines(eng, name string) []string { return w.h.lines(eng, name) }
 
 // table parses a CSV file into rows keyed by column name.
 func (w *world) table(eng, name string) []map[string]string {
