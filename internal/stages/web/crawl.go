@@ -41,6 +41,14 @@ func (*Crawl) Configured(e run.Env) (bool, string) {
 	return true, ""
 }
 
+// Evidence is what a candidate the crawl found rests on: the crawl, and the
+// service it crawled. The check key also carries the limits, which must not
+// count as another piece of support when they change.
+func (*Crawl) Evidence(checkKey string) (source, item string) {
+	item, _, _ = strings.Cut(checkKey, "|")
+	return "crawl", item
+}
+
 type crawlInput struct {
 	sc            *scope.Scope
 	host, scheme  string

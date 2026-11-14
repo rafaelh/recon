@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"iter"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/rafaelh/recon/internal/dnsname"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/input"
 	"github.com/rafaelh/recon/internal/kinds"
+	"github.com/rafaelh/recon/internal/orgname"
 	"github.com/rafaelh/recon/internal/run"
 	"github.com/rafaelh/recon/internal/stages/httpsrc"
 )
@@ -137,29 +137,10 @@ func NewOrgASN() *OrgASN {
 	return &OrgASN{orgStage{name: "org-asn", sources: []string{"stat.ripe.net"}}}
 }
 
-var legalSuffix = map[string]bool{
-	"inc": true, "llc": true, "ltd": true, "limited": true, "corp": true, "corporation": true, "co": true,
-	"company": true, "plc": true, "gmbh": true, "sa": true, "ag": true, "pty": true, "pte": true, "bv": true, "nv": true,
-}
-
-var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
-
-// tokens are the lower-case words of an organisation name without legal suffixes.
-func tokens(org string) []string {
-	var out []string
-	for _, t := range nonAlnum.Split(strings.ToLower(org), -1) {
-		if t != "" && !legalSuffix[t] {
-			out = append(out, t)
-		}
-	}
-	return out
-}
-
 // Run finds the organisation's ASNs and their announced prefixes. An ASN is
-// kept only if its holder name contains every token of the organisation name.
+// kept only if its holder name matches the organisation by the word rule.
 func (*OrgASN) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Observation, error) {
-	want := tokens(c.Key)
-	if len(want) == 0 {
+	if len(orgname.Tokens(c.Key)) == 0 {
 		return nil, nil
 	}
 	q := url.Values{"resource": {c.Key}, "limit": {"50"}, "sourceapp": {"recon"}}
@@ -187,12 +168,7 @@ func (*OrgASN) Run(ctx context.Context, c run.Check, e egress.Clients) ([]run.Ob
 			continue
 		}
 		for _, s := range cat.Suggestions {
-			holder := strings.ToLower(s.Description)
-			ok := true
-			for _, t := range want {
-				ok = ok && strings.Contains(holder, t)
-			}
-			if ok && len(asns) < maxASNsPerOrg {
+			if orgname.Matches(c.Key, s.Description) && len(asns) < maxASNsPerOrg {
 				asns = append(asns, strings.ToUpper(s.Value))
 			}
 		}

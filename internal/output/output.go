@@ -63,6 +63,8 @@ type File struct {
 	Format  Format
 	Columns []string
 	Rows    func(Snapshot) []Row
+	// Order, if set, sorts the rows instead of their cells.
+	Order func(a, b Row) int
 }
 
 // Render writes every file via .recon/tmp and renames it into dir.
@@ -121,7 +123,11 @@ func renderFile(dir, tmp string, f File, snap Snapshot) error {
 		}
 		return nil
 	}
-	slices.SortStableFunc(rows, func(a, b Row) int { return slices.Compare(a.Cells, b.Cells) })
+	order := f.Order
+	if order == nil {
+		order = func(a, b Row) int { return slices.Compare(a.Cells, b.Cells) }
+	}
+	slices.SortStableFunc(rows, order)
 	var buf bytes.Buffer
 	switch f.Format {
 	case TXT:
@@ -191,7 +197,7 @@ func csvSafe(s string) string {
 func Default() []File {
 	files := []File{
 		{Name: "scope.csv", Format: CSV, Columns: []string{"type", "value", "source"}, Rows: scopeRows},
-		{Name: "candidates.csv", Format: CSV, Columns: []string{"type", "value", "found_by"}, Rows: candidateRows},
+		{Name: "candidates.csv", Format: CSV, Columns: candidateColumns, Rows: candidateRows, Order: candidateOrder},
 		{Name: "excluded.csv", Format: CSV, Columns: []string{"value", "reason"}, Rows: excludedRows},
 		{Name: "subdomains.txt", Format: TXT, Rows: inScopeHostRows(false)},
 		{Name: "resolutions.csv", Format: CSV, Columns: []string{"name", "type", "value", "source"}, Rows: resolutionRows},
@@ -301,21 +307,6 @@ func (s Snapshot) of(k kinds.Named) []store.Record { return s.Records[k.Name()] 
 
 func recordRow(r store.Record, cells ...string) Row {
 	return Row{Cells: cells, Current: r.Current, FirstSeen: r.FirstSeen, LastSeen: r.LastSeen}
-}
-
-// candidateRows lists the roots, hostnames and netblocks the summary counts as
-// candidates: both ask the snapshot's Visibility.
-func candidateRows(s Snapshot) []Row {
-	var rows []Row
-	vis := s.vis()
-	for _, kind := range []kinds.Named{kinds.Root, kinds.Hostname, kinds.Netblock} {
-		for _, r := range s.of(kind) {
-			if vis.Category(kind, r) == kinds.Candidates {
-				rows = append(rows, recordRow(r, kind.Name(), r.Key, strings.Join(r.Stages, ",")))
-			}
-		}
-	}
-	return rows
 }
 
 // excludedRows lists the values the summary counts as excluded, once each. A

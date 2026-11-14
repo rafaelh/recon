@@ -61,9 +61,11 @@ signals, exit codes) → `internal/run.Runner` → stages → `internal/store` (
 - `Run` reports negative results (NXDOMAIN, closed port) as completed checks with zero or more
   observations. A returned error means a transient failure: the check is retried on later runs.
   Wrap `run.ErrAbortStage` to abort the stage's remaining checks for this run.
-- Optional interfaces: `WorkerCounter` (a custom pool size, used by ports), `CandidateExempt`, and
+- Optional interfaces: `WorkerCounter` (a custom pool size, used by ports), `CandidateExempt`,
   `Retiring` (completed checks the stage no longer yields are retired, so their evidence stops
-  being current).
+  being current) and `Evidencer` (names the source and supporting item a check gives a candidate;
+  without it they are the stage name and the check key, so a stage whose key carries a setting
+  must implement it or a changed setting would count twice).
 - Stages read state only through `run.View`, which offers scope, inventory and cached current
   records. Web stages must use `ProbeHostnames()` (wildcard-aware), not `InScopeHostnames()`.
 - The registry order is `defaultStages()` in `internal/cli/cli.go`, and that order matters (see
@@ -83,7 +85,10 @@ in-scope, candidate or excluded), `inventory` (wildcards, provider hosts, port e
 `findings` are pure functions of the current records, scope, settings and date. Risk stages
 (`internal/stages/risk`) store only *evidence* kinds. `internal/findings` derives findings from
 the evidence that is shown. A finding that is no longer derived stays on record but is marked not
-current. Records keep `first_seen`/`last_seen`/`current` and are never deleted.
+current. Records keep `first_seen`/`last_seen`/`current` and are never deleted. Other derived
+records (the `candidate_rank` of each candidate, ranked by `internal/candidates`) come from the
+runner's list of derivers in `internal/run/derive.go`, each stored under its own pseudo-stage and
+re-derived only when the kinds it reads, the inputs or the date change.
 
 **Pure knowledge packages** with no I/O: `cloudstorage` (bucket naming, S3/GCS/Azure),
 `provider` (shared infrastructure from CNAME suffixes, address ranges and ASNs; data in the

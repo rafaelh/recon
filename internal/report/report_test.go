@@ -96,6 +96,49 @@ func TestConsoleSummary(t *testing.T) {
 	}
 }
 
+// The summary lists the high candidates with the input that promotes each, at
+// most 20 of them and then how many more candidates.csv holds; medium
+// candidates are listed only when the run carries them (--verbose).
+func TestConsoleSummaryCandidates(t *testing.T) {
+	cand := func(kind, value, promote string, n int) map[string]any {
+		return map[string]any{"kind": kind, "value": value, "sources": "otx;whoisxml", "evidence_count": n, "confidence": "high", "promote": promote}
+	}
+	var high []map[string]any
+	for i := 0; i < 22; i++ {
+		v := string(rune('a'+i)) + ".org"
+		high = append(high, cand("root", v, v, 2))
+	}
+	high[0] = cand("netblock", "198.51.100.0/24", "--cidr 198.51.100.0/24", 3)
+	summary := func(f map[string]any) string {
+		var buf bytes.Buffer
+		report.NewConsole(&buf, false, clk).Emit(report.Event{Type: "summary", Fields: f})
+		return buf.String()
+	}
+
+	out := summary(map[string]any{"totals": map[string]int{"hosts": 1}, "candidates": high})
+	if !strings.Contains(out, "promote: --cidr 198.51.100.0/24") || !strings.Contains(out, "promote: t.org") {
+		t.Errorf("the first 20 are listed with their promoting input:\n%s", out)
+	}
+	if strings.Contains(out, "u.org") || strings.Contains(out, "v.org") {
+		t.Errorf("only 20 are listed:\n%s", out)
+	}
+	if !strings.Contains(out, "and 2 more in candidates.csv") {
+		t.Errorf("missing the overflow line:\n%s", out)
+	}
+	if strings.Contains(out, "medium") {
+		t.Errorf("no medium list without medium candidates:\n%s", out)
+	}
+
+	out = summary(map[string]any{"candidates": high[:2],
+		"medium_candidates": []map[string]any{{"kind": "root", "value": "mid.org", "sources": "whoisxml", "evidence_count": 1, "confidence": "medium", "promote": "mid.org"}}})
+	if !strings.Contains(out, "mid.org") || strings.Contains(out, "more in candidates.csv") {
+		t.Errorf("medium candidates listed, with no overflow line:\n%s", out)
+	}
+	if out := summary(map[string]any{"totals": map[string]int{"hosts": 1}}); strings.Contains(out, "andidates") {
+		t.Errorf("a run with no ranked candidates prints no candidate block:\n%s", out)
+	}
+}
+
 // The redactor wrapper scrubs every string in an event, including nested ones.
 func TestRedactingEmitter(t *testing.T) {
 	var buf bytes.Buffer

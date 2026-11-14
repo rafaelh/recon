@@ -19,7 +19,9 @@ import (
 )
 
 // Event is one thing that happened in a run. Types: run_start, stage, found,
-// count, warning, error, summary, run_end.
+// count, warning, error, candidate, summary, run_end. A candidate event is one
+// high-confidence candidate, emitted before the summary; the console prints it
+// only as part of the summary.
 type Event struct {
 	Type   string
 	Time   string // RFC 3339; filled in by the emitter if empty
@@ -211,6 +213,27 @@ func (c *Console) summary(b *strings.Builder, f map[string]any) {
 				b.WriteString(" - " + d)
 			}
 		}
+	}
+	c.candidates(b, f, "candidates", "Candidates worth promoting (high confidence)")
+	c.candidates(b, f, "medium_candidates", "Candidates of medium confidence")
+}
+
+// maxListedCandidates is how many candidates of one confidence the summary lists.
+const maxListedCandidates = 20
+
+// candidates lists the candidates of one confidence with the input that
+// promotes each, then how many more candidates.csv holds.
+func (c *Console) candidates(b *strings.Builder, f map[string]any, field, title string) {
+	list, _ := f[field].([]map[string]any)
+	if len(list) == 0 {
+		return
+	}
+	b.WriteString("\n" + c.st("2", true).Render(title))
+	for _, x := range list[:min(len(list), maxListedCandidates)] {
+		fmt.Fprintf(b, "\n  %s  %s evidence (%s)  promote: %s", str(x, "value"), str(x, "evidence_count"), str(x, "sources"), str(x, "promote"))
+	}
+	if more := len(list) - maxListedCandidates; more > 0 {
+		fmt.Fprintf(b, "\n  and %d more in candidates.csv", more)
 	}
 }
 

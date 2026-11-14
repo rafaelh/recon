@@ -434,3 +434,95 @@ func TestKindVersion(t *testing.T) {
 		t.Error("a redo sweep must change the version")
 	}
 }
+
+// A redo moves the version of the kinds the stage observes, because those
+// records lose their observers at once; a kind it does not observe stays put.
+func TestRedoBumpsTheKindsTheStageObserves(t *testing.T) {
+	s, _ := open(t, newClock(), nil)
+	s.Complete("st", "c1", []store.Obs{{Kind: "x", Key: "a"}})
+	s.Complete("other", "c2", []store.Obs{{Kind: "y", Key: "b"}})
+	mustFlush(t, s)
+	x, y := s.KindVersion("x"), s.KindVersion("y")
+	if err := s.Redo("st"); err != nil {
+		t.Fatal(err)
+	}
+	if s.KindVersion("x") == x {
+		t.Error("the redone stage's kind must change version")
+	}
+	if s.KindVersion("y") != y {
+		t.Error("another stage's kind must not")
+	}
+}
+
+// Observers lists, per record, the completed checks that observe it now: not
+// the observations of a check a redo has forgotten, nor of one retired.
+func TestObservers(t *testing.T) {
+	s, _ := open(t, newClock(), nil)
+	obs := func(kind string, keys ...string) []store.Obs {
+		var out []store.Obs
+		for _, k := range keys {
+			out = append(out, store.Obs{Kind: kind, Key: k})
+		}
+		return out
+	}
+	s.Complete("whoisxml", "Acme", obs("root", "x.org", "y.org"))
+	s.Complete("crtsh", "k1", obs("root", "x.org"))
+	s.Complete("crtsh", "k2", obs("hostname", "x.org"))
+	mustFlush(t, s)
+
+	want := func(got map[string][]store.Observer, key string, pairs ...string) {
+		t.Helper()
+		var have []string
+		for _, o := range got[key] {
+			have = append(have, o.Stage+"/"+o.CheckKey)
+		}
+		if strings.Join(have, ",") != strings.Join(pairs, ",") {
+			t.Errorf("observers of %s = %v, want %v", key, have, pairs)
+		}
+	}
+	got, err := s.Observers("root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want(got, "x.org", "crtsh/k1", "whoisxml/Acme") // by stage, then check
+	want(got, "y.org", "whoisxml/Acme")
+	if len(got) != 2 {
+		t.Errorf("only the kind's own records: %v", got)
+	}
+
+	// A check that no longer produces a record stops observing it.
+	s.Complete("crtsh", "k1", nil)
+	mustFlush(t, s)
+	got, _ = s.Observers("root")
+	want(got, "x.org", "whoisxml/Acme")
+
+	// A redo forgets the stage's completed checks: until one completes again it
+	// observes nothing, even though its stale observations are still stored.
+	if err := s.Redo("whoisxml"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.Observers("root")
+	if len(got) != 0 {
+		t.Errorf("after a redo, before the checks run again: %v", got)
+	}
+	s.Complete("whoisxml", "Acme", obs("root", "x.org")) // y.org is no longer found
+	mustFlush(t, s)
+	if err := s.FinishRedo("whoisxml", map[string]struct{}{"Acme": {}}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.Observers("root")
+	want(got, "x.org", "whoisxml/Acme")
+	want(got, "y.org")
+
+	// A retired check no longer observes.
+	s.Complete("st", "svc|fp=old", obs("root", "z.org"))
+	s.Complete("st", "svc|fp=new", obs("root", "z.org"))
+	mustFlush(t, s)
+	got, _ = s.Observers("root")
+	want(got, "z.org", "st/svc|fp=new", "st/svc|fp=old")
+	if err := s.Retire("st", map[string]struct{}{"svc|fp=new": {}}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.Observers("root")
+	want(got, "z.org", "st/svc|fp=new")
+}
