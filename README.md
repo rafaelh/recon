@@ -127,6 +127,13 @@ provider endpoints. Only hostnames are recorded from Cert Spotter, OTX, HackerTa
 Anubis. When one of these five reports that its free quota is spent, its stage alone stops, and its
 checks are retried on the next run.
 
+The `providerranges` stage fetches the address ranges that seven providers publish: AWS, GCP,
+Cloudflare (IPv4 and IPv6), Fastly, DigitalOcean, Oracle Cloud and Linode. Each list is its own
+check, fetched once per engagement and refreshed only by `--redo providerranges`. A list that fails
+to download, or has no ranges in it, is a failed check (named by `--verbose`): the ranges fetched
+before keep applying. Azure is classified by ASN only, because Microsoft publishes its ranges at a
+changing URL.
+
 All network access goes through one package. On every supported platform, a test fails if any other
 package imports a network package or `syscall`, or uses `golang.org/x/sys/unix` for anything other
 than signals and file locking, and if any package imports `os/exec`.
@@ -204,7 +211,7 @@ Everything is in `<output-dir>/<engagement>/`:
 | `resolutions.csv` | DNS records for in-scope names (A, AAAA and CNAME, and the NS, SOA, TXT and CAA records of each root, see below), with a `source` column: `resolve` (recon's own lookup), `shodan` (reported by Shodan only) or `resolve;shodan`. Records only Shodan reports decide nothing: they never make a name resolved or an address contacted, port-checked or probed. |
 | `unresolved.txt` | In-scope names that did not resolve |
 | `wildcard-excluded.txt` | Names dropped because their domain answers every name (wildcard DNS) |
-| `ips.csv` | Addresses with ASN, owner, hosting provider, scope, port eligibility and hostnames |
+| `ips.csv` | Addresses with ASN, owner, hosting provider, service (or, where the provider publishes no service, region), scope, port eligibility and hostnames. A published range names the provider even when the owner lookup failed, and takes precedence over the ASN. Cloudflare and Fastly addresses are shared infrastructure and are not port-checked. DigitalOcean addresses and Linode addresses are customers' own machines, so an in-scope hostname that resolves to one is port-checked: DigitalOcean addresses were skipped as shared hosting before its list was fetched, so the next active run may handshake addresses it previously skipped. An address two providers' lists cover shows both, joined with `;`, and is shared if either is. |
 | `provider-hosts.csv` | Names that point at shared cloud or SaaS providers, with the evidence |
 | `web-services.csv` | Web services found: status, title, server, technologies, redirects and TLS details |
 | `urls.csv` | URLs from crawling and web archives, with status and source |

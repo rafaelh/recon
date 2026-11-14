@@ -4,10 +4,12 @@
 package provider
 
 import (
+	"cmp"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"net/netip"
 	"regexp"
 	"slices"
@@ -86,17 +88,24 @@ func (x *Ranges) covering(a netip.Addr) []*Range {
 }
 
 // Result is what is known about an address. Evidence is "range" or "asn".
-// Class is "saas" for an address served by a third-party SaaS platform and
-// empty otherwise.
+// Class is the class of the providers.yaml entry that matched ("saas", "cdn",
+// "hyperscaler" or "shared-hosting"), and for an address matched by a published
+// range it is "cdn" for a CDN's ranges and empty otherwise. Region is the
+// region a range publisher gives, where it does. An address two providers'
+// ranges cover has their names (and services and regions) joined with ";".
 type Result struct {
 	Known, Shared     bool
 	Provider, Service string
 	Evidence          string
 	Class             string
+	Region            string
 }
 
 // ClassSaaS marks an entry or address served by a third-party SaaS platform.
 const ClassSaaS = "saas"
+
+// ClassCDN marks an address served by a content delivery network.
+const ClassCDN = "cdn"
 
 // Entry is a matched CNAME entry of providers.yaml. NXDomain says a chain that
 // dangles into it can be claimed; Body, an RE2 regex, matches the page an
@@ -245,51 +254,129 @@ func (db *DB) staticRange(a netip.Addr) (addrRange, bool) {
 	return addrRange{}, false
 }
 
+// rangeRule settles one provider's ranges that cover an address. rs is never
+// empty and is in the order the ranges were recorded. It fills in only Shared,
+// Service, Region and Class: classifyRanges sets the rest.
+type rangeRule func(rs []*Range) Result
+
+// rangeRules say, for each provider whose published ranges are fetched, what
+// being inside one of them means. A provider with no rule here is ignored.
+var rangeRules = map[string]rangeRule{
+	"aws":          awsRule,
+	"gcp":          wholeListRule(true, ""),
+	"cloudflare":   wholeListRule(true, ClassCDN),
+	"fastly":       wholeListRule(true, ClassCDN),
+	"digitalocean": wholeListRule(false, ""),
+	"linode":       wholeListRule(false, ""),
+	"oracle":       oracleRule,
+}
+
+// HasRangeRule reports whether a provider's published ranges mean anything to
+// Classify. A provider whose ranges are fetched needs one, or they are ignored.
+func HasRangeRule(provider string) bool {
+	_, ok := rangeRules[provider]
+	return ok
+}
+
+// wholeListRule: every address in the provider's ranges is shared infrastructure
+// (a customer's own machine when shared is false). The service is not reported,
+// since the list does not discriminate by it.
+func wholeListRule(shared bool, class string) rangeRule {
+	return func(rs []*Range) Result { return Result{Shared: shared, Region: rs[0].Region, Class: class} }
+}
+
+// awsRule: an address is a dedicated VM only if an EC2 range proves it. A range
+// of any other service makes it shared, and one only in the AMAZON superset
+// fails closed.
+func awsRule(rs []*Range) Result {
+	var ec2, amazon *Range
+	for _, r := range rs {
+		switch r.Service {
+		case "EC2":
+			ec2 = cmp.Or(ec2, r)
+		case "AMAZON":
+			amazon = cmp.Or(amazon, r)
+		default:
+			return Result{Shared: true, Service: r.Service, Region: r.Region}
+		}
+	}
+	if ec2 != nil {
+		return Result{Service: "EC2", Region: ec2.Region}
+	}
+	return Result{Shared: true, Region: amazon.Region}
+}
+
+// oracleRule: a range tagged OSN (Oracle services) or OBJECT_STORAGE is shared
+// and the rest are dedicated. An address in both kinds is shared. The range
+// reported is the first by service, then region, whatever order they were
+// recorded in.
+func oracleRule(rs []*Range) Result {
+	slices.SortFunc(rs, func(a, b *Range) int {
+		return cmp.Or(cmp.Compare(a.Service, b.Service), cmp.Compare(a.Region, b.Region))
+	})
+	pick, shared := rs[0], false
+	for _, r := range rs {
+		if r.Service == "OSN" || r.Service == "OBJECT_STORAGE" {
+			pick, shared = r, true
+			break
+		}
+	}
+	return Result{Shared: shared, Service: pick.Service, Region: pick.Region}
+}
+
+// classifyRanges settles an address from the ranges that cover it. Each
+// provider first settles its own ranges by its own rule, so an EC2 range still
+// wins over the AMAZON superset that also covers it. Across providers the names
+// are joined with ";" in name order and the address is shared if any provider's
+// result is: it fails closed. ok is false when no range of a known provider
+// covers the address.
+func classifyRanges(covering []*Range) (res Result, ok bool) {
+	by := map[string][]*Range{}
+	for _, r := range covering {
+		if _, known := rangeRules[r.Provider]; known {
+			by[r.Provider] = append(by[r.Provider], r)
+		}
+	}
+	if len(by) == 0 {
+		return Result{}, false
+	}
+	var names, services, regions []string
+	res = Result{Known: true, Evidence: "range"}
+	for _, p := range slices.Sorted(maps.Keys(by)) {
+		r := rangeRules[p](by[p])
+		names = append(names, p)
+		if r.Service != "" {
+			services = append(services, r.Service)
+		}
+		if r.Region != "" {
+			regions = append(regions, r.Region)
+		}
+		res.Shared = res.Shared || r.Shared
+		res.Class = cmp.Or(res.Class, r.Class)
+	}
+	res.Provider = strings.Join(names, ";")
+	res.Service = strings.Join(services, ";")
+	res.Region = strings.Join(regions, ";")
+	return res, true
+}
+
 // Classify says what is known about an address from the provider ranges and
-// its owner. An address is Known if its owner is, or a range covers it.
-// Hyperscaler addresses are shared unless an AWS EC2 range proves a dedicated
-// VM; an address only in the AMAZON superset, GCP ranges (no service) and
-// Azure (no ranges) all fail closed.
+// its owner. An address is Known if its owner is, or a range covers it. A
+// published range takes precedence over the owner's ASN, which is the fallback
+// when the list is missing. Each provider's own rule says what its ranges
+// mean (see rangeRules); hyperscaler addresses with no range to prove
+// otherwise, and Azure (no ranges), fail closed.
 func (db *DB) Classify(a netip.Addr, owner Owner, ranges *Ranges) Result {
 	a = a.Unmap()
-	var ec2, amazon, gcp bool
-	for _, r := range ranges.covering(a) {
-		switch r.Provider {
-		case "aws":
-			switch r.Service {
-			case "EC2":
-				ec2 = true
-			case "AMAZON":
-				amazon = true
-			default:
-				return Result{Known: true, Shared: true, Provider: "aws", Service: r.Service, Evidence: "range"}
-			}
-		case "gcp":
-			gcp = true
-		}
-	}
-	switch {
-	case gcp:
-		return Result{Known: true, Shared: true, Provider: "gcp", Evidence: "range"}
-	case ec2:
-		return Result{Known: true, Provider: "aws", Service: "EC2", Evidence: "range"}
-	case amazon:
-		return Result{Known: true, Shared: true, Provider: "aws", Evidence: "range"}
+	if res, ok := classifyRanges(ranges.covering(a)); ok {
+		return res
 	}
 	if r, ok := db.staticRange(a); ok {
-		res := Result{Known: true, Shared: true, Provider: r.Provider, Service: r.Service, Evidence: "range"}
-		if r.class == ClassSaaS {
-			res.Class = ClassSaaS
-		}
-		return res
+		return Result{Known: true, Shared: true, Provider: r.Provider, Service: r.Service, Evidence: "range", Class: r.class}
 	}
 	if owner.Known {
 		if p, ok := db.asns[owner.ASN]; ok {
-			res := Result{Known: true, Shared: true, Provider: p.provider, Evidence: "asn"}
-			if p.class == ClassSaaS {
-				res.Class = ClassSaaS
-			}
-			return res
+			return Result{Known: true, Shared: true, Provider: p.provider, Evidence: "asn", Class: p.class}
 		}
 		return Result{Known: true}
 	}

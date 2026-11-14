@@ -2,9 +2,13 @@
 #
 # cname: a CNAME target that ends with `suffix` (on a label boundary) is hosted by that provider.
 # asn:   an address whose origin AS is listed belongs to the provider. `class` is
-#        cdn and shared-hosting (always shared), hyperscaler (shared unless a
-#        provider range proves the address is a dedicated virtual machine) or
-#        saas (a third-party platform serving other companies' content).
+#        cdn and shared-hosting (shared), hyperscaler (shared unless a provider
+#        range proves the address is a dedicated virtual machine) or saas (a
+#        third-party platform serving other companies' content). A published
+#        range list (see internal/provider's rangeRules) takes precedence over
+#        the ASN, so these classes are the fallback when a list is missing:
+#        DigitalOcean's ranges make its addresses dedicated, Cloudflare's and
+#        Fastly's cdn.
 #
 # cname entries may also carry:
 #   class: saas      the host is served by a third-party SaaS platform, never requested for sensitive paths

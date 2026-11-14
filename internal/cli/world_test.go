@@ -26,6 +26,8 @@ var sourcePatterns = []string{
 	"api.shodan.io", "reverse-whois.whoisxmlapi.com", "stat.ripe.net", "ip-ranges.amazonaws.com", "www.gstatic.com",
 	"otx.alienvault.com", "api.hackertarget.com", "urlscan.io", "jldc.me", "api.certspotter.com",
 	"api.platform.censys.io", "dns.projectdiscovery.io",
+	// The range publishers after AWS and GCP.
+	"www.cloudflare.com", "api.fastly.com", "www.digitalocean.com", "docs.oracle.com", "geoip.linode.com",
 	// The storage stage's; their default answer is "no such bucket".
 	"s3.amazonaws.com", "s3.*.amazonaws.com", "storage.googleapis.com", "*.blob.core.windows.net",
 }

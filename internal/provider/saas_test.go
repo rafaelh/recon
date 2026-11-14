@@ -95,9 +95,9 @@ func TestSaaSRecognition(t *testing.T) {
 	if !res.Shared || res.Provider != "shopify" || res.Class != "saas" || res.Evidence != "asn" {
 		t.Errorf("shopify asn = %+v", res)
 	}
-	// A CDN ASN is not SaaS.
-	if res = db.Classify(ip("104.16.0.1"), provider.Owner{ASN: 13335, Known: true}, nil); res.Class != "" {
-		t.Errorf("cloudflare class = %q", res.Class)
+	// A CDN ASN is a CDN, not SaaS.
+	if res = db.Classify(ip("104.16.0.1"), provider.Owner{ASN: 13335, Known: true}, nil); res.Class != provider.ClassCDN {
+		t.Errorf("cloudflare class = %q, want %q", res.Class, provider.ClassCDN)
 	}
 	// An ordinary address is none of these.
 	if res = db.Classify(ip("203.0.113.5"), provider.Owner{ASN: 64500, Known: true}, nil); res.Shared || res.Class != "" {
