@@ -49,6 +49,6 @@ When you are finished:
   a person, such as manual steps, live runs and decisions only the user can make, gathered from
   every section of the file. Give each item the exact command or place to do it. If there is
   nothing, write "None."
-- If the project's instructions say where to archive finished specification files, copy the file
-  there.
-- Then stop.
+- Move the finished specification file to `docs/specs/done`.
+- Commit the changes to main and then stop.
+

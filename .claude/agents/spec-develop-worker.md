@@ -7,7 +7,6 @@ description: >
   plus the file's path.
 tools: Bash, Read, Edit, Write, Grep, Glob
 model: inherit
-color: blue
 ---
 
 # Spec-develop worker
