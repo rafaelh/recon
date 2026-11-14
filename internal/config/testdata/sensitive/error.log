@@ -1,0 +1,1 @@
+[Sun Oct 01 12:00:00.123456 2026] [core:error] [pid 1234] [client 203.0.113.9:51234] AH00126: Invalid URI in request GET /../ HTTP/1.1

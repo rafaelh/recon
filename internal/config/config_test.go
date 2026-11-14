@@ -130,12 +130,12 @@ func TestKeys(t *testing.T) {
 		fmt.Sprintf("%v", s.Keys["shodan"]), fmt.Sprintf("%s", s.Keys["shodan"]),
 		fmt.Sprintf("%+v", s), fmt.Sprintf("%#v", s), fmt.Sprint(s.Keys),
 	} {
-		if strings.Contains(out, "secret") {
+		if strings.Contains(out, "filesecret123") || strings.Contains(out, "envsecret456") {
 			t.Errorf("secret leaked in %q", out)
 		}
 	}
 	b, _ := json.Marshal(s)
-	if strings.Contains(string(b), "secret") {
+	if strings.Contains(string(b), "filesecret123") || strings.Contains(string(b), "envsecret456") {
 		t.Errorf("secret leaked in JSON %s", b)
 	}
 	kv := s.KeyValues()

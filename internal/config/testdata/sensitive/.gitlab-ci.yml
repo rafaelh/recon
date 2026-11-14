@@ -1,0 +1,5 @@
+image: node:20
+stages:
+  - build
+variables:
+  NODE_ENV: production

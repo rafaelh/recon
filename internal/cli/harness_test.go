@@ -157,6 +157,25 @@ func (h *harness) events() []event {
 	return out
 }
 
+// lines are the lines of an engagement output file, none for a missing or empty file.
+func (h *harness) lines(eng, name string) []string {
+	s := strings.TrimSpace(h.readOut(eng, name))
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
+}
+
+// summaryEvent is the run's one summary event.
+func (h *harness) summaryEvent() event {
+	h.t.Helper()
+	sums := ofType(h.events(), "summary")
+	if len(sums) != 1 {
+		h.t.Fatalf("want one summary event, got %d\n%s", len(sums), h.stdout.String())
+	}
+	return sums[0]
+}
+
 func ofType(evs []event, typ string) []event {
 	var out []event
 	for _, e := range evs {

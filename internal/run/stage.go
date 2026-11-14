@@ -39,6 +39,9 @@ const (
 type Check struct {
 	Key   string
 	Input any
+	// Cost is what the check spends of its stage's per-run budget (see Budgeted):
+	// the number of names it queries, requests it sends. 0 means 1.
+	Cost int
 }
 
 // Observation is a fact a check found, made with a kind's handle (for example
@@ -106,6 +109,11 @@ type Stage interface {
 // workers from Settings.Concurrency (the ports stage, whose checks are slow).
 type WorkerCounter interface {
 	Workers(config.Settings) int
+}
+
+// Budgeted is implemented by a stage that caps the work it does in one run.
+type Budgeted interface {
+	Budget(config.Settings) int
 }
 
 // CandidateExempt is implemented by a stage whose third-party sources include
@@ -260,8 +268,12 @@ func (v View) StorageRefs() []cloudstorage.Reference {
 	return findings.References(findings.Input{Scope: v.sc, Inv: v.inv, Records: v.Records})
 }
 
+// WildcardZone reports whether the name is a zone known to be a wildcard.
+func (v View) WildcardZone(name string) bool { return v.inv.WildcardZone(name) }
+
 // Seeds are the hostnames the generator stage derives names from: never
-// names only the generator itself observed.
+// names only the generator itself observed, and never one directly under a
+// wildcard zone.
 func (v View) Seeds(generator string) []string { return v.inv.Seeds(v.sc, generator) }
 
 // OpenPort is a current open_port record: the port stage emits one per

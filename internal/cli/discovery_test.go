@@ -56,10 +56,11 @@ func TestSources_KeylessSources(t *testing.T) {
 	if len(w.requests("web.archive.org")) < 3 {
 		t.Errorf("wayback should be paged (count + 2 pages): %d requests", len(w.requests("web.archive.org")))
 	}
-	for k, a := range w.obsAttrs(eng, "hostname") {
-		if k == "d.example.com" && !strings.Contains(a, "CC-MAIN-2026-01") {
-			t.Errorf("Common Crawl index id missing from %s attrs %s", k, a)
-		}
+	// Look at Common Crawl's own observation, not whichever stage's attributes a
+	// name-keyed map happens to keep.
+	ccAttrs := queryStrings(t, w.h.openDB(eng), "SELECT attrs FROM observations WHERE kind='hostname' AND key='d.example.com' AND stage='commoncrawl'")
+	if len(ccAttrs) != 1 || !strings.Contains(ccAttrs[0], "CC-MAIN-2026-01") {
+		t.Errorf("Common Crawl index id missing from d.example.com attrs %v", ccAttrs)
 	}
 	for _, s := range []string{"crtsh", "wayback", "commoncrawl"} {
 		if st, _ := stateOf(w, s); st != "done" {
@@ -529,26 +530,38 @@ func TestWildcards(t *testing.T) {
 	}
 }
 
-// With permutations on (the default) every generated name "exists" under a
-// wildcard, yet exactly one representative and the real host are probed.
+// With permutations on (the default), a zone already known to be a wildcard is
+// not permuted: its generated names would all "exist". Only the real host is
+// probed, besides the root, and nothing is wildcard-only.
 func TestWildcards_WildcardWithDefaultPermutations(t *testing.T) {
 	w := newWorld(t)
 	w.crtsh(map[string][]string{"example.com": {"real.example.com"}}, nil)
 	w.dns.Wildcard("example.com", "203.0.113.1", "203.0.113.2")
 	w.dns.A("real.example.com", "203.0.113.50")
 	w.run("--passive", "example.com")
-	excluded := w.lines(eng, "wildcard-excluded.txt")
-	if len(excluded) < 100 {
-		t.Fatalf("expected the generated names to be wildcard-only, got %d", len(excluded))
+	if excluded := w.lines(eng, "wildcard-excluded.txt"); len(excluded) != 0 {
+		t.Fatalf("no names should have been generated under the wildcard, got %d wildcard-only: %v", len(excluded), excluded)
 	}
 	probed := w.probed()
-	if len(probed) != 3 || !slices.Contains(probed, "example.com") || !slices.Contains(probed, "real.example.com") {
+	if len(probed) != 2 || !slices.Contains(probed, "example.com") || !slices.Contains(probed, "real.example.com") {
 		t.Fatalf("probed = %v", probed)
 	}
-	for _, p := range probed {
-		if p != "example.com" && p != "real.example.com" && p != excluded[0] {
-			t.Errorf("the representative must be the smallest wildcard-only name %s, got %s", excluded[0], p)
-		}
+	if n := len(w.dns.Queried("A")); n > 20 {
+		t.Errorf("%d names were queried; the wildcard zone should not have been permuted", n)
+	}
+}
+
+// A wildcard-only name that another source found still gets exactly one
+// representative probe: the smallest wildcard-only name.
+func TestWildcards_WildcardOnlyNamesFromSourcesGetOneRepresentative(t *testing.T) {
+	w := newWorld(t)
+	w.crtsh(map[string][]string{"example.com": {"real.example.com", "b-fake.example.com", "a-fake.example.com", "c-fake.example.com"}}, nil)
+	w.dns.Wildcard("example.com", "203.0.113.1", "203.0.113.2")
+	w.dns.A("real.example.com", "203.0.113.50")
+	w.run("--passive", "example.com")
+	probed := w.probed()
+	if len(probed) != 3 || !slices.Contains(probed, "example.com") || !slices.Contains(probed, "real.example.com") || !slices.Contains(probed, "a-fake.example.com") {
+		t.Fatalf("probed = %v, want the root, the real host and a-fake as the representative", probed)
 	}
 }
 

@@ -1,0 +1,4 @@
+{
+"cmdline": ["/usr/bin/app"],
+"memstats": {"Alloc": 1234567}
+}

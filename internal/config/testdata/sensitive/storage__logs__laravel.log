@@ -1,0 +1,1 @@
+[2026-10-01 12:00:00] production.ERROR: SQLSTATE[HY000] [2002] Connection refused {"exception":"[object] (PDOException)"}

@@ -1,62 +1,816 @@
 # Built-in sensitive paths. Each is requested once per live web service.
 # Every entry needs a signature (an RE2 over the first 1 MiB of the body) and/or magic
-# (a hex body prefix) so a catch-all site that answers 200 to everything is not flagged.
-# status defaults to 200 and severity to medium.
-- path: /.git/config
+# (a hex body prefix) so a catch-all site that answers 200 to everything is not flagged,
+# and an explicit severity. status defaults to 200.
+#
+# Requests are made entry by entry in severity order (high, medium, low) and, within a
+# severity, in the order of this file, so put the most telling entries first.
+#
+# The first 23 entries are the list as it was when the check keys were first recorded;
+# their signature, magic and status must never change (a test pins them), or every
+# engagement would request them again and strand its earlier hits. New entries go
+# at the end of their severity group.
+- path: '/.git/config'
   signature: '\[core\]'
   severity: high
-- path: /.git/HEAD
+- path: '/.git/HEAD'
   signature: '^ref: refs/'
   severity: high
-- path: /.env
+- path: '/.env'
   signature: '(?m)^[A-Z][A-Z0-9_]*=.'
   severity: high
-- path: /.aws/credentials
+- path: '/.aws/credentials'
   signature: 'aws_access_key_id'
   severity: high
-- path: /.htpasswd
+- path: '/.htpasswd'
   signature: '(?m)^[^:\s]+:(\$|\{SHA\})'
   severity: high
-- path: /wp-config.php.bak
+- path: '/wp-config.php.bak'
   signature: 'DB_PASSWORD'
   severity: high
-- path: /.svn/entries
+- path: '/.svn/entries'
   signature: '(?s)^\d+\s+(dir|file)'
-- path: /.hg/hgrc
+  severity: medium
+- path: '/.hg/hgrc'
   signature: '\[(paths|ui)\]'
-- path: /.DS_Store
+  severity: medium
+- path: '/.DS_Store'
   magic: '0000000142756431'
   severity: low
-- path: /server-status
+- path: '/server-status'
   signature: 'Apache Server Status'
-- path: /server-info
+  severity: medium
+- path: '/server-info'
   signature: 'Apache Server Information'
-- path: /phpinfo.php
+  severity: medium
+- path: '/phpinfo.php'
   signature: 'PHP Version|phpinfo\(\)'
-- path: /info.php
+  severity: medium
+- path: '/info.php'
   signature: 'PHP Version|phpinfo\(\)'
-- path: /actuator/env
+  severity: medium
+- path: '/actuator/env'
   signature: '"propertySources"|"activeProfiles"'
   severity: high
-- path: /actuator/heapdump
+- path: '/actuator/heapdump'
   magic: '4a4156412050524f46494c45'
   severity: high
-- path: /.npmrc
+- path: '/.npmrc'
   signature: '_authToken|_password'
   severity: high
-- path: /.docker/config.json
+- path: '/.docker/config.json'
   signature: '"auths"'
   severity: high
-- path: /id_rsa
+- path: '/id_rsa'
   signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
   severity: high
-- path: /backup.zip
+- path: '/backup.zip'
   magic: '504b0304'
-- path: /backup.tar.gz
+  severity: medium
+- path: '/backup.tar.gz'
   magic: '1f8b08'
-- path: /backup.sql
+  severity: medium
+- path: '/backup.sql'
   signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
-- path: /dump.sql
+  severity: medium
+- path: '/dump.sql'
   signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
-- path: /WEB-INF/web.xml
+  severity: medium
+- path: '/WEB-INF/web.xml'
   signature: '<web-app'
+  severity: medium
+- path: '/.env.local'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.production'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.development'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.dev'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.prod'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.staging'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.backup'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.bak'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.old'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.env.save'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: high
+- path: '/.git/logs/HEAD'
+  signature: '^0{40} [0-9a-f]{40} '
+  severity: high
+- path: '/.git/index'
+  magic: '44495243'
+  severity: high
+- path: '/.git/packed-refs'
+  signature: '(?m)^[0-9a-f]{40} refs/'
+  severity: high
+- path: '/.svn/wc.db'
+  magic: '53514c69746520666f726d6174203300'
+  severity: high
+- path: '/.git-credentials'
+  signature: '(?m)^https?://[^:/\s]+:[^@\s]+@'
+  severity: high
+- path: '/.netrc'
+  signature: '(?m)^machine \S+'
+  severity: high
+- path: '/.pgpass'
+  signature: '(?m)^[^:\s]+:[0-9*]+:[^:\s]+:[^:\s]+:.+'
+  severity: high
+- path: '/.pypirc'
+  signature: '(?is)\[(distutils|pypi|testpypi)\].*password'
+  severity: high
+- path: '/.s3cfg'
+  signature: 'access_key\s*='
+  severity: high
+- path: '/.boto'
+  signature: 'aws_secret_access_key'
+  severity: high
+- path: '/.dockercfg'
+  signature: '"auth"\s*:'
+  severity: high
+- path: '/.kube/config'
+  signature: '(?m)^kind: Config'
+  severity: high
+- path: '/.gem/credentials'
+  signature: '^:rubygems_api_key:'
+  severity: high
+- path: '/auth.json'
+  signature: '"(github-oauth|http-basic|gitlab-token|bearer)"'
+  severity: high
+- path: '/.ssh/id_rsa'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/.ssh/id_dsa'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/.ssh/id_ecdsa'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/.ssh/id_ed25519'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/id_dsa'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/id_ecdsa'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/id_ed25519'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/server.key'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/private.key'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/privatekey.pem'
+  signature: '-----BEGIN (RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+  severity: high
+- path: '/credentials.json'
+  signature: '"(client_secret|private_key|api_key|secret_access_key)"'
+  severity: high
+- path: '/client_secrets.json'
+  signature: '"client_secret"'
+  severity: high
+- path: '/service-account.json'
+  signature: '"type"\s*:\s*"service_account"'
+  severity: high
+- path: '/serviceAccountKey.json'
+  signature: '"type"\s*:\s*"service_account"'
+  severity: high
+- path: '/terraform.tfstate'
+  signature: '"terraform_version"'
+  severity: high
+- path: '/terraform.tfstate.backup'
+  signature: '"terraform_version"'
+  severity: high
+- path: '/.terraform/terraform.tfstate'
+  signature: '"terraform_version"|"backend"'
+  severity: high
+- path: '/sftp-config.json'
+  signature: '"(host|remote_path|upload_on_save)"'
+  severity: high
+- path: '/.vscode/sftp.json'
+  signature: '"(host|remotePath|privateKeyPath)"'
+  severity: high
+- path: '/.ftpconfig'
+  signature: '"host"|"pass"'
+  severity: high
+- path: '/config/database.yml'
+  signature: '(?s)(development|production|test|default):.*adapter:'
+  severity: high
+- path: '/config/secrets.yml'
+  signature: 'secret_key_base'
+  severity: high
+- path: '/config/master.key'
+  signature: '^[0-9a-f]{32}\s*$'
+  severity: high
+- path: '/settings.py'
+  signature: '(SECRET_KEY|INSTALLED_APPS)\s*='
+  severity: high
+- path: '/local_settings.py'
+  signature: '(SECRET_KEY|DATABASES|PASSWORD)\s*[=:]'
+  severity: high
+- path: '/wp-config.php'
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: '/wp-config.php.old'
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: '/wp-config.php.save'
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: '/wp-config.php~'
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: '/wp-config.old'
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: '/wp-config.bak'
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: '/wp-config.txt'
+  signature: 'DB_PASSWORD'
+  severity: high
+- path: '/configuration.php'
+  signature: 'class JConfig'
+  severity: high
+- path: '/LocalSettings.php'
+  signature: '\$(wgDBpassword|wgSecretKey)'
+  severity: high
+- path: '/sites/default/settings.php'
+  signature: '\$databases\s*[\[=]'
+  severity: high
+- path: '/app/etc/env.php'
+  signature: '''(db|crypt)''\s*=>'
+  severity: high
+- path: '/app/etc/local.xml'
+  signature: '<(crypt|resources)>'
+  severity: high
+- path: '/config.inc.php'
+  signature: '\$cfg\[''(Servers|blowfish_secret)''\]'
+  severity: high
+- path: '/config.php'
+  signature: '(?is)<\?php.*(pass|secret|db_|define\()'
+  severity: high
+- path: '/config.php.bak'
+  signature: '(?is)<\?php.*(pass|secret|db_|define\()'
+  severity: high
+- path: '/config.php.old'
+  signature: '(?is)<\?php.*(pass|secret|db_|define\()'
+  severity: high
+- path: '/config.php~'
+  signature: '(?is)<\?php.*(pass|secret|db_|define\()'
+  severity: high
+- path: '/application.properties'
+  signature: '(?m)^(spring|server|logging|jdbc)\.[A-Za-z0-9.\-]+\s*='
+  severity: high
+- path: '/WEB-INF/classes/application.properties'
+  signature: '(?m)^(spring|server|logging|jdbc)\.[A-Za-z0-9.\-]+\s*='
+  severity: high
+- path: '/WEB-INF/classes/hibernate.cfg.xml'
+  signature: '<hibernate-configuration'
+  severity: high
+- path: '/appsettings.json'
+  signature: '"(ConnectionStrings|AllowedHosts)"'
+  severity: high
+- path: '/web.config'
+  signature: '<configuration'
+  severity: high
+- path: '/web.config.bak'
+  signature: '<configuration'
+  severity: high
+- path: '/index.php.bak'
+  signature: '<\?php'
+  severity: high
+- path: '/index.php.old'
+  signature: '<\?php'
+  severity: high
+- path: '/index.php~'
+  signature: '<\?php'
+  severity: high
+- path: '/db.sqlite'
+  magic: '53514c69746520666f726d6174203300'
+  severity: high
+- path: '/db.sqlite3'
+  magic: '53514c69746520666f726d6174203300'
+  severity: high
+- path: '/database.sqlite'
+  magic: '53514c69746520666f726d6174203300'
+  severity: high
+- path: '/database.db'
+  magic: '53514c69746520666f726d6174203300'
+  severity: high
+- path: '/app.db'
+  magic: '53514c69746520666f726d6174203300'
+  severity: high
+- path: '/database.mdb'
+  magic: '000100005374616e64617264204a6574204442'
+  severity: high
+- path: '/database.sql'
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+  severity: high
+- path: '/db.sql'
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+  severity: high
+- path: '/db_backup.sql'
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+  severity: high
+- path: '/mysql.sql'
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+  severity: high
+- path: '/data.sql'
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+  severity: high
+- path: '/users.sql'
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+  severity: high
+- path: '/sql.sql'
+  signature: '(?i)(CREATE TABLE|INSERT INTO|DROP TABLE)'
+  severity: high
+- path: '/backup.sql.gz'
+  magic: '1f8b08'
+  severity: high
+- path: '/dump.sql.gz'
+  magic: '1f8b08'
+  severity: high
+- path: '/database.sql.gz'
+  magic: '1f8b08'
+  severity: high
+- path: '/_cat/indices'
+  signature: '(?m)^(green|yellow|red)\s+(open|close)\s'
+  severity: high
+- path: '/_cluster/health'
+  signature: '"cluster_name"\s*:.*"status"\s*:'
+  severity: high
+- path: '/_search'
+  signature: '"hits"\s*:\s*\{'
+  severity: high
+- path: '/v2/_catalog'
+  signature: '"repositories"\s*:'
+  severity: high
+- path: '/containers/json'
+  signature: '^\[\{"Id":"'
+  severity: high
+- path: '/api/v1/namespaces'
+  signature: '"kind"\s*:\s*"NamespaceList"'
+  severity: high
+- path: '/v1/agent/self'
+  signature: '"Config"\s*:\s*\{.*"NodeName"'
+  severity: high
+- path: '/jmx-console/'
+  signature: 'JBoss JMX Management Console'
+  severity: high
+- path: '/invoker/JMXInvokerServlet'
+  magic: 'aced0005'
+  severity: high
+- path: '/h2-console'
+  signature: 'H2 Console'
+  severity: high
+- path: '/console'
+  signature: 'Werkzeug Debugger|Console // Werkzeug'
+  severity: high
+- path: '/_ignition/health-check'
+  signature: '"can_execute_commands"'
+  severity: high
+- path: '/debug/pprof/'
+  signature: 'Types of profiles available'
+  severity: high
+- path: '/jolokia/version'
+  signature: '(?s)"agent"\s*:.*"protocol"'
+  severity: high
+- path: '/actuator/mappings'
+  signature: '"dispatcherServlets"'
+  severity: medium
+- path: '/actuator/beans'
+  signature: '"scope"\s*:\s*"(singleton|prototype)"'
+  severity: medium
+- path: '/actuator/threaddump'
+  signature: '"threadName"'
+  severity: medium
+- path: '/actuator/loggers'
+  signature: '"levels"\s*:'
+  severity: medium
+- path: '/actuator/httptrace'
+  signature: '"traces"\s*:'
+  severity: medium
+- path: '/env'
+  signature: '"(systemProperties|systemEnvironment|propertySources)"'
+  severity: high
+- path: '/.gitlab-ci.yml'
+  signature: '(?m)^(stages|script|image|variables|before_script):'
+  severity: medium
+- path: '/.git/description'
+  signature: 'Unnamed repository; edit this file'
+  severity: medium
+- path: '/.svn/all-wcprops'
+  signature: 'svn:wc:ra_dav:version-url'
+  severity: medium
+- path: '/.hg/requires'
+  signature: '(?m)^(revlogv1|store|fncache|dotencode)$'
+  severity: medium
+- path: '/.bzr/branch-format'
+  signature: 'Bazaar-NG'
+  severity: medium
+- path: '/CVS/Root'
+  signature: '^:(pserver|ext|local):'
+  severity: medium
+- path: '/CVS/Entries'
+  signature: '(?m)^/[^/]+/[0-9.]+/'
+  severity: medium
+- path: '/.idea/workspace.xml'
+  signature: '<project version='
+  severity: medium
+- path: '/.aws/config'
+  signature: '(?m)^\[(default|profile [^\]]+)\]'
+  severity: medium
+- path: '/.ssh/authorized_keys'
+  signature: '(?m)^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-\S+) AAAA'
+  severity: medium
+- path: '/.mysql_history'
+  signature: '_HiStOrY_V2_'
+  severity: medium
+- path: '/.htaccess'
+  signature: '(?i)(RewriteEngine|AuthType|AuthUserFile|Order allow,deny|Require (all|valid-user))'
+  severity: medium
+- path: '/.user.ini'
+  signature: '(?m)^(auto_prepend_file|upload_max_filesize|display_errors)\s*='
+  severity: medium
+- path: '/docker-compose.yml'
+  signature: '(?m)^(version:|services:)'
+  severity: medium
+- path: '/docker-compose.yaml'
+  signature: '(?m)^(version:|services:)'
+  severity: medium
+- path: '/application.yml'
+  signature: '(?m)^(spring|server):'
+  severity: medium
+- path: '/appsettings.Development.json'
+  signature: '"(ConnectionStrings|Logging)"'
+  severity: medium
+- path: '/WEB-INF/applicationContext.xml'
+  signature: '<beans'
+  severity: medium
+- path: '/actuator'
+  signature: '(?s)"_links".*"(health|env|beans)"'
+  severity: medium
+- path: '/metrics'
+  signature: '(?m)^# (HELP|TYPE) '
+  severity: medium
+- path: '/actuator/prometheus'
+  signature: '(?m)^# (HELP|TYPE) '
+  severity: medium
+- path: '/debug/vars'
+  signature: '"memstats"\s*:'
+  severity: medium
+- path: '/nginx_status'
+  signature: 'Active connections: \d+'
+  severity: medium
+- path: '/basic_status'
+  signature: 'Active connections: \d+'
+  severity: medium
+- path: '/test.php'
+  signature: 'PHP Version|phpinfo\(\)'
+  severity: medium
+- path: '/php_info.php'
+  signature: 'PHP Version|phpinfo\(\)'
+  severity: medium
+- path: '/pi.php'
+  signature: 'PHP Version|phpinfo\(\)'
+  severity: medium
+- path: '/i.php'
+  signature: 'PHP Version|phpinfo\(\)'
+  severity: medium
+- path: '/elmah.axd'
+  signature: 'Error Log for'
+  severity: medium
+- path: '/trace.axd'
+  signature: 'Application Trace'
+  severity: medium
+- path: '/rails/info/properties'
+  signature: 'Rails version'
+  severity: medium
+- path: '/cgi-bin/test-cgi'
+  signature: '(SERVER_SOFTWARE|GATEWAY_INTERFACE)'
+  severity: medium
+- path: '/cgi-bin/printenv'
+  signature: '(SERVER_SOFTWARE|GATEWAY_INTERFACE)'
+  severity: medium
+- path: '/phpmyadmin/'
+  signature: 'phpMyAdmin'
+  severity: medium
+- path: '/pma/'
+  signature: 'phpMyAdmin'
+  severity: medium
+- path: '/phpPgAdmin/'
+  signature: 'phpPgAdmin'
+  severity: medium
+- path: '/adminer.php'
+  signature: '(?i)adminer\.org|Login - Adminer'
+  severity: medium
+- path: '/solr/'
+  signature: 'Solr Admin'
+  severity: medium
+- path: '/CFIDE/administrator/'
+  signature: 'ColdFusion Administrator'
+  severity: medium
+- path: '/console/login/LoginForm.jsp'
+  signature: 'Oracle WebLogic Server Administration Console'
+  severity: medium
+- path: '/v2/keys'
+  signature: '"action"\s*:\s*"get"'
+  severity: medium
+- path: '/wp-content/debug.log'
+  signature: '(?m)^\[[0-9]{2}-[A-Za-z]{3}-[0-9]{4} [0-9:]+ UTC\] PHP '
+  severity: medium
+- path: '/debug.log'
+  signature: '(?m)^\[[0-9]{2}-[A-Za-z]{3}-[0-9]{4} [0-9:]+( [A-Za-z/_]+)?\] PHP '
+  severity: medium
+- path: '/error_log'
+  signature: '(?m)^\[[0-9]{2}-[A-Za-z]{3}-[0-9]{4} [0-9:]+( [A-Za-z/_]+)?\] PHP '
+  severity: medium
+- path: '/php_errors.log'
+  signature: '(?m)^\[[0-9]{2}-[A-Za-z]{3}-[0-9]{4} [0-9:]+( [A-Za-z/_]+)?\] PHP '
+  severity: medium
+- path: '/php_error.log'
+  signature: '(?m)^\[[0-9]{2}-[A-Za-z]{3}-[0-9]{4} [0-9:]+( [A-Za-z/_]+)?\] PHP '
+  severity: medium
+- path: '/logs/php_error.log'
+  signature: '(?m)^\[[0-9]{2}-[A-Za-z]{3}-[0-9]{4} [0-9:]+( [A-Za-z/_]+)?\] PHP '
+  severity: medium
+- path: '/error.log'
+  signature: '(?m)^\[[A-Z][a-z]{2} [A-Z][a-z]{2} [0-9]{2} [0-9:.]+ [0-9]{4}\] \['
+  severity: medium
+- path: '/logs/error.log'
+  signature: '(?m)^\[[A-Z][a-z]{2} [A-Z][a-z]{2} [0-9]{2} [0-9:.]+ [0-9]{4}\] \['
+  severity: medium
+- path: '/log/error.log'
+  signature: '(?m)^\[[A-Z][a-z]{2} [A-Z][a-z]{2} [0-9]{2} [0-9:.]+ [0-9]{4}\] \['
+  severity: medium
+- path: '/access.log'
+  signature: '(?m)^\S+ \S+ \S+ \[[0-9]{2}/[A-Za-z]{3}/[0-9]{4}:[0-9:]+ [+-][0-9]{4}\] \"'
+  severity: medium
+- path: '/logs/access.log'
+  signature: '(?m)^\S+ \S+ \S+ \[[0-9]{2}/[A-Za-z]{3}/[0-9]{4}:[0-9:]+ [+-][0-9]{4}\] \"'
+  severity: medium
+- path: '/log/access.log'
+  signature: '(?m)^\S+ \S+ \S+ \[[0-9]{2}/[A-Za-z]{3}/[0-9]{4}:[0-9:]+ [+-][0-9]{4}\] \"'
+  severity: medium
+- path: '/storage/logs/laravel.log'
+  signature: '(?m)^\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]+\] [a-z]+\.(ERROR|WARNING|INFO|DEBUG)'
+  severity: medium
+- path: '/yarn-error.log'
+  signature: '(?m)^Yarn version:'
+  severity: low
+- path: '/npm-debug.log'
+  signature: '(?m)^[0-9]+ (verbose|info|silly) '
+  severity: low
+- path: '/backup.tgz'
+  magic: '1f8b08'
+  severity: medium
+- path: '/backup.rar'
+  magic: '526172211a07'
+  severity: medium
+- path: '/backup.7z'
+  magic: '377abcaf271c'
+  severity: medium
+- path: '/backup.tar.bz2'
+  magic: '425a68'
+  severity: medium
+- path: '/site.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/www.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/web.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/website.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/public_html.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/html.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/wwwroot.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/htdocs.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/app.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/src.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/source.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/old.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/archive.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/data.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/db.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/database.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/sql.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/backups.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/backup.sql.zip'
+  magic: '504b0304'
+  severity: medium
+- path: '/backup/'
+  signature: '(?i)<title>Index of /backup'
+  severity: medium
+- path: '/backups/'
+  signature: '(?i)<title>Index of /backups'
+  severity: medium
+- path: '/bak/'
+  signature: '(?i)<title>Index of /bak'
+  severity: medium
+- path: '/old/'
+  signature: '(?i)<title>Index of /old'
+  severity: medium
+- path: '/dump/'
+  signature: '(?i)<title>Index of /dump'
+  severity: medium
+- path: '/db/'
+  signature: '(?i)<title>Index of /db'
+  severity: medium
+- path: '/sql/'
+  signature: '(?i)<title>Index of /sql'
+  severity: medium
+- path: '/database/'
+  signature: '(?i)<title>Index of /database'
+  severity: medium
+- path: '/private/'
+  signature: '(?i)<title>Index of /private'
+  severity: medium
+- path: '/secret/'
+  signature: '(?i)<title>Index of /secret'
+  severity: medium
+- path: '/config/'
+  signature: '(?i)<title>Index of /config'
+  severity: medium
+- path: '/conf/'
+  signature: '(?i)<title>Index of /conf'
+  severity: medium
+- path: '/.git/'
+  signature: '(?i)<title>Index of /\.git'
+  severity: medium
+- path: '/.svn/'
+  signature: '(?i)<title>Index of /\.svn'
+  severity: medium
+- path: '/.ssh/'
+  signature: '(?i)<title>Index of /\.ssh'
+  severity: medium
+- path: '/logs/'
+  signature: '(?i)<title>Index of /logs'
+  severity: medium
+- path: '/log/'
+  signature: '(?i)<title>Index of /log'
+  severity: medium
+- path: '/tmp/'
+  signature: '(?i)<title>Index of /tmp'
+  severity: medium
+- path: '/temp/'
+  signature: '(?i)<title>Index of /temp'
+  severity: medium
+- path: '/uploads/'
+  signature: '(?i)<title>Index of /uploads'
+  severity: low
+- path: '/files/'
+  signature: '(?i)<title>Index of /files'
+  severity: low
+- path: '/Thumbs.db'
+  magic: 'd0cf11e0a1b11ae1'
+  severity: low
+- path: '/id_rsa.pub'
+  signature: '^ssh-rsa AAAA'
+  severity: low
+- path: '/.ssh/known_hosts'
+  signature: '(?m)^\S+ (ssh-(rsa|ed25519)|ecdsa-sha2-\S+) AAAA'
+  severity: low
+- path: '/.env.example'
+  signature: '(?m)^[A-Z][A-Z0-9_]*=.'
+  severity: low
+- path: '/.firebaserc'
+  signature: '"projects"'
+  severity: low
+- path: '/META-INF/MANIFEST.MF'
+  signature: '(?m)^Manifest-Version:'
+  severity: low
+- path: '/crossdomain.xml'
+  signature: 'allow-access-from\s+domain="\*"'
+  severity: low
+- path: '/clientaccesspolicy.xml'
+  signature: '<domain uri="\*"'
+  severity: low
+- path: '/swagger.json'
+  signature: '"swagger"\s*:\s*"2'
+  severity: low
+- path: '/v2/api-docs'
+  signature: '"swagger"\s*:\s*"2'
+  severity: low
+- path: '/openapi.json'
+  signature: '"openapi"\s*:\s*"3'
+  severity: low
+- path: '/v3/api-docs'
+  signature: '"openapi"\s*:\s*"3'
+  severity: low
+- path: '/swagger-ui.html'
+  signature: 'Swagger UI'
+  severity: low
+- path: '/graphiql'
+  signature: 'GraphiQL'
+  severity: low
+- path: '/actuator/health'
+  signature: '"status"\s*:\s*"(UP|DOWN|OUT_OF_SERVICE)"'
+  severity: low
+- path: '/v1/sys/health'
+  signature: '"sealed"\s*:'
+  severity: low
+- path: '/composer.json'
+  signature: '"require"\s*:'
+  severity: low
+- path: '/composer.lock'
+  signature: '"(content-hash|_readme)"'
+  severity: low
+- path: '/package.json'
+  signature: '"(dependencies|devDependencies|scripts)"\s*:'
+  severity: low
+- path: '/package-lock.json'
+  signature: '"lockfileVersion"'
+  severity: low
+- path: '/yarn.lock'
+  signature: '# yarn lockfile v1'
+  severity: low
+- path: '/Gemfile'
+  signature: '(?m)^(source|gem) [''\"]'
+  severity: low
+- path: '/Gemfile.lock'
+  signature: '(?m)^(GEM|BUNDLED WITH)$'
+  severity: low
+- path: '/requirements.txt'
+  signature: '(?m)^[A-Za-z0-9_.\-]+(==|>=|<=|~=)[0-9]'
+  severity: low
+- path: '/Pipfile'
+  signature: '(?m)^\[(packages|source)\]'
+  severity: low
+- path: '/pom.xml'
+  signature: '<project[^>]*maven'
+  severity: low
+- path: '/build.gradle'
+  signature: '(?m)^(apply plugin|dependencies|repositories|plugins)\b'
+  severity: low
+- path: '/Dockerfile'
+  signature: '(?mi)^FROM \S+'
+  severity: low
+- path: '/Jenkinsfile'
+  signature: 'pipeline\s*\{'
+  severity: low
+- path: '/.travis.yml'
+  signature: '(?m)^(language|script|install):'
+  severity: low
+- path: '/.circleci/config.yml'
+  signature: '(?m)^(version|jobs|workflows):'
+  severity: low
+- path: '/bitbucket-pipelines.yml'
+  signature: '(?m)^pipelines:'
+  severity: low
+- path: '/.drone.yml'
+  signature: '(?m)^(kind|steps):'
+  severity: low
+- path: '/Vagrantfile'
+  signature: 'Vagrant\.configure'
+  severity: low

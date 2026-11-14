@@ -1,0 +1,1 @@
+{"_links":{"self":{"href":"http://example.com/actuator","templated":false},"health":{"href":"http://example.com/actuator/health"},"env":{"href":"http://example.com/actuator/env"}}}

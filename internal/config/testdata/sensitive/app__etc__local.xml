@@ -1,0 +1,2 @@
+<?xml version="1.0"?>
+<config><global><crypt><key><![CDATA[0123456789abcdef]]></key></crypt><resources><default_setup><connection><password>example</password></connection></default_setup></resources></global></config>

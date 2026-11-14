@@ -193,15 +193,21 @@ func (c *Console) Emit(ev Event) {
 
 func (c *Console) summary(b *strings.Builder, f map[string]any) {
 	b.WriteString(c.st("6", true).Render("Summary"))
-	if totals, ok := f["totals"].(map[string]int); ok {
-		for _, k := range sortedKeys(totals) {
-			fmt.Fprintf(b, "\n  %-16s %d", sanitize.Text(k), totals[k])
+	counts := func(m map[string]int) {
+		for _, k := range sortedKeys(m) {
+			fmt.Fprintf(b, "\n  %-16s %d", sanitize.Text(k), m[k])
 		}
 	}
-	if failed, ok := f["failed"].(map[string]int); ok && len(failed) > 0 {
-		b.WriteString("\n" + c.st("3", true).Render("Failed checks (retried on the next run)"))
-		for _, k := range sortedKeys(failed) {
-			fmt.Fprintf(b, "\n  %-16s %d", sanitize.Text(k), failed[k])
+	if totals, ok := f["totals"].(map[string]int); ok {
+		counts(totals)
+	}
+	for _, blk := range []struct{ key, heading string }{
+		{"failed", "Failed checks (retried on the next run)"},
+		{"deferred", "Deferred to the next run"},
+	} {
+		if m, ok := f[blk.key].(map[string]int); ok && len(m) > 0 {
+			b.WriteString("\n" + c.st("3", true).Render(blk.heading))
+			counts(m)
 		}
 	}
 	if fs, ok := f["findings"].([]map[string]any); ok && len(fs) > 0 {

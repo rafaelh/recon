@@ -1,0 +1,6 @@
+spring:
+  datasource:
+    url: jdbc:mysql://db.example.com/app
+    password: example
+server:
+  port: 8080

@@ -7,6 +7,7 @@ import (
 	"iter"
 	"sync"
 
+	"github.com/rafaelh/recon/internal/config"
 	"github.com/rafaelh/recon/internal/egress"
 	"github.com/rafaelh/recon/internal/run"
 )
@@ -102,3 +103,12 @@ func Keys(prefix string, n int) []run.Check {
 	}
 	return out
 }
+
+// Budgeted is a Stage with a per-run budget of Limit.
+type Budgeted struct {
+	*Stage
+	Limit int
+}
+
+// Budget is the stage's per-run budget.
+func (b Budgeted) Budget(config.Settings) int { return b.Limit }

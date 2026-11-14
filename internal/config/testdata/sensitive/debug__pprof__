@@ -1,0 +1,2 @@
+<html><head><title>/debug/pprof/</title></head><body>/debug/pprof/<br>Types of profiles available:
+<table><tr><td>12</td><td><a href="goroutine?debug=1">goroutine</a></td></tr></table></body></html>

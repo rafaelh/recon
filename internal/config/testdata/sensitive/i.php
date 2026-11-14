@@ -1,0 +1,1 @@
+<!DOCTYPE html><html><head><title>phpinfo()</title></head><body><div class="center"><table><tr class="h"><td><h1 class="p">PHP Version 8.2.12</h1></td></tr></table></div></body></html>

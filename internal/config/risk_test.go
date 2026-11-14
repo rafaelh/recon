@@ -53,15 +53,15 @@ func TestStorageAndCertificateSettings(t *testing.T) {
 	}
 }
 
-// The built-in list is about 20 entries, each with a signature or magic.
+// The built-in list has at least 150 entries, each with a signature or magic.
 func TestBuiltinSensitivePaths(t *testing.T) {
 	clearEnv(t)
 	s, err := load(t, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n := len(s.SensitivePathEntries); n < 18 || n > 30 {
-		t.Errorf("built-in entries = %d, want about 20", n)
+	if n := len(s.SensitivePathEntries); n < 150 {
+		t.Errorf("built-in entries = %d, want at least 150", n)
 	}
 	paths := map[string]bool{}
 	for _, e := range s.SensitivePathEntries {

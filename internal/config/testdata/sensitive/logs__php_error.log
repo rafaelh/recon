@@ -1,0 +1,1 @@
+[01-Oct-2026 12:00:00 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function foo() in /var/www/html/index.php:12

@@ -109,7 +109,10 @@ type recordsCache struct {
 	all, curr []store.Record
 }
 
-type stageStats struct{ attempted, failed int }
+// stageStats are a stage's counters. spent is the budget the checks sent this
+// run have used (see Budgeted) and deferred the cost of the checks its last
+// pass deferred.
+type stageStats struct{ attempted, failed, spent, deferred int }
 
 // New creates a Runner.
 func New(cfg Config) *Runner {
@@ -509,6 +512,19 @@ func (r *Runner) runStage(ctx context.Context, s Stage, first bool) (int, error)
 	_, retiring := s.(Retiring)
 	keepAll := redoPending || retiring
 	all := map[string]struct{}{}
+	// A budgeted stage spends its budget on the pending checks in the order it
+	// yields them. The first one that would pass it, and every pending one after
+	// it, is deferred: not sent, not failed, not attempted. The check is already
+	// in all, so a redo or a retire still counts it as valid and its earlier
+	// evidence stays current. The first pending check of the run is always taken.
+	budget := 0 // 0: the stage is not budgeted
+	if b, ok := s.(Budgeted); ok {
+		budget = max(b.Budget(r.cfg.Settings), 1)
+	}
+	r.mu.Lock()
+	spent := r.stat(name).spent
+	r.mu.Unlock()
+	deferredCost := 0
 	enumFailed := false
 	running := false // whether the stage has been shown as running
 produce:
@@ -548,6 +564,14 @@ produce:
 			abortFail(c.Key, "stage aborted earlier in this run")
 			continue
 		}
+		if budget > 0 {
+			cost := max(c.Cost, 1)
+			if deferredCost > 0 || (spent > 0 && spent+cost > budget) {
+				deferredCost += cost
+				continue
+			}
+			spent += cost
+		}
 		if !running {
 			r.setState(name, "running", "", 0, 0)
 			running = true
@@ -571,6 +595,7 @@ produce:
 	r.mu.Lock()
 	ss := r.stat(name)
 	ss.attempted += n
+	ss.spent, ss.deferred = spent, deferredCost
 	total, failed := ss.attempted, ss.failed
 	r.mu.Unlock()
 	switch {
@@ -655,11 +680,14 @@ func (r *Runner) emitCounts(snap output.Snapshot) {
 }
 
 func (r *Runner) emitSummary() {
-	failed := map[string]int{}
+	failed, deferred := map[string]int{}, map[string]int{}
 	r.mu.Lock()
 	for name, s := range r.stats {
 		if s.failed > 0 {
 			failed[name] = s.failed
+		}
+		if s.deferred > 0 {
+			deferred[name] = s.deferred
 		}
 	}
 	r.mu.Unlock()
@@ -672,7 +700,7 @@ func (r *Runner) emitSummary() {
 	for _, c := range high {
 		r.emit("candidate", c)
 	}
-	fields := map[string]any{"totals": r.lastTot, "failed": failed, "findings": listed, "candidates": high}
+	fields := map[string]any{"totals": r.lastTot, "failed": failed, "deferred": deferred, "findings": listed, "candidates": high}
 	if r.cfg.Verbose {
 		fields["medium_candidates"] = medium
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"slices"
 	"strconv"
 
 	"github.com/rafaelh/recon/internal/config"
@@ -36,8 +37,14 @@ type pathInput struct {
 	entry   config.SensitivePath
 }
 
-// Checks yields (service, entry) checks, path-major so consecutive requests go
-// to different hosts. The key hashes the entry's signature, magic and status.
+// Budget is the most requests the stage sends in one run.
+func (*SensitivePaths) Budget(s config.Settings) int { return s.SensitivePathMaxRequests }
+
+// Checks yields (service, entry) checks entry by entry in severity order (the
+// list order within a severity), then by service, so the budget gives every
+// service its highest-severity paths first and consecutive requests go to
+// different hosts. The key hashes the entry's signature, magic and status; the
+// egress index is the entry's position in the configured list.
 func (*SensitivePaths) Checks(ctx context.Context, v run.View) iter.Seq2[run.Check, error] {
 	return func(yield func(run.Check, error) bool) {
 		var svcs []pathInput
@@ -46,7 +53,14 @@ func (*SensitivePaths) Checks(ctx context.Context, v run.View) iter.Seq2[run.Che
 				svcs = append(svcs, pathInput{service: ws.Key, svc: ws.Svc})
 			}
 		}
-		for i, entry := range v.Settings().SensitivePathEntries {
+		entries := v.Settings().SensitivePathEntries
+		order := make([]int, len(entries))
+		for i := range order {
+			order[i] = i
+		}
+		slices.SortStableFunc(order, func(a, b int) int { return entries[a].SeverityRank() - entries[b].SeverityRank() })
+		for _, i := range order {
+			entry := entries[i]
 			hash := entry.Hash()
 			for _, in := range svcs {
 				in.index, in.entry = i, entry

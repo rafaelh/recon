@@ -1,0 +1,1 @@
+<html><head><title>Oracle WebLogic Server Administration Console</title></head><body></body></html>
